@@ -1,30 +1,230 @@
-<!--
-    ECOMUNITY (V17 - Brandizzato e Auto-Login) - Prototipo di App di Scambio basata su Karma e Community Points (CP)
-
-    *** ATTENZIONE: Questa versione ha l'auto-login abilitato per facilitare il test della logica. ***
-    
-    Principi di Fiducia:
-    1. Ingresso Sicuro: Login Google obbligatorio (simulato).
-    2. Sblocco Acquisti: Doppia Soglia (CP Guadagnati >= 50 E Karma Points >= 100).
-    3. Risoluzione Controversie: Sistema di Giuria Karma (Voto Comunitario).
--->
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- TITOLO AGGIORNATO -->
     <title>EcoMunity - Scambio Etico e Comunitario</title>
-    <!-- Caricamento di Tailwind CSS per lo styling -->
+    <script type="module">
+  // --- 1. IMPORTAZIONI COMPLETE FIREBASE ---
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+  // Importazioni per l'Autenticazione (Login Google)
+  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+  // Importazioni per il Database (Firestore - Interazioni/Pubblicazione)
+  import { getFirestore, collection, addDoc, query, onSnapshot } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+
+
+  // Your web app's Firebase configuration (I tuoi dati restano invariati)
+  const firebaseConfig = {
+    apiKey: "AIzaSyCTwU75eJLGpuz5jw_gkhHdgYrHUkN__AY",
+    authDomain: "ecomunity-app.firebaseapp.com",
+    projectId: "ecomunity-app",
+    storageBucket: "ecomunity-app.firebasestorage.app",
+    messagingSenderId: "788175207861",
+    appId: "1:788175207861:web:e3f159da01c096e0d3edfc"
+  };
+
+  // Inizializza Firebase
+  const app = initializeApp(firebaseConfig);
+  
+  // --- 2. INIZIALIZZAZIONE SERVIZI FIREBASE ---
+  const auth = getAuth(app); // Servizio di Autenticazione
+  const db = getFirestore(app); // Servizio Database Firestore
+  const googleProvider = new GoogleAuthProvider(); // Provider per Google Login
+  
+  // Variabile per tenere traccia del tipo di offerta (bene o servizio)
+  let currentOfferType = 'bene';
+
+  // --- FUNZIONI DI GESTIONE UI ---
+  
+  // Funzione per cambiare schermata
+  function switchScreen(screenId) {
+    document.querySelectorAll('.screen').forEach(screen => {
+      screen.classList.remove('active');
+    });
+    const screenToShow = document.getElementById(screenId);
+    if (screenToShow) {
+        screenToShow.classList.add('active');
+        // Nasconde sempre la schermata di login quando si entra nell'app
+        document.getElementById('login-screen').style.display = 'none'; 
+    }
+  }
+
+  // Funzione per gestire i click sulla Tab Bar
+  window.navigate = function(screenId, element) {
+    switchScreen(screenId);
+    // Aggiorna lo stato "attivo" della tab bar
+    document.querySelectorAll('.tab-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    element.classList.add('active');
+  }
+
+  // Funzione per il toggle del tipo di offerta nella schermata di Pubblicazione
+  window.toggleOfferType = function(type) {
+    currentOfferType = type;
+    document.getElementById('type-bene').classList.remove('bg-[#22c55e]', 'text-white');
+    document.getElementById('type-servizio').classList.remove('bg-[#22c55e]', 'text-white');
+    document.getElementById('type-bene').classList.add('text-gray-700', 'hover:bg-gray-200');
+    document.getElementById('type-servizio').classList.add('text-gray-700', 'hover:bg-gray-200');
+
+    if (type === 'bene') {
+        document.getElementById('type-bene').classList.add('bg-[#22c55e]', 'text-white');
+    } else {
+        document.getElementById('type-servizio').classList.add('bg-[#22c55e]', 'text-white');
+    }
+  }
+
+
+  // --- 3. FUNZIONE DI AUTENTICAZIONE GOOGLE ---
+  // Funzione chiamata dal pulsante di login (aggiunta a window per l'onclick)
+  window.handleAuth = async function() {
+    try {
+        const result = await signInWithPopup(auth, googleProvider);
+        // L'utente si è loggato con successo. onAuthStateChanged gestirà l'UI.
+        console.log("Accesso Google completato per:", result.user.displayName);
+    } catch (error) {
+        // Gestione degli errori (es. l'utente ha chiuso il popup)
+        console.error("Errore di Autenticazione:", error.code, error.message);
+        if (error.code !== 'auth/popup-closed-by-user') {
+            alert("Errore di accesso. Riprova: " + error.message);
+        }
+    }
+  };
+
+  // Funzione di Logout (da collegare a un pulsante nella schermata Profilo)
+  window.handleLogout = async function() {
+      await signOut(auth);
+      console.log("Utente disconnesso.");
+      // onAuthStateChanged gestirà il reindirizzamento alla schermata di Login
+  }
+
+
+  // --- 4. GESTIONE STATO UTENTE (ON LOAD) ---
+  // Controlla lo stato di autenticazione all'avvio dell'app
+  onAuthStateChanged(auth, (user) => {
+    // 1. Nasconde la schermata di caricamento
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('app-container').classList.remove('hidden');
+    
+    if (user) {
+        // Utente loggato (Registrato o Ri-loggato)
+        console.log("Utente attivo:", user.uid, user.displayName);
+        
+        // Aggiorna l'UI del profilo se necessario (es. nome utente)
+        document.getElementById('profile-name').textContent = user.displayName || "Utente EcoMunity";
+        
+        // Passa alla schermata Home e attiva l'icona
+        switchScreen('home-screen');
+        document.getElementById('nav-home').classList.add('active');
+
+        // Carica le offerte dal database (Questa è la funzione che devi implementare)
+        loadOffers(); 
+
+    } else {
+        // Utente NON loggato
+        console.log("Nessun utente loggato. Mostra schermata di Login.");
+        // Mostra la schermata di Login (deve essere in display:flex per il centraggio)
+        document.getElementById('login-screen').style.display = 'flex';
+        // Nasconde l'header e la tab bar quando non loggato
+        document.getElementById('app-header').style.display = 'none';
+        document.getElementById('tab-bar').style.display = 'none';
+    }
+  });
+
+
+  // --- 5. INTERAZIONE DATABASE (ESEMPIO DI PUBBLICAZIONE) ---
+  // Funzione per salvare una nuova offerta su Firestore
+  window.publishOffer = async function(event) {
+    event.preventDefault(); // Impedisce il ricaricamento della pagina
+    
+    // Recupera i dati del form
+    const title = document.getElementById('title').value;
+    const description = document.getElementById('description').value;
+    
+    // Ottieni l'utente corrente per associare l'offerta
+    const user = auth.currentUser;
+    if (!user) {
+        alert("Devi essere loggato per pubblicare un'offerta.");
+        return;
+    }
+
+    try {
+        const docRef = await addDoc(collection(db, "offerte"), {
+            title: title,
+            description: description,
+            type: currentOfferType, // 'bene' o 'servizio'
+            ownerId: user.uid,
+            ownerName: user.displayName,
+            timestamp: new Date(),
+            status: 'available'
+        });
+        
+        console.log("Documento scritto con ID: ", docRef.id);
+        alert("Offerta pubblicata con successo!");
+        
+        // Reset del form e navigazione alla home
+        document.getElementById('publish-form').reset();
+        window.navigate('home-screen', document.getElementById('nav-home'));
+
+    } catch (e) {
+        console.error("Errore durante l'aggiunta del documento: ", e);
+        alert("Errore durante la pubblicazione. Controlla la console.");
+    }
+  }
+
+  // --- 6. INTERAZIONE DATABASE (ESEMPIO DI LETTURA) ---
+  // Funzione per leggere e popolare le offerte
+  function loadOffers() {
+      // Inizia l'ascolto in tempo reale sulla collezione 'offerte'
+      // Questo aggiornerà l'UI ogni volta che una nuova offerta viene aggiunta o modificata
+      const q = query(collection(db, "offerte"));
+      
+      onSnapshot(q, (querySnapshot) => {
+          let beniHtml = '';
+          let serviziHtml = '';
+          
+          querySnapshot.forEach((doc) => {
+              const offer = doc.data();
+              // Costruisci il blocco HTML per l'offerta
+              const offerHtml = `
+                <div class="bg-white p-4 rounded-lg shadow-sm flex justify-between items-center border border-gray-200">
+                    <div>
+                        <p class="font-semibold text-lg">${offer.title}</p>
+                        <p class="text-sm text-gray-500">${offer.description}</p>
+                        <p class="text-xs text-gray-400 mt-1">Offerto da: ${offer.ownerName}</p>
+                    </div>
+                    <button class="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition">
+                        Contatta
+                    </button>
+                </div>
+              `;
+
+              if (offer.type === 'bene') {
+                  beniHtml += offerHtml;
+              } else if (offer.type === 'servizio') {
+                  serviziHtml += offerHtml;
+              }
+          });
+
+          // Aggiorna l'HTML della Home Screen
+          document.getElementById('item-list-bene').innerHTML = beniHtml;
+          document.getElementById('item-list-servizio').innerHTML = serviziHtml;
+          document.getElementById('empty-bene').style.display = beniHtml ? 'none' : 'block';
+          document.getElementById('empty-servizio').style.display = serviziHtml ? 'none' : 'block';
+      });
+  }
+
+</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
-        /* Stili per la Tab Bar (Navbar Mobile) */
+        
+        /* Stili per la Tab Bar (Navbar Mobile) - Aumentata a 72px per sicurezza */
         #tab-bar {
             display: flex;
             justify-content: space-around;
             align-items: center;
-            height: 64px;
+            height: 72px; /* Aumentato per evitare tagli */
             background-color: #ffffff;
             box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
             position: fixed;
@@ -42,7 +242,9 @@
         }
         .screen {
             display: none;
-            padding-bottom: 72px; /* Spazio per la tab bar */
+            padding-bottom: 80px; /* Spazio per la tab bar da 72px + padding */
+            min-height: calc(100vh - 72px - 64px); /* Calcola altezza utile per mobile */
+            padding-top: 1rem;
         }
         .screen.active {
             display: block;
@@ -53,7 +255,6 @@
             opacity: 0.6;
         }
         .app-header {
-            /* Colore primario aggiornato */
             background-color: #22c55e;
             color: white;
             padding: 1rem;
@@ -62,7 +263,6 @@
             top: 0;
             z-index: 40;
         }
-        /* Icona di default (Foglia/Ciclo) per EcoMunity */
         .ecomunity-logo {
             display: inline-flex;
             align-items: center;
@@ -74,25 +274,28 @@
 </head>
 <body class="antialiased text-gray-800">
 
-    <!-- Header Fisso -->
     <div id="app-header" class="app-header">
-        <div class="text-2xl font-black tracking-wide text-center ecomunity-logo justify-center">
-            <!-- Icona Foglia Semplificata -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-leaf"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.1 10.4 17 10.8 21 12c-3.1 1.7-6.4 2.1-11 0a2 2 0 0 0-1.7 2.9c.7 2.8-.8 6.5-4.2 7A7 7 0 0 1 11 20"/></svg>
-            EcoMunity
+        <div class="flex justify-between items-center">
+             <div class="text-2xl font-black tracking-wide ecomunity-logo">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-leaf"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.1 10.4 17 10.8 21 12c-3.1 1.7-6.4 2.1-11 0a2 2 0 0 0-1.7 2.9c.7 2.8-.8 6.5-4.2 7A7 7 0 0 1 11 20"/></svg>
+                EcoMunity
+            </div>
+            <button onclick="handleLogout()" class="text-sm font-medium py-1 px-3 border border-white rounded-full hover:bg-white hover:text-[#22c55e] transition duration-150">
+                Esci
+            </button>
         </div>
     </div>
 
-    <!-- Contenitore Principale Schermi -->
-    <div id="app-container" class="p-4 pt-8">
+    <div id="loading-screen" class="fixed inset-0 bg-white flex flex-col items-center justify-center p-6 z-50">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-[#22c55e] mb-4"></div>
+        <p class="text-gray-600 text-lg">Caricamento dati EcoMunity...</p>
+        <p class="text-sm text-gray-400 mt-2">(Tentativo di Autenticazione Automatica)</p>
+    </div>
 
-        <!-- ---------------------------------------------------- -->
-        <!-- SCHERMATA LOGIN (Simulazione Obbligatoria Google) -->
-        <!-- ---------------------------------------------------- -->
-        <!-- NASCOSTO DI DEFAULT GRAZIE AD AUTO-LOGIN -->
-        <div id="login-screen" class="screen fixed inset-0 bg-gray-50 flex flex-col items-center justify-center p-6 z-50 hidden">
+    <div id="app-container" class="p-4 hidden">
+
+        <div id="login-screen" class="screen fixed inset-0 bg-gray-50 flex-col items-center justify-center p-6 z-50" style="display: none;">
             <div class="max-w-sm w-full bg-white p-8 shadow-2xl rounded-xl text-center border border-gray-100">
-                <!-- NOME AGGIORNATO -->
                 <h2 class="text-3xl font-extrabold text-[#22c55e] mb-2 ecomunity-logo justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-leaf"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.1 10.4 17 10.8 21 12c-3.1 1.7-6.4 2.1-11 0a2 2 0 0 0-1.7 2.9c.7 2.8-.8 6.5-4.2 7A7 7 0 0 1 11 20"/></svg>
                     EcoMunity
@@ -100,7 +303,7 @@
                 <p class="text-gray-600 mb-8">Un'economia circolare basata sulla fiducia e sul Karma.</p>
 
                 <div class="space-y-4">
-                    <button id="login-button" onclick="handleLogin()" class="w-full flex items-center justify-center px-6 py-3 border border-gray-300 rounded-xl shadow-md text-base font-medium text-gray-700 bg-white hover:bg-gray-50 transition duration-150">
+                    <button id="login-button" onclick="handleAuth()" class="w-full flex items-center justify-center px-6 py-3 border border-gray-300 rounded-xl shadow-md text-base font-medium text-gray-700 bg-white hover:bg-gray-50 transition duration-150">
                         <svg class="w-6 h-6 mr-3" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M43.61 20.0833H42V20H24V28H36.443C35.213 31.865 31.547 34.667 27 34.667C20.667 34.667 15.667 29.667 15.667 23.333C15.667 16.999 20.667 11.999 27 11.999C30.067 11.999 32.867 13.199 34.867 15.199L40.033 10.033C36.467 6.467 31.9 4.667 27 4.667C13.667 4.667 4.667 13.667 4.667 23.333C4.667 32.999 13.667 41.999 27 41.999C35.533 41.999 43.067 36.333 43.61 28.167V20.0833Z" fill="#FFC107" />
                             <path d="M43.61 20.0833H42V20H24V28H36.443C35.213 31.865 31.547 34.667 27 34.667C20.667 34.667 15.667 29.667 15.667 23.333C15.667 16.999 20.667 11.999 27 11.999C30.067 11.999 32.867 13.199 34.867 15.199L40.033 10.033C36.467 6.467 31.9 4.667 27 4.667C13.667 4.667 4.667 13.667 4.667 23.333C4.667 32.999 13.667 41.999 27 41.999C35.533 41.999 43.067 36.333 43.61 28.167V20.0833Z" fill="#4285F4" />
@@ -114,29 +317,36 @@
             </div>
         </div>
 
-        <!-- ---------------------------------------------------- -->
-        <!-- SCHERMATA HOME (Feed Articoli/Servizi) -->
-        <!-- ---------------------------------------------------- -->
-        <div id="home-screen" class="screen">
-            <div class="mb-6 flex space-x-2 overflow-x-auto pb-2">
-                <button onclick="filterItems('all')" class="category-btn bg-[#22c55e] text-white px-4 py-2 rounded-full font-semibold text-sm shadow-md transition duration-150">Tutto</button>
-                <button onclick="filterItems('bene')" class="category-btn bg-white text-gray-700 px-4 py-2 rounded-full font-semibold text-sm border border-gray-300 hover:bg-gray-100 transition duration-150">Beni</button>
-                <button onclick="filterItems('servizio')" class="category-btn bg-white text-gray-700 px-4 py-2 rounded-full font-semibold text-sm border border-gray-300 hover:bg-gray-100 transition duration-150">Servizi (Banca Ore)</button>
+
+        <div id="home-screen" class="screen active">
+            <h2 class="text-xl font-bold mb-6 text-gray-700">Le Ultime Offerte</h2>
+            
+            <div class="mb-8 p-4 rounded-xl bg-blue-50 border-2 border-blue-200">
+                <h3 class="text-lg font-extrabold text-blue-800 mb-4 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-package-check mr-2"><path d="m16 16 2 2 4-4"/><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                    Beni e Oggetti
+                </h3>
+                <div id="item-list-bene" class="space-y-4">
+                    </div>
+                <p id="empty-bene" class="text-sm text-gray-500 text-center mt-4 hidden">Nessun bene disponibile al momento. Pubblicane uno!</p>
             </div>
 
-            <div id="item-list" class="space-y-4">
-                <!-- Gli articoli verranno inseriti qui -->
+            <div class="p-4 rounded-xl bg-green-50 border-2 border-green-200">
+                <h3 class="text-lg font-extrabold text-green-800 mb-4 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-timer mr-2"><path d="M10 2h4"/><path d="M12 14v-4"/><path d="M22 12a10 10 0 0 1-10 10A10 10 0 0 1 2 12h2a8 8 0 0 0 8 8 8 8 0 0 0 8-8z"/></svg>
+                    Servizi (Banca Ore)
+                </h3>
+                <div id="item-list-servizio" class="space-y-4">
+                    </div>
+                <p id="empty-servizio" class="text-sm text-gray-500 text-center mt-4 hidden">Nessun servizio disponibile al momento. Pubblicane uno!</p>
             </div>
+            
         </div>
 
-        <!-- ---------------------------------------------------- -->
-        <!-- SCHERMATA PUBBLICA (Modulo per Articoli e Servizi) -->
-        <!-- ---------------------------------------------------- -->
         <div id="publish-screen" class="screen">
             <h2 class="text-xl font-bold mb-6 text-gray-700">Pubblica la Tua Offerta</h2>
-            <form id="publish-form" class="space-y-6 bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+            <form id="publish-form" onsubmit="publishOffer(event)" class="space-y-6 bg-white p-6 rounded-xl shadow-lg border border-gray-100">
 
-                <!-- Scelta Tipo (Bene vs Servizio) -->
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Cosa stai offrendo?</label>
                     <div class="flex space-x-4 p-1 bg-gray-100 rounded-lg">
@@ -147,623 +357,69 @@
 
                 <div>
                     <label for="title" class="block text-sm font-medium text-gray-700">Titolo dell'Offerta</label>
-                    <input type="text" id="title" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#22c55e] focus:ring focus:ring-[#22c55e] focus:ring-opacity-50 p-3 border">
+                    <input type="text" id="title" required class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-[#22c55e] focus:border-[#22c55e]" placeholder="Esempio: Bicicletta da città usata">
                 </div>
-
+                
                 <div>
-                    <label for="description" class="block text-sm font-medium text-gray-700">Descrizione</label>
-                    <textarea id="description" rows="3" required class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#22c55e] focus:ring focus:ring-[#22c55e] focus:ring-opacity-50 p-3 border"></textarea>
+                    <label for="description" class="block text-sm font-medium text-gray-700">Descrizione Dettagliata</label>
+                    <textarea id="description" rows="4" required class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-[#22c55e] focus:border-[#22c55e]" placeholder="Descrivi l'oggetto o il servizio. Sii chiaro su cosa cerchi in cambio."></textarea>
                 </div>
-
-                <!-- Prezzo in Community Points (CP) -->
-                <div id="cp-price-section">
-                    <label for="cp-price" class="block text-sm font-medium text-gray-700">Prezzo in Community Points (CP)</label>
-                    <input type="number" id="cp-price" required min="5" value="50" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#22c55e] focus:ring focus:ring-[#22c55e] focus:ring-opacity-50 p-3 border">
-                    <p class="mt-1 text-xs text-gray-500">I servizi hanno un valore consigliato (es. 20 CP/ora).</p>
-                </div>
-
-                <button type="submit" class="w-full bg-[#22c55e] text-white py-3 px-4 rounded-xl font-semibold hover:bg-[#15803d] transition duration-150 shadow-md">Pubblica Offerta e Guadagna Karma</button>
+                
+                <button type="submit" class="w-full bg-[#22c55e] text-white font-bold py-3 px-4 rounded-xl hover:bg-green-600 transition duration-150 shadow-md">
+                    Pubblica Offerta
+                </button>
             </form>
         </div>
-
-        <!-- ---------------------------------------------------- -->
-        <!-- SCHERMATA MESSAGGI/CHAT -->
-        <!-- ---------------------------------------------------- -->
-        <div id="messages-screen" class="screen">
-            <h2 class="text-xl font-bold mb-6 text-gray-700">Le Tue Trattative</h2>
-            <div id="chat-list" class="space-y-3">
-                <!-- Chat List Item -->
-                <div onclick="showChatDetail('chat-1')" class="chat-item bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between transition duration-150 hover:bg-gray-50 cursor-pointer">
-                    <div class="flex items-center">
-                        <span class="inline-block h-10 w-10 rounded-full bg-blue-500 mr-4 flex items-center justify-center font-bold text-white">JA</span>
-                        <div>
-                            <p class="font-semibold text-gray-800">John Artigiano</p>
-                            <p class="text-sm text-gray-500">Servizio: Riparazione Elettrica (20 CP)</p>
-                        </div>
-                    </div>
-                    <span class="text-xs font-medium text-[#22c55e]">Attiva</span>
-                </div>
-                <!-- Chat List Item -->
-                <div onclick="showChatDetail('chat-2')" class="chat-item bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between transition duration-150 hover:bg-gray-50 cursor-pointer">
-                    <div class="flex items-center">
-                        <span class="inline-block h-10 w-10 rounded-full bg-red-500 mr-4 flex items-center justify-center font-bold text-white">AP</span>
-                        <div>
-                            <p class="font-semibold text-gray-800">Alice Pittrice</p>
-                            <p class="text-sm text-gray-500">Oggetto: Vecchio Cavalletto (40 CP)</p>
-                        </div>
-                    </div>
-                    <span class="text-xs font-medium text-yellow-600">In Sospeso</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Dettaglio Chat (Popup/Modale) -->
-        <div id="chat-detail-screen" class="screen fixed inset-0 bg-white p-4 pt-0 z-40 hidden flex-col">
-            <button onclick="hideChatDetail()" class="text-gray-600 p-2 self-start mb-4 mt-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-            </button>
-            <div class="flex-grow overflow-y-auto p-2 bg-gray-50 rounded-xl mb-4 shadow-inner">
-                <p class="text-center text-sm text-gray-500 my-4">Trattativa con John Artigiano - 20 CP</p>
-                <div class="flex justify-start mb-3">
-                    <div class="bg-gray-200 p-3 rounded-xl max-w-[80%]">Ciao! Posso farti il servizio elettrico martedì alle 16:00.</div>
-                </div>
-                <div class="flex justify-end mb-3">
-                    <div class="bg-[#22c55e] text-white p-3 rounded-xl max-w-[80%]">Perfetto! Accetto l'offerta per 20 CP. A martedì!</div>
-                </div>
-                <!-- Messaggio di sistema -->
-                <p class="text-center text-xs text-gray-400 my-4">Lo scambio è stato concordato. L'acquirente può confermare la ricezione.</p>
-
-                <!-- Simulazione di Controversia (Solo in chat-1) -->
-                <div id="controversy-section" class="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm">
-                    <p class="font-semibold text-yellow-800 mb-2">Stato Transazione:</p>
-                    <p id="controversy-status" class="text-yellow-700">In attesa di conferma finale da entrambe le parti.</p>
-                </div>
-            </div>
-
-            <div class="flex justify-between space-x-2 mt-auto">
-                <button id="confirm-success-btn" onclick="openReview('chat-1')" class="flex-1 bg-green-600 text-white py-3 px-4 rounded-xl font-semibold hover:bg-green-700 transition duration-150 shadow-md">CONFERMA SCAMBIO RIUSCITO</button>
-                <button id="open-controversy-btn" onclick="openControversy('chat-1')" class="bg-red-500 text-white py-3 px-4 rounded-xl font-semibold hover:bg-red-600 transition duration-150 shadow-md">Problema</button>
-            </div>
-        </div>
-
-        <!-- Modale di Recensione -->
-        <div id="review-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
-            <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
-                <h3 class="text-lg font-bold mb-4">Valuta lo Scambio</h3>
-                <p class="mb-4 text-sm text-gray-600">La tua valutazione assegnerà i Karma Points (KP) all'altra parte.</p>
-                <form id="review-form" class="space-y-4">
-                    <!-- 3 Livelli di Voto -->
-                    <div class="space-y-2">
-                        <label class="flex items-center p-3 bg-green-50 rounded-lg border border-green-200 cursor-pointer hover:bg-green-100">
-                            <input type="radio" name="rating" value="eccellente" required class="form-radio h-4 w-4 text-green-600">
-                            <span class="ml-3 text-sm font-medium text-gray-700">Eccellente (+10 KP)</span>
-                        </label>
-                        <label class="flex items-center p-3 bg-gray-50 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100">
-                            <input type="radio" name="rating" value="riuscita" class="form-radio h-4 w-4 text-gray-600">
-                            <span class="ml-3 text-sm font-medium text-gray-700">Riuscita (+5 KP)</span>
-                        </label>
-                        <label class="flex items-center p-3 bg-red-50 rounded-lg border border-red-200 cursor-pointer hover:bg-red-100">
-                            <input type="radio" name="rating" value="problematica" class="form-radio h-4 w-4 text-red-600">
-                            <span class="ml-3 text-sm font-medium text-gray-700">Problematica (Apri Controversia)</span>
-                        </label>
-                    </div>
-
-                    <div>
-                        <label for="review-text" class="block text-sm font-medium text-gray-700 mb-1">Motivazione (Obbligatoria per "Problematica")</label>
-                        <textarea id="review-text" rows="2" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#22c55e] focus:ring focus:ring-[#22c55e] focus:ring-opacity-50 p-2 border"></textarea>
-                    </div>
-
-                    <button type="submit" class="w-full bg-[#22c55e] text-white py-2 rounded-xl font-semibold hover:bg-[#15803d] transition duration-150">Invia Recensione</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Modale Controversia (Giuria Karma) -->
-        <div id="controversy-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
-            <div class="bg-white p-6 rounded-xl shadow-2xl max-w-lg w-full">
-                <h3 class="text-xl font-bold mb-4 text-red-600">Controversia Aperta!</h3>
-                <p class="mb-4 text-sm text-gray-700">Il caso è stato inoltrato alla **Giuria Karma** (utenti Livello 3+). Il verdetto sarà emesso entro 72 ore.</p>
-                <div class="p-3 bg-red-50 border border-red-200 rounded-lg mb-4">
-                    <p class="font-semibold text-red-800">Penalità KP Congelata:</p>
-                    <p class="text-red-700">L'utente John Artigiano ha una penalità di **-10 KP in sospeso** fino al verdetto finale. </p>
-                </div>
-
-                <p class="font-semibold mb-2 text-gray-700">Simulazione Verdetto Giuria (Solo Test):</p>
-                <div class="flex space-x-3">
-                    <button onclick="handleControversyVerdict(true)" class="flex-1 bg-green-500 text-white py-2 rounded-xl font-semibold hover:bg-green-600 transition duration-150">Giuria: Annulla Penalità (+5 KP per John)</button>
-                    <button onclick="handleControversyVerdict(false)" class="flex-1 bg-red-600 text-white py-2 rounded-xl font-semibold hover:bg-red-700 transition duration-150">Giuria: Conferma Penalità (-10 KP per John)</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ---------------------------------------------------- -->
-        <!-- SCHERMATA PROFILO -->
-        <!-- ---------------------------------------------------- -->
-        <div id="profile-screen" class="screen">
-            <h2 class="text-xl font-bold mb-6 text-gray-700">Il Tuo Profilo EcoMunity</h2>
-
-            <!-- Sezione Saldo CP e Stato -->
-            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 mb-6">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="font-bold text-lg text-gray-700">Saldo e Karma</h3>
-                    <p id="user-name" class="text-sm font-semibold text-[#22c55e]">Utente Test</p>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4 text-center">
-                    <div class="bg-blue-50 p-4 rounded-xl">
-                        <p class="text-2xl font-black text-blue-600" id="cp-balance">0</p>
-                        <p class="text-sm text-blue-800 font-medium">Community Points (CP)</p>
-                    </div>
-                    <div class="bg-yellow-50 p-4 rounded-xl">
-                        <p class="text-2xl font-black text-yellow-600" id="kp-balance">0</p>
-                        <p class="text-sm text-yellow-800 font-medium">Karma Points (KP)</p>
-                    </div>
-                </div>
-
-                <div class="mt-4 pt-4 border-t border-gray-100">
-                    <p class="text-sm font-medium text-gray-700">CP Guadagnati Totali:</p>
-                    <p class="text-lg font-black text-gray-800" id="cp-earned">0</p>
-                </div>
-            </div>
-
-            <!-- Sezione Stato Karma e Sblocco -->
-            <div id="activation-block" class="p-6 rounded-xl shadow-lg mb-6">
-                <h3 class="font-bold text-lg mb-3 flex items-center">
-                    <span id="karma-status-icon" class="mr-2"></span>
-                    <span id="karma-status-title">Stato Karma: Principiante</span>
-                </h3>
-
-                <p id="karma-status-message" class="text-sm text-gray-700 mb-3"></p>
-
-                <div id="requirements-list" class="space-y-2 text-sm">
-                    <p class="font-semibold mb-2">Requisiti per Sbloccare l'Acquisto (Livello 1):</p>
-                    <div id="req-cp-earned" class="flex items-center"></div>
-                    <div id="req-kp-balance" class="flex items-center"></div>
-                </div>
-            </div>
-
-            <!-- Livello di Verifica (Login Google) -->
-            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                <h3 class="font-bold text-lg mb-3">Verifica Identità</h3>
-                <div class="flex items-center text-sm font-medium text-green-600 bg-green-50 p-3 rounded-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle mr-2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
-                    Account Verificato (Tramite Google Login)
-                </div>
-                <p class="mt-2 text-xs text-gray-500">Questo garantisce l'onestà. Utenti verificati che frodano vengono banditi definitivamente.</p>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Tab Bar di Navigazione Mobile -->
-    <div id="tab-bar">
-        <button class="tab-item active flex flex-col items-center p-2" onclick="showScreen('home')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-list"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
-            <span class="text-xs mt-1">Home</span>
-        </button>
-        <button class="tab-item flex flex-col items-center p-2" onclick="showScreen('publish')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-plus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-            <span class="text-xs mt-1">Pubblica</span>
-        </button>
-        <button class="tab-item flex flex-col items-center p-2" onclick="showScreen('messages')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-circle"><path d="M7.9 20.3a12 12 0 1 0-3.8-3.8c.8-.8 2.2-2.2 2.2-2.2L7.9 20.3Z"/></svg>
-            <span class="text-xs mt-1">Chat</span>
-        </button>
-        <button class="tab-item flex flex-col items-center p-2" onclick="showScreen('profile')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-circle"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg>
-            <span class="text-xs mt-1">Profilo</span>
-        </button>
-    </div>
-
-    <!-- Logica JavaScript (Core Business) -->
-    <script>
-        // --- INIZIALIZZAZIONE STATO E DATI ---
-
-        // Stato utente: CP = Community Points (Valuta), KP = Karma Points (Reputazione/Livello)
-        let userState = {
-            isLoggedIn: false,
-            // Valuta spendibile
-            cpBalance: 10,
-            // Punti per sbloccare e reputazione
-            kpBalance: 0,
-            // Per il requisito anti-approfittatori
-            cpEarned: 0,
-            isActivated: false,
-            // Simulazione dell'utente autenticato
-            userId: 'user_42_simulated',
-            userName: 'EcoMunity Tester' // Nome aggiornato
-        };
-
-        // Soglie di attivazione (Doppia Soglia Anti-Approfittatori)
-        const MIN_KP = 100;
-        const MIN_CP_EARNED = 50;
-
-        let items = [
-            { id: 1, type: 'bene', title: 'Libro: L\'economia Circolare', description: 'Ottima introduzione ai principi di sostenibilità.', cpValue: 50, postedBy: 'user_99', status: 'disponibile' },
-            { id: 2, type: 'servizio', title: 'Servizio: Lezione di Chitarra (1h)', description: 'Lezioni base per principianti. Per ogni ora richiesta.', cpValue: 20, postedBy: 'user_101', status: 'disponibile' },
-            { id: 3, type: 'bene', title: 'Vecchia cassetta degli attrezzi', description: 'Completa ma ha bisogno di una pulita.', cpValue: 15, postedBy: 'user_99', status: 'disponibile' },
-            { id: 4, type: 'servizio', title: 'Servizio: Consulenza Fiscale Base (30 min)', description: 'Aiuto per dichiarazioni semplici.', cpValue: 100, postedBy: 'user_102', status: 'disponibile' }
-        ];
-
-        let currentActiveScreen = 'home'; // Modificato per l'auto-login
-        let currentChatId = null;
-
-        // --- GESTIONE INTERFACCIA E NAVIGAZIONE ---
-
-        function showScreen(screenId) {
-            if (!userState.isLoggedIn && screenId !== 'login') {
-                document.getElementById('login-screen').classList.remove('hidden');
-                document.getElementById('login-screen').classList.add('flex');
-                return;
-            }
-
-            // Nascondi tutti gli schermi
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.classList.remove('active');
-                screen.style.display = 'none';
-            });
-            // Mostra lo schermo richiesto
-            const targetScreen = document.getElementById(screenId + '-screen');
-            if (targetScreen) {
-                targetScreen.classList.add('active');
-                targetScreen.style.display = 'block';
-                currentActiveScreen = screenId;
-                
-                // Aggiorna l'interfaccia quando si va al profilo o alla home
-                if (screenId === 'profile') {
-                    updateProfileUI();
-                } else if (screenId === 'home') {
-                    renderItems();
-                }
-            }
-            
-            // Aggiorna la tab bar
-            document.querySelectorAll('.tab-item').forEach(tab => tab.classList.remove('active'));
-            const activeTab = document.querySelector(`.tab-item[onclick*="${screenId}"]`);
-            if (activeTab) {
-                activeTab.classList.add('active');
-            }
-        }
-
-        // --- LOGICA DI AUTENTICAZIONE ---
-
-        function handleLogin() {
-            // Simulazione di login Google riuscito
-            userState.isLoggedIn = true;
-            
-            document.getElementById('login-screen').classList.remove('active', 'flex');
-            document.getElementById('login-screen').classList.add('hidden');
-            
-            // Forza la visualizzazione della home
-            showScreen('home');
-            
-            // Inizializza l'interfaccia dopo il login
-            updateProfileUI();
-            renderItems();
-            
-            // Aggiorna nome utente
-            document.getElementById('user-name').textContent = userState.userName;
-        }
-
-
-        // --- LOGICA DI PUBBLICAZIONE E ATTIVAZIONE (KP/CP Earned) ---
-
-        function toggleOfferType(type) {
-            const beneBtn = document.getElementById('type-bene');
-            const servizioBtn = document.getElementById('type-servizio');
-            const priceInput = document.getElementById('cp-price');
-
-            if (type === 'bene') {
-                beneBtn.classList.add('bg-[#22c55e]', 'text-white');
-                beneBtn.classList.remove('text-gray-700', 'hover:bg-gray-200');
-                servizioBtn.classList.remove('bg-[#22c55e]', 'text-white');
-                servizioBtn.classList.add('text-gray-700', 'hover:bg-gray-200');
-                priceInput.value = 50;
-            } else {
-                servizioBtn.classList.add('bg-[#22c55e]', 'text-white');
-                servizioBtn.classList.remove('text-gray-700', 'hover:bg-gray-200');
-                beneBtn.classList.remove('bg-[#22c55e]', 'text-white');
-                beneBtn.classList.add('text-gray-700', 'hover:bg-gray-200');
-                priceInput.value = 20;
-            }
-        }
-
-        document.getElementById('publish-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const title = document.getElementById('title').value;
-            const description = document.getElementById('description').value;
-            const cpPrice = parseInt(document.getElementById('cp-price').value);
-            const offerType = document.getElementById('type-bene').classList.contains('bg-[#22c55e]') ? 'bene' : 'servizio';
-
-            // Simulazione di una transazione completata (per il requisito di sblocco)
-            if (!userState.isActivated) {
-                // Bonus di prima transazione completata: +100 KP e 50 CP guadagnati minimi
-                userState.kpBalance = 100;
-                userState.cpEarned = Math.max(userState.cpEarned, 50); // Garantisce il minimo di 50 CP guadagnati
-                updateProfileUI(); // Aggiorna per mostrare lo sblocco
-                
-                // Messaggio di conferma sblocco
-                alert('Congratulazioni! La tua offerta è stata pubblicata. Hai guadagnato il tuo "Karma di Primo Contributo" e ora puoi iniziare ad acquistare!');
-            }
-            
-            // Aggiungi l'articolo simulato (non necessario per la logica, ma per il feedback)
-            const newItem = {
-                id: items.length + 1,
-                type: offerType,
-                title: title,
-                description: description,
-                cpValue: cpPrice,
-                postedBy: userState.userId,
-                status: 'disponibile'
-            };
-            items.unshift(newItem); // Aggiunge in cima
-
-            // Reset del form e torna alla Home
-            this.reset();
-            renderItems();
-            showScreen('home');
-        });
-
-        // --- GESTIONE DEI DATI E DEL FEED (HOME) ---
-
-        function renderItems(filter = 'all') {
-            const itemList = document.getElementById('item-list');
-            itemList.innerHTML = '';
-            
-            const filteredItems = items.filter(item => filter === 'all' || item.type === filter);
-
-            filteredItems.forEach(item => {
-                const itemTypeLabel = item.type === 'bene' ? 'Bene' : 'Servizio';
-                const isMyItem = item.postedBy === userState.userId;
-
-                // Determina se il pulsante ACQUISTA è bloccato
-                const isBlocked = !userState.isActivated && !isMyItem;
-                const buttonClass = isBlocked ? 'purchase-blocked bg-gray-400' : 'bg-[#facc15] hover:bg-[#eab308]';
-                const buttonText = isMyItem ? 'Tua Offerta' : (isBlocked ? 'Bloccato (Livello 0)' : 'Acquista');
-
-                // HTML dell'elemento
-                const itemHtml = `
-                    <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-                        <div class="flex-grow">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-xs font-semibold px-2 py-1 rounded-full text-blue-800 bg-blue-100">${itemTypeLabel}</span>
-                                <!-- Colore CP aggiornato -->
-                                <span class="text-sm font-black text-[#22c55e]">${item.cpValue} CP</span>
-                            </div>
-                            <h3 class="text-lg font-bold text-gray-800">${item.title}</h3>
-                            <p class="text-sm text-gray-600 mt-1">${item.description}</p>
-                            <p class="text-xs text-gray-500 mt-2">Postato da: ${item.postedBy}</p>
-                        </div>
-                        <div class="flex-shrink-0 flex items-end justify-end">
-                            <button ${isBlocked || isMyItem ? 'disabled' : ''} onclick="handlePurchase(${item.id}, ${item.cpValue})"
-                                class="w-full sm:w-auto py-2 px-4 rounded-xl text-white font-bold transition duration-150 shadow-md ${buttonClass}">
-                                ${buttonText}
-                            </button>
-                        </div>
-                    </div>
-                `;
-                itemList.innerHTML += itemHtml;
-            });
-            
-            // Aggiorna lo stato dei pulsanti categoria
-            document.querySelectorAll('.category-btn').forEach(btn => {
-                btn.classList.remove('bg-[#22c55e]', 'text-white');
-                btn.classList.add('bg-white', 'text-gray-700', 'border-gray-300', 'hover:bg-gray-100');
-            });
-            const activeBtn = document.querySelector(`[onclick*="filterItems('${filter}')"]`);
-            if (activeBtn) {
-                activeBtn.classList.add('bg-[#22c55e]', 'text-white');
-                activeBtn.classList.remove('bg-white', 'text-gray-700', 'border-gray-300', 'hover:bg-gray-100');
-            }
-        }
-
-        function filterItems(filter) {
-            renderItems(filter);
-        }
-
-        function handlePurchase(itemId, cpValue) {
-            if (cpValue > userState.cpBalance) {
-                alert(`Non hai abbastanza CP. Hai bisogno di ${cpValue} CP, ma ne hai solo ${userState.cpBalance}.`);
-                return;
-            }
-
-            // Simulazione: Blocca i CP e inizia la trattativa (chat)
-            alert(`Acquisto di ${cpValue} CP avviato! I CP sono stati bloccati. Verrai reindirizzato alla chat per concordare i dettagli.`);
-            
-            // Simula l'apertura della chat per la conferma
-            userState.cpBalance -= cpValue; // Blocca i CP
-            updateProfileUI();
-            showChatDetail('chat-1'); // Usa la chat di esempio
-        }
-
-        // --- GESTIONE PROFILO E BLOCCO ACQUISTO ---
-
-        function updateProfileUI() {
-            // Verifica la Doppia Soglia di Attivazione
-            userState.isActivated = userState.kpBalance >= MIN_KP && userState.cpEarned >= MIN_CP_EARNED;
-            
-            // Elementi UI
-            document.getElementById('cp-balance').textContent = userState.cpBalance;
-            document.getElementById('kp-balance').textContent = userState.kpBalance;
-            document.getElementById('cp-earned').textContent = userState.cpEarned;
-            
-            const statusBlock = document.getElementById('activation-block');
-            const statusIcon = document.getElementById('karma-status-icon');
-            const statusTitle = document.getElementById('karma-status-title');
-            const statusMessage = document.getElementById('karma-status-message');
-            
-            const reqCpEarned = document.getElementById('req-cp-earned');
-            const reqKpBalance = document.getElementById('req-kp-balance');
-            
-            // Aggiorna lo stato generale
-            if (userState.isActivated) {
-                statusBlock.classList.add('bg-green-100', 'border-green-300');
-                statusBlock.classList.remove('bg-red-100', 'border-red-300');
-                statusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle text-green-600"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>`;
-                statusTitle.textContent = 'Stato Karma: Attivo (Livello 1)';
-                statusMessage.textContent = 'Congratulazioni! Hai sbloccato l\'acquisto e le funzioni di livello superiore. Continua a contribuire!';
-                requirements_list.style.display = 'none';
-
-            } else {
-                statusBlock.classList.add('bg-red-100', 'border-red-300');
-                statusBlock.classList.remove('bg-green-100', 'border-green-300');
-                statusIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-lock text-red-600"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
-                statusTitle.textContent = 'Stato Karma: Principiante (Livello 0)';
-                statusMessage.textContent = 'Devi prima dare per poter ricevere! Completa una transazione per sbloccare gli acquisti.';
-                requirements_list.style.display = 'block';
-
-                // Aggiorna lo stato dei requisiti individuali
-                const cpCheck = userState.cpEarned >= MIN_CP_EARNED;
-                const kpCheck = userState.kpBalance >= MIN_KP;
-
-                reqCpEarned.innerHTML = `<span class="mr-2">${cpCheck ? '✅' : '❌'}</span> Aver guadagnato almeno **${MIN_CP_EARNED} CP** (Hai: ${userState.cpEarned} CP)`;
-                reqKpBalance.innerHTML = `<span class="mr-2">${kpCheck ? '✅' : '❌'}</span> Avere almeno **${MIN_KP} Karma Points** (Hai: ${userState.kpBalance} KP)`;
-            }
-
-            // Riafforza il rendering della home per aggiornare i pulsanti 'Acquista'
-            if (currentActiveScreen === 'home') {
-                const activeTab = document.querySelector('.tab-item.active');
-                let filter = 'all';
-                if (activeTab && activeTab.textContent.toLowerCase().includes('servizi')) {
-                    filter = 'servizio';
-                } else if (activeTab && activeTab.textContent.toLowerCase().includes('beni')) {
-                    filter = 'bene';
-                }
-                renderItems(filter);
-            }
-        }
         
-        // --- GESTIONE CHAT, CONFERMA E RECENSIONE ---
-
-        function showChatDetail(chatId) {
-            currentChatId = chatId;
-            document.getElementById('chat-detail-screen').classList.remove('hidden');
-            document.getElementById('chat-detail-screen').classList.add('flex');
-            document.getElementById('tab-bar').style.display = 'none';
-            document.getElementById('app-header').style.display = 'none';
-        }
-
-        function hideChatDetail() {
-            document.getElementById('chat-detail-screen').classList.add('hidden');
-            document.getElementById('chat-detail-screen').classList.remove('flex');
-            document.getElementById('tab-bar').style.display = 'flex';
-            document.getElementById('app-header').style.display = 'block';
-            showScreen('messages');
-            // Nascondi la sezione di controversia al ritorno
-            document.getElementById('controversy-section').style.display = 'block';
-            document.getElementById('controversy-status').textContent = 'In attesa di conferma finale da entrambe le parti.';
-        }
-
-        function openReview(chatId) {
-            // Simulazione: Utente B (venditore) riceve i CP e i KP di base
-            const exchangedCP = 20; 
-            const baseKP = 5; // KP di base per uno scambio riuscito
-
-            // L'acquirente (Utente Test) paga 20 CP (già fatto in handlePurchase)
-
-            // Il venditore riceve i CP (solo simulazione)
-            // L'utente attuale è l'acquirente, quindi non modifichiamo il saldo CP qui.
-
-            // Apri Modale Recensione per il KP Aggiuntivo/Malus
-            document.getElementById('review-modal').classList.remove('hidden');
-        }
-
-        document.getElementById('review-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const rating = document.querySelector('input[name="rating"]:checked').value;
-            const reviewText = document.getElementById('review-text').value;
-
-            // Logica di penalità/bonus KP
-            let kpChange = 0;
-            let finalMessage = '';
-
-            if (rating === 'eccellente') {
-                kpChange = 10; 
-                finalMessage = 'Recensione Eccellente inviata. L\'utente ha ricevuto +10 KP. Saldo KP attuale: ';
-            } else if (rating === 'riuscita') {
-                kpChange = 5;
-                finalMessage = 'Recensione Riuscita inviata. L\'utente ha ricevuto +5 KP. Saldo KP attuale: ';
-            } else if (rating === 'problematica') {
-                if (!reviewText.trim()) {
-                    alert('Devi motivare la recensione "Problematica" per iscritto.');
-                    return;
-                }
-                // Avvia la procedura di controversia (Giuria Karma)
-                alert('Problema segnalato. Controversia aperta e penalità KP congelata. Verrai reindirizzato al verdetto simulato.');
-                document.getElementById('review-modal').classList.add('hidden');
-                openControversy(currentChatId);
-                return;
-            }
-
-            // Simulazione: Assegna KP al VENDITORE (John Artigiano)
-            // L'utente attuale (EcoMunity Tester) guadagna solo i 50 CP al primo publish
+        <div id="profile-screen" class="screen">
+            <h2 class="text-xl font-bold mb-6 text-gray-700">Il Tuo Profilo</h2>
             
-            // Simula l'aggiornamento del KP di John
-            // Visto che non abbiamo un database, l'effetto sul EcoMunity Tester qui è nullo, 
-            // ma il messaggio mostra l'impatto sul venditore.
-
-            alert(finalMessage + ` (Simulato sul venditore)`);
-
-            // Simula il guadagno di 50 CP Earned per sblocco se non ancora attivo
-            if (!userState.isActivated) {
-                 userState.kpBalance = MIN_KP; // Simuliamo che il primo scambio ha sbloccato l'utente
-                 userState.cpEarned = MIN_CP_EARNED; 
-            } else {
-                 userState.kpBalance += 5; // KP Bonus per la partecipazione attiva
-            }
-
-
-            updateProfileUI();
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100 space-y-4">
+                <p class="text-2xl font-bold text-[#22c55e]" id="profile-name">Caricamento...</p>
+                <p class="text-sm text-gray-600">Karma Attuale: <span class="font-bold text-yellow-600">50 (Principiante)</span></p>
+                
+                <h3 class="font-semibold text-gray-700 pt-4">Le Tue Offerte Pubblicate</h3>
+                <div class="space-y-3">
+                    <p class="text-sm text-gray-500">Nessuna offerta attiva. Pubblicane una!</p>
+                </div>
+            </div>
             
-            // Chiudi tutto
-            document.getElementById('review-modal').classList.add('hidden');
-            hideChatDetail();
-        });
+            <button onclick="handleLogout()" class="mt-6 w-full py-3 text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition duration-150">
+                Disconnetti Account
+            </button>
+        </div>
+        
+    </div>
+    
+    <div id="tab-bar">
+        <button class="tab-item active" id="nav-home" onclick="navigate('home-screen', this)">
+            <div class="flex flex-col items-center p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-layout-grid"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="12" x2="12" y1="3" y2="21"/></svg>
+                <span class="text-xs mt-1">Home</span>
+            </div>
+        </button>
+        
+        <button class="tab-item" id="nav-publish" onclick="navigate('publish-screen', this)">
+            <div class="flex flex-col items-center p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-circle"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+                <span class="text-xs mt-1">Pubblica</span>
+            </div>
+        </button>
+        
+        <button class="tab-item" id="nav-chat" onclick="alert('La schermata Chat non è ancora implementata!')">
+            <div class="flex flex-col items-center p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="text-xs mt-1">Chat</span>
+            </div>
+        </button>
+        
+        <button class="tab-item" id="nav-profile" onclick="navigate('profile-screen', this)">
+            <div class="flex flex-col items-center p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span class="text-xs mt-1">Profilo</span>
+            </div>
+        </button>
+    </div>
 
-        // --- GESTIONE CONTROVERSIE (GIURIA KARMA) ---
-
-        function openControversy(chatId) {
-            // Questo viene chiamato se l'utente clicca 'Problema' o invia recensione 'Problematica'
-            document.getElementById('review-modal').classList.add('hidden');
-            document.getElementById('controversy-modal').classList.remove('hidden');
-            
-            // Aggiorna lo stato nella chat
-            document.getElementById('controversy-status').textContent = 'CONTROVERSIA APERTA. Penalità KP in sospeso.';
-            
-            // Simulazione: i KP di John Artigiano (-10 KP) sono in congelamento.
-            // L'utente attuale (il difensore) può agire solo dopo la giuria.
-        }
-
-        function handleControversyVerdict(isDefendantFavored) {
-            let message = '';
-            
-            if (isDefendantFavored) {
-                // Giuria ANNULLA la penalità (L'accusatore aveva torto)
-                // L'utente accusato (John) viene premiato (+5 KP)
-                // L'utente attuale (EcoMunity Tester - l'accusatore) riceve un malus per abuso di sistema
-                userState.kpBalance = Math.max(0, userState.kpBalance - 5); 
-                message = 'VERDETTO: Assolto. La Giuria ha dato ragione a John. L\'accusatore (tu) riceve un malus di -5 KP per abuso del sistema di controversie.';
-            } else {
-                // Giuria CONFERMA la penalità (L'accusatore aveva ragione)
-                // L'utente accusato (John) perde -10 KP
-                // L'utente attuale (EcoMunity Tester - l'accusatore) viene premiato (+5 KP)
-                userState.kpBalance += 5; 
-                message = 'VERDETTO: Confermata la Penalità. La Giuria ti ha dato ragione e il venditore (John) ha perso -10 KP. Hai ricevuto un bonus di +5 KP per l\'onestà nel reporting.';
-            }
-
-            updateProfileUI();
-            alert(message);
-            document.getElementById('controversy-modal').classList.add('hidden');
-            hideChatDetail();
-        }
-
-        // --- AVVIO APP ---
-        document.addEventListener('DOMContentLoaded', () => {
-            // !!! Avvia la funzione di login all'inizio per bypassare la schermata iniziale !!!
-            handleLogin(); 
-        });
-    </script>
 </body>
 </html>
-

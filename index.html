@@ -15,12 +15,13 @@
   // Your web app's Firebase configuration (I tuoi dati restano invariati)
   const firebaseConfig = {
     apiKey: "AIzaSyCTwU75eJLGpuz5jw_gkhHdgYrHUkN__AY",
-    auhttps://ecomunity.vercel.app/thDomain: "ecomunity-app.firebaseapp.com",
+    authDomain: "ecomunity-app.firebaseapp.com",
     projectId: "ecomunity-app",
     storageBucket: "ecomunity-app.firebasestorage.app",
     messagingSenderId: "788175207861",
     appId: "1:788175207861:web:e3f159da01c096e0d3edfc"
   };
+
 
   // Inizializza Firebase
   const app = initializeApp(firebaseConfig);
@@ -108,10 +109,10 @@
     if (user) {
         // Utente loggato (Registrato o Ri-loggato)
         console.log("Utente attivo:", user.uid, user.displayName);
-        
-            // **MODIFICHE APPORTATE QUI PER GARANTIRE LA VISIBILITÀ SU TUTTI I BROWSER**
-    document.getElementById('app-header').style.display = 'block'; 
-    document.getElementById('tab-bar').style.display = 'flex'; 
+
+        // **MODIFICHE PER GARANTIRE LA VISIBILITÀ SU TUTTI I BROWSER**
+        document.getElementById('app-header').style.display = 'block'; 
+        document.getElementById('tab-bar').style.display = 'flex'; 
         
         // Aggiorna l'UI del profilo se necessario (es. nome utente)
         document.getElementById('profile-name').textContent = user.displayName || "Utente EcoMunity";
@@ -133,7 +134,6 @@
         document.getElementById('tab-bar').style.display = 'none';
     }
   });
-
 
   // --- 5. INTERAZIONE DATABASE (ESEMPIO DI PUBBLICAZIONE) ---
   // Funzione per salvare una nuova offerta su Firestore

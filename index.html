@@ -3,13 +3,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EcoMunity - Scambio Etico e Comunitario</title>
-    <script type="module">
+<script type="module">
   // --- 1. IMPORTAZIONI COMPLETE FIREBASE ---
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
   // Importazioni per l'Autenticazione (Login Google)
   import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
   // Importazioni per il Database (Firestore - Interazioni/Pubblicazione)
-  import { getFirestore, collection, addDoc, query, onSnapshot } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+  // AGGIUNTE: doc, deleteDoc e updateDoc
+  import { getFirestore, collection, addDoc, query, onSnapshot, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 
   // Your web app's Firebase configuration (I tuoi dati restano invariati)
@@ -21,7 +22,6 @@
     messagingSenderId: "788175207861",
     appId: "1:788175207861:web:e3f159da01c096e0d3edfc"
   };
-
 
   // Inizializza Firebase
   const app = initializeApp(firebaseConfig);
@@ -121,7 +121,7 @@
         switchScreen('home-screen');
         document.getElementById('nav-home').classList.add('active');
 
-        // Carica le offerte dal database (Questa è la funzione che devi implementare)
+        // Carica le offerte dal database
         loadOffers(); 
 
     } else {
@@ -134,6 +134,7 @@
         document.getElementById('tab-bar').style.display = 'none';
     }
   });
+
 
   // --- 5. INTERAZIONE DATABASE (ESEMPIO DI PUBBLICAZIONE) ---
   // Funzione per salvare una nuova offerta su Firestore
@@ -175,30 +176,85 @@
     }
   }
 
+  // NUOVA FUNZIONE: ELIMINA OFFERTA
+  window.deleteOffer = async function(docId) {
+      if (confirm("Sei sicuro di voler eliminare questa offerta? L'azione è irreversibile.")) {
+          try {
+              // Trova il riferimento al documento e lo elimina
+              await deleteDoc(doc(db, "offerte", docId));
+              console.log("Documento eliminato con ID: ", docId);
+              alert("Offerta eliminata con successo!");
+              // L'aggiornamento UI è automatico grazie a onSnapshot in loadOffers
+          } catch (e) {
+              console.error("Errore durante l'eliminazione del documento: ", e);
+              alert("Errore durante l'eliminazione. Controlla le regole di sicurezza (write).");
+          }
+      }
+  }
+  
+  // NUOVA FUNZIONE: MODIFICA OFFERTA (funzionalità iniziale)
+  window.editOffer = function(docId, title, description) {
+      alert("Funzione di modifica avviata. Caricamento dati annuncio: " + title);
+      // **NOTA BENE:** Per l'implementazione completa:
+      // 1. Dovresti creare un form Modale o reindirizzare alla schermata di Pubblicazione.
+      // 2. Pre-compilare i campi 'title' e 'description' con i valori passati.
+      // 3. Creare una funzione 'updateOffer' che usa updateDoc(docRef, { ...nuovidati... }).
+      
+      console.log("ID da modificare:", docId);
+      console.log("Titolo attuale:", title);
+  }
+
+
   // --- 6. INTERAZIONE DATABASE (ESEMPIO DI LETTURA) ---
   // Funzione per leggere e popolare le offerte
   function loadOffers() {
+      // Ottieni l'utente loggato
+      const currentUser = auth.currentUser;
+      const currentUserId = currentUser ? currentUser.uid : null;
+      
       // Inizia l'ascolto in tempo reale sulla collezione 'offerte'
-      // Questo aggiornerà l'UI ogni volta che una nuova offerta viene aggiunta o modificata
       const q = query(collection(db, "offerte"));
       
       onSnapshot(q, (querySnapshot) => {
           let beniHtml = '';
           let serviziHtml = '';
           
-          querySnapshot.forEach((doc) => {
-              const offer = doc.data();
+          querySnapshot.forEach((document) => {
+              const offer = document.data();
+              const docId = document.id; // Ottieni l'ID del documento
+              const isOwner = currentUserId && offer.ownerId === currentUserId; // Controlla se è il proprietario
+
+              // COSTRUZIONE DINAMICA DEI PULSANTI
+              const ownerButtons = isOwner ? `
+                  <div class="flex space-x-2 mt-2">
+                      <button onclick="editOffer('${docId}', \`${offer.title}\`, \`${offer.description}\`)" 
+                          class="px-2 py-1 text-xs bg-yellow-500 text-white font-medium rounded-full hover:bg-yellow-600 transition">
+                          Modifica
+                      </button>
+                      <button onclick="deleteOffer('${docId}')" 
+                          class="px-2 py-1 text-xs bg-red-500 text-white font-medium rounded-full hover:bg-red-600 transition">
+                          Elimina
+                      </button>
+                  </div>
+              ` : '';
+
+              // PULSANTE 'CONTATTA' (mostrato solo se NON è il proprietario)
+              const contactButton = isOwner ? '' : `
+                  <button class="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition">
+                      Contatta
+                  </button>
+              `;
+
               // Costruisci il blocco HTML per l'offerta
               const offerHtml = `
-                <div class="bg-white p-4 rounded-lg shadow-sm flex justify-between items-center border border-gray-200">
+                <div class="bg-white p-4 rounded-lg shadow-sm flex justify-between items-start border border-gray-200">
                     <div>
                         <p class="font-semibold text-lg">${offer.title}</p>
                         <p class="text-sm text-gray-500">${offer.description}</p>
                         <p class="text-xs text-gray-400 mt-1">Offerto da: ${offer.ownerName}</p>
+                        ${ownerButtons}
                     </div>
-                    <button class="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition">
-                        Contatta
-                    </button>
+                    ${contactButton}
                 </div>
               `;
 
@@ -218,6 +274,7 @@
   }
 
 </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');

@@ -67,15 +67,13 @@
     document.getElementById('type-bene').classList.add('text-gray-700', 'hover:bg-gray-200');
     document.getElementById('type-servizio').classList.add('text-gray-700', 'hover:bg-gray-200');
 
-        if (type === 'bene') {
+    if (type === 'bene') {
         document.getElementById('type-bene').classList.add('bg-[#22c55e]', 'text-white');
     } else {
         document.getElementById('type-servizio').classList.add('bg-[#22c55e]', 'text-white');
     }
   }
 
-  // >>> INIZIO NUOVO CODICE DA COPIARE/INCOLLARE QUI <<<
-  
   // NUOVA FUNZIONE: per cambiare tra scheda Beni e Servizi sulla Home
   window.switchHomeTab = function(type, element) {
     // Nasconde tutti i contenuti della Home Tab
@@ -98,8 +96,6 @@
     element.classList.remove('text-gray-700', 'hover:bg-gray-200');
     element.classList.add('bg-[#22c55e]', 'text-white');
   }
-
-  // >>> FINE NUOVO CODICE DA COPIARE/INCOLLARE QUI <<<
 
 
   // --- 3. FUNZIONE DI AUTENTICAZIONE GOOGLE ---

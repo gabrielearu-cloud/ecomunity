@@ -67,12 +67,39 @@
     document.getElementById('type-bene').classList.add('text-gray-700', 'hover:bg-gray-200');
     document.getElementById('type-servizio').classList.add('text-gray-700', 'hover:bg-gray-200');
 
-    if (type === 'bene') {
+        if (type === 'bene') {
         document.getElementById('type-bene').classList.add('bg-[#22c55e]', 'text-white');
     } else {
         document.getElementById('type-servizio').classList.add('bg-[#22c55e]', 'text-white');
     }
   }
+
+  // >>> INIZIO NUOVO CODICE DA COPIARE/INCOLLARE QUI <<<
+  
+  // NUOVA FUNZIONE: per cambiare tra scheda Beni e Servizi sulla Home
+  window.switchHomeTab = function(type, element) {
+    // Nasconde tutti i contenuti della Home Tab
+    document.querySelectorAll('.home-tab-content').forEach(content => {
+      content.classList.add('hidden');
+      content.classList.remove('active');
+    });
+    
+    // Rimuove la classe attiva da tutti i bottoni della barra
+    document.getElementById('tab-btn-beni').classList.remove('bg-[#22c55e]', 'text-white');
+    document.getElementById('tab-btn-servizi').classList.remove('bg-[#22c55e]', 'text-white');
+    document.getElementById('tab-btn-beni').classList.add('text-gray-700', 'hover:bg-gray-200');
+    document.getElementById('tab-btn-servizi').classList.add('text-gray-700', 'hover:bg-gray-200');
+
+    // Mostra il contenuto corretto
+    document.getElementById('home-' + type).classList.remove('hidden');
+    document.getElementById('home-' + type).classList.add('active');
+
+    // Applica lo stile attivo al bottone
+    element.classList.remove('text-gray-700', 'hover:bg-gray-200');
+    element.classList.add('bg-[#22c55e]', 'text-white');
+  }
+
+  // >>> FINE NUOVO CODICE DA COPIARE/INCOLLARE QUI <<<
 
 
   // --- 3. FUNZIONE DI AUTENTICAZIONE GOOGLE ---
@@ -331,9 +358,22 @@
         .ecomunity-logo svg {
             margin-right: 0.5rem;
         }
+        
+        /* >>> INIZIO NUOVO CODICE CSS DA COPIARE/INCOLLARE QUI <<< */
+        
+        /* Stile per nascondere/mostrare le schede Home interne */
+        .home-tab-content.hidden {
+            display: none;
+        }
+        .home-tab-content.active {
+            display: block;
+        }
+
+        /* >>> FINE NUOVO CODICE CSS DA COPIARE/INCOLLARE QUI <<< */
     </style>
 </head>
 <body class="antialiased text-gray-800">
+
 
     <div id="app-header" class="app-header">
         <div class="flex justify-between items-center">
@@ -379,18 +419,44 @@
         </div>
 
 
-        <div id="home-screen" class="screen active">
-            <h2 class="text-xl font-bold mb-6 text-gray-700">Le Ultime Offerte</h2>
+                <div id="home-screen" class="screen active">
+            <h2 class="text-xl font-bold mb-4 text-gray-700">Il Mercato EcoMunity</h2>
             
-            <div class="mb-8 p-4 rounded-xl bg-blue-50 border-2 border-blue-200">
-                <h3 class="text-lg font-extrabold text-blue-800 mb-4 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-package-check mr-2"><path d="m16 16 2 2 4-4"/><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-                    Beni e Oggetti
-                </h3>
-                <div id="item-list-bene" class="space-y-4">
-                    </div>
-                <p id="empty-bene" class="text-sm text-gray-500 text-center mt-4 hidden">Nessun bene disponibile al momento. Pubblicane uno!</p>
+            <div class="flex space-x-2 p-1 bg-gray-100 rounded-lg mb-4">
+                <button type="button" onclick="switchHomeTab('beni', this)" id="tab-btn-beni" class="flex-1 py-2 text-center rounded-lg font-bold bg-[#22c55e] text-white transition duration-150">
+                    Beni (Oggetti)
+                </button>
+                <button type="button" onclick="switchHomeTab('servizi', this)" id="tab-btn-servizi" class="flex-1 py-2 text-center rounded-lg font-bold text-gray-700 hover:bg-gray-200 transition duration-150">
+                    Servizi (Banca Ore)
+                </button>
             </div>
+            
+            <div id="home-beni" class="home-tab-content active">
+                <div class="mb-4 p-4 rounded-xl bg-blue-50 border-2 border-blue-200">
+                    <h3 class="text-lg font-extrabold text-blue-800 mb-4 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-package-check mr-2"><path d="m16 16 2 2 4-4"/><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                        Beni in Scambio
+                    </h3>
+                    <div id="item-list-bene" class="space-y-4">
+                        </div>
+                    <p id="empty-bene" class="text-sm text-gray-500 text-center mt-4 hidden">Nessun bene disponibile al momento. Pubblicane uno!</p>
+                </div>
+            </div>
+            
+            <div id="home-servizi" class="home-tab-content hidden">
+                <div class="p-4 rounded-xl bg-green-50 border-2 border-green-200">
+                    <h3 class="text-lg font-extrabold text-green-800 mb-4 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-timer mr-2"><path d="M10 2h4"/><path d="M12 14v-4"/><path d="M22 12a10 10 0 0 1-10 10A10 10 0 0 1 2 12h2a8 8 0 0 0 8 8 8 8 0 0 0 8-8z"/></svg>
+                        Servizi (Banca Ore)
+                    </h3>
+                    <div id="item-list-servizio" class="space-y-4">
+                        </div>
+                    <p id="empty-servizio" class="text-sm text-gray-500 text-center mt-4 hidden">Nessun servizio disponibile al momento. Pubblicane uno!</p>
+                </div>
+            </div>
+            
+        </div>
+
 
             <div class="p-4 rounded-xl bg-green-50 border-2 border-green-200">
                 <h3 class="text-lg font-extrabold text-green-800 mb-4 flex items-center">

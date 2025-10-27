@@ -147,8 +147,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
         // Carica le offerte dal database
         loadOffers(); 
-        loadChatList(); 
-         loadChatMessages(); // Serve per inizializzare il listener dei messaggi
+        loadChatList(); // Serve per inizializzare il listener dei messaggi
     } else {
         // Utente NON loggato
         console.log("Nessun utente loggato. Mostra schermata di Login.");
@@ -312,32 +311,140 @@ window.navigateFromChat = function(screenId, element) {
     }
   }
 
-  // NUOVA FUNZIONE: ELIMINA OFFERTA
-  window.deleteOffer = async function(docId) {
-      if (confirm("Sei sicuro di voler eliminare questa offerta? L'azione è irreversibile.")) {
-          try {
-              // Trova il riferimento al documento e lo elimina
-              await deleteDoc(doc(db, "offerte", docId));
-              console.log("Documento eliminato con ID: ", docId);
-              alert("Offerta eliminata con successo!");
-              // L'aggiornamento UI è automatico grazie a onSnapshot in loadOffers
-          } catch (e) {
-              console.error("Errore durante l'eliminazione del documento: ", e);
-              alert("Errore durante l'eliminazione. Controlla le regole di sicurezza (write).");
-          }
+   // ************************************************************
+  // ** NUOVE FUNZIONI DI GESTIONE CHAT, STATO E ASSEGNAZIONE CP **
+  // ************************************************************
+
+  // NUOVA FUNZIONE: Richiede il feedback, gestisce l'assegnazione di CP e imposta lo stato a 'completed'
+  window.requestFeedback = async function(docId, cpValue) {
+      const user = auth.currentUser;
+      if (!user) {
+          alert("Errore di autenticazione.");
+          return;
+      }
+      
+      const offerRef = doc(db, "offerte", docId);
+      const offerSnap = await getDoc(offerRef); // Ottiene lo stato attuale
+      if (!offerSnap.exists() || offerSnap.data().status !== 'reserved' || offerSnap.data().ownerId !== user.uid) {
+           alert("Impossibile completare. L'offerta non è riservata o non sei il proprietario.");
+           return;
+      }
+
+      // Semplice richiesta di feedback tramite prompt per simulare le 3 opzioni (SIMULAZIONE CP/Karma)
+      const feedback = prompt(
+          "L'oggetto è stato ritirato con successo? Scegli un'opzione:\n" +
+          "1: Andato a Buon Fine (Assegna 100% CP)\n" +
+          "2: Meritevole (Extra CP, +120%)\n" +
+          "3: Qualcosa Non ha Funzionato (0 CP, Bassa affidabilità)"
+      );
+
+      let finalCP = 0;
+      let feedbackType = '';
+      
+      switch (feedback) {
+          case '1':
+              finalCP = cpValue; // 100% del valore (Es. 50 CP)
+              feedbackType = 'success';
+              break;
+          case '2':
+              finalCP = Math.round(cpValue * 1.2); // 120% del valore (Es. 60 CP)
+              feedbackType = 'merit';
+              break;
+          case '3':
+              finalCP = 0; // Nessun CP
+              feedbackType = 'fail';
+              break;
+          default:
+              alert("Selezione non valida. Annullato.");
+              return;
+      }
+      
+      if (feedbackType === 'fail' && !confirm("Sei sicuro di voler dare un feedback negativo? L'acquirente non riceverà CP.")) {
+           return;
+      }
+
+      try {
+          // 1. Aggiornamento Stato Offerta a 'completed'
+          await updateDoc(offerRef, {
+              status: 'completed', 
+              feedback: feedbackType, 
+              cp_awarded: finalCP,
+              completionDate: new Date()
+          });
+
+          // 2. Notifica e ricarica
+          alert(`Scambio completato! L'acquirente riceverà ${finalCP} CP.`);
+          loadOffers(); 
+          
+      } catch (e) {
+          console.error("Errore durante il completamento dello scambio: ", e);
+          alert("Errore nel completare lo scambio. Controlla la console.");
       }
   }
-    // NUOVA FUNZIONE: Carica la lista delle chat
+
+
+  // NUOVA FUNZIONE: Avvia la chat, imposta l'offerta a 'reserved' e reindirizza
+  window.initiateChat = async function(offerId, ownerId, offerTitle) {
+      const user = auth.currentUser;
+      if (!user) {
+          alert("Devi essere loggato per contattare il venditore.");
+          return;
+      }
+      
+      const offerRef = doc(db, "offerte", offerId);
+      
+      // Controllo per offerte già riservate
+      const offerSnap = await getDoc(offerRef);
+      if (offerSnap.exists() && offerSnap.data().status !== 'available') {
+           alert("Questa offerta non è più disponibile o è già riservata.");
+           loadOffers();
+           return;
+      }
+
+      try {
+          // 1. Aggiorna lo stato dell'offerta a 'reserved'
+          await updateDoc(offerRef, {
+              status: 'reserved',
+              reservedBy: user.uid, 
+              reservedByName: user.displayName
+          });
+          
+          // 2. Aggiunge un documento Chat (ID univoco basato su offerta e acquirente)
+          const chatId = `${offerId}_${user.uid}`; 
+          const ownerName = offerSnap.data().ownerName || 'Venditore';
+
+          await setDoc(doc(db, "chats", chatId), { 
+              offerId: offerId,
+              offerTitle: offerTitle,
+              participants: [ownerId, user.uid], 
+              buyerId: user.uid,
+              sellerId: ownerId,
+              lastMessage: `Chat avviata per ${offerTitle}.`,
+              lastMessageTimestamp: new Date()
+          });
+          
+          alert(`Hai riservato l'offerta e avviato la chat!`);
+          
+          // 3. Naviga alla schermata della lista chat e ricarica
+          window.navigate('chat-list-screen', document.getElementById('nav-chat'));
+          loadOffers(); 
+
+      } catch (e) {
+          console.error("Errore nell'avvio della chat:", e);
+          alert("Errore nell'avvio della chat. Riprova.");
+      }
+  }
+
+  // NUOVA FUNZIONE: Carica la lista delle chat
   function loadChatList() {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
       
       const q = query(
-    collection(db, "chats"),
-    where("participants", "array-contains", currentUser.uid)
-);
+          collection(db, "chats"),
+          where("participants", "array-contains", currentUser.uid)
+      );
       
-      // Ascolto in tempo reale su tutte le chat (ottimizzazione futura: query solo su 'participants' include 'currentUser.uid')
       onSnapshot(q, (querySnapshot) => {
           let chatsHtml = '';
           let count = 0;
@@ -346,20 +453,15 @@ window.navigateFromChat = function(screenId, element) {
               const chat = doc.data();
               const chatId = doc.id;
               
-              // Mostra solo le chat in cui l'utente è un partecipante
-              if (chat.participants.includes(currentUser.uid)) {
-                  count++;
-                  // Determina l'altro partecipante
-                  const otherUserId = chat.participants.find(uid => uid !== currentUser.uid);
-                  const isSeller = chat.sellerId === currentUser.uid;
-                  
-                  chatsHtml += `
-                      <div onclick="openChat('${chatId}', \`${chat.offerTitle}\`)" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition cursor-pointer">
-                          <p class="font-bold text-gray-800">${chat.offerTitle} (${isSeller ? 'Vendita' : 'Acquisto'})</p>
-                          <p class="text-sm text-gray-500 truncate">Ultimo messaggio: ${chat.lastMessage || 'Nessun messaggio'}</p>
-                      </div>
-                  `;
-              }
+              count++;
+              const isSeller = chat.sellerId === currentUser.uid;
+              
+              chatsHtml += `
+                  <div onclick="openChat('${chatId}', \`${chat.offerTitle}\`)" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition cursor-pointer">
+                      <p class="font-bold text-gray-800">${chat.offerTitle} (${isSeller ? 'Offerta' : 'Acquisto'})</p>
+                      <p class="text-sm text-gray-500 truncate">Ultimo messaggio: ${chat.lastMessage || 'Nessun messaggio'}</p>
+                  </div>
+              `;
           });
 
           document.getElementById('chat-list-container').innerHTML = chatsHtml;
@@ -367,24 +469,36 @@ window.navigateFromChat = function(screenId, element) {
       });
   }
 
-  // Chiama loadChatList all'accesso
-  // Dove: Cerca il blocco 'if (user)' dentro onAuthStateChanged e aggiungi:
-  // loadChatList();
-
-  // NUOVA FUNZIONE: MODIFICA OFFERTA (funzionalità iniziale)
-  window.editOffer = function(docId, title, description) {
-      alert("Funzione di modifica avviata. Caricamento dati annuncio: " + title);
-      // **NOTA BENE:** Per l'implementazione completa:
-      // 1. Dovresti creare un form Modale o reindirizzare alla schermata di Pubblicazione.
-      // 2. Pre-compilare i campi 'title' e 'description' con i valori passati.
-      // 3. Creare una funzione 'updateOffer' che usa updateDoc(docRef, { ...nuovidati... }).
+  // Sostituisce la tua precedente loadChatMessages (assicurati di aver rimosso la vecchia)
+  function loadMessages(chatId) { 
+      const messagesContainer = document.getElementById('messages-container');
+      messagesContainer.innerHTML = ''; 
       
-      console.log("ID da modificare:", docId);
-      console.log("Titolo attuale:", title);
+      const q = query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"));
+      const currentUser = auth.currentUser;
+
+      onSnapshot(q, (querySnapshot) => {
+          messagesContainer.innerHTML = ''; 
+          querySnapshot.forEach((doc) => {
+              const message = doc.data();
+              const isMine = message.senderId === currentUser.uid;
+              
+              const timeString = message.timestamp && message.timestamp.toDate ? message.timestamp.toDate().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'Ora Sconosciuta';
+
+              const messageClass = isMine 
+                  ? 'self-end bg-[#dcf8c6] text-gray-900 rounded-bl-xl rounded-tl-xl rounded-tr-xl' 
+                  : 'self-start bg-white text-gray-800 rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100';
+
+              messagesContainer.innerHTML += `
+                  <div class="max-w-[75%] p-3 shadow-sm ${messageClass}">
+                      <p class="text-sm">${message.text}</p>
+                      <span class="text-xs text-right block ${isMine ? 'text-gray-600' : 'text-gray-500'} mt-1">${timeString}</span>
+                  </div>
+              `;
+          });
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      });
   }
-  // NUOVA FUNZIONE: Inizia una chat con il proprietario dell'offerta
-window.startNewChat = async function(offerId, offerTitle, sellerId, sellerName) {
-    const currentUser = auth.currentUser;
     
     // DEBUG: CONTROLLA GLI ID PRIMA DI TUTTO
     console.log("Acquirente (loggato):", currentUser ? currentUser.uid : "NON LOGGATO");
@@ -439,15 +553,13 @@ window.startNewChat = async function(offerId, offerTitle, sellerId, sellerName) 
     }
 }
 
-  // --- 6. INTERAZIONE DATABASE (ESEMPIO DI LETTURA) ---
-  // Funzione per leggere e popolare le offerte
+    // --- 6. INTERAZIONE DATABASE (ESEMPIO DI LETTURA) ---
+  // Funzione per leggere e popolare le offerte, ora con gestione stati (available, reserved, completed)
   function loadOffers() {
-      // Ottieni l'utente loggato
       const currentUser = auth.currentUser;
       const currentUserId = currentUser ? currentUser.uid : null;
       
-      // Inizia l'ascolto in tempo reale sulla collezione 'offerte'
-      const q = query(collection(db, "offerte"));
+      const q = query(collection(db, "offerte"), orderBy("timestamp", "desc"));
       
       onSnapshot(q, (querySnapshot) => {
           let beniHtml = '';
@@ -455,42 +567,91 @@ window.startNewChat = async function(offerId, offerTitle, sellerId, sellerName) 
           
           querySnapshot.forEach((document) => {
               const offer = document.data();
-              const docId = document.id; // Ottieni l'ID del documento
-              const isOwner = currentUserId && offer.ownerId === currentUserId; // Controlla se è il proprietario
+              const docId = document.id; 
+              const isOwner = currentUserId && offer.ownerId === currentUserId; 
+              
+              const status = offer.status || 'available'; 
+              const isAvailable = status === 'available';
+              const isReserved = status === 'reserved';
+              const isCompleted = status === 'completed';
+              const isReservedByMe = isReserved && offer.reservedBy === currentUserId;
+              
+              // ** Assumiamo un valore CP base (sarebbe un campo nell'offerta) **
+              const cpValuePlaceholder = 50; 
 
-              // COSTRUZIONE DINAMICA DEI PULSANTI
-              const ownerButtons = isOwner ? `
-                  <div class="flex space-x-2 mt-2">
-                      <button onclick="editOffer('${docId}', \`${offer.title}\`, \`${offer.description}\`)" 
-                          class="px-2 py-1 text-xs bg-yellow-500 text-white font-medium rounded-full hover:bg-yellow-600 transition">
-                          Modifica
-                      </button>
-                      <button onclick="deleteOffer('${docId}')" 
-                          class="px-2 py-1 text-xs bg-red-500 text-white font-medium rounded-full hover:bg-red-600 transition">
-                          Elimina
-                      </button>
-                  </div>
-              ` : '';
+              // ********** PULSANTI PROPRIETARIO **********
+              let ownerButtons = '';
+              if (isOwner && !isCompleted) {
+                  ownerButtons = `
+                      <div class="flex space-x-2 mt-2">
+                          <button onclick="deleteOffer('${docId}')" 
+                              class="px-2 py-1 text-xs bg-red-500 text-white font-medium rounded-full hover:bg-red-600 transition">
+                              Elimina
+                          </button>
+                      </div>
+                  `;
+              }
+              
+              // ********** PULSANTE AZIONE PRINCIPALE **********
+              let actionButton = '';
+              let statusBadge = '';
 
-              // PULSANTE 'CONTATTA' (mostrato solo se NON è il proprietario)
-              const contactButton = isOwner ? '' : `
-                  <button onclick="startNewChat('${docId}', \`${offer.title}\`, '${offer.ownerId}', \`${offer.ownerName}\`)" 
-                      class="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition">
-                      Contatta
-                  </button>
-              `;
+              if (isOwner) {
+                  if (isReserved) {
+                      // Proprietario: Pulsante per assegnare CP
+                      const reservedByName = offer.reservedByName || 'Acquirente';
+                      actionButton = `
+                          <div class="flex flex-col items-center">
+                              <p class="text-sm text-blue-600 font-medium mb-1">Riservata a: ${reservedByName.split(' ')[0]}</p>
+                              <button onclick="requestFeedback('${docId}', ${cpValuePlaceholder})" 
+                                  class="px-3 py-1 bg-blue-500 text-white text-sm font-medium rounded-full hover:bg-blue-600 transition">
+                                  Conferma Scambio (Assegna CP)
+                              </button>
+                          </div>
+                      `;
+                      statusBadge = `<span class="text-xs text-blue-500 font-bold ml-2">RISERVATA</span>`;
+
+                  } else if (isCompleted) {
+                       actionButton = `<span class="px-3 py-1 bg-gray-400 text-white text-sm font-medium rounded-full">SCAMBIATA</span>`;
+                       statusBadge = `<span class="text-xs text-gray-500 font-bold ml-2">COMPLETATA</span>`;
+                  }
+
+              } else { // Non è il proprietario
+                  if (isAvailable) {
+                      // Acquirente: Pulsante Contatta/Riserva
+                      actionButton = `
+                          <button onclick="initiateChat('${docId}', '${offer.ownerId}', \`${offer.title}\`)" 
+                              class="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition">
+                              Contatta (Costo: ${cpValuePlaceholder} CP)
+                          </button>
+                      `;
+                  } else if (isReserved && !isReservedByMe) {
+                      // Acquirente: Offerta riservata da altro utente
+                      actionButton = `<span class="px-3 py-1 bg-gray-400 text-white text-sm font-medium rounded-full">RISERVATA</span>`;
+                      statusBadge = `<span class="text-xs text-blue-500 font-bold ml-2">RISERVATA</span>`;
+                  } else if (isReserved && isReservedByMe) {
+                      // Acquirente: Offerta riservata da me
+                      actionButton = `<span class="px-3 py-1 bg-yellow-500 text-white text-sm font-medium rounded-full">TUA RISERVA</span>`;
+                      statusBadge = `<span class="text-xs text-blue-500 font-bold ml-2">RISERVATA (Tu)</span>`;
+                  } else if (isCompleted) {
+                      // Acquirente: Offerta completata
+                      actionButton = `<span class="px-3 py-1 bg-gray-400 text-white text-sm font-medium rounded-full">SCAMBIATA</span>`;
+                      statusBadge = `<span class="text-xs text-gray-500 font-bold ml-2">COMPLETATA</span>`;
+                  }
+              }
 
 
               // Costruisci il blocco HTML per l'offerta
               const offerHtml = `
                 <div class="bg-white p-4 rounded-lg shadow-sm flex justify-between items-start border border-gray-200">
                     <div>
-                        <p class="font-semibold text-lg">${offer.title}</p>
+                        <p class="font-semibold text-lg">${offer.title} ${statusBadge}</p>
                         <p class="text-sm text-gray-500">${offer.description}</p>
                         <p class="text-xs text-gray-400 mt-1">Offerto da: ${offer.ownerName}</p>
+                        <p class="text-sm font-bold text-yellow-600 mt-2">Valore: ${cpValuePlaceholder} CP</p>
                         ${ownerButtons}
                     </div>
-                    ${contactButton}
+                    ${actionButton}
                 </div>
               `;
 

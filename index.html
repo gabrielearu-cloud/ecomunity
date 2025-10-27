@@ -216,7 +216,6 @@ window.sendMessage = async function(event) {
     }
 }
 
-
 // Funzione per caricare e visualizzare i messaggi in tempo reale
 function loadChatMessages(chatId) {
     if (!chatId) return;
@@ -332,7 +331,10 @@ window.navigateFromChat = function(screenId, element) {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
       
-      const q = query(collection(db, "chats"));
+      const q = query(
+    collection(db, "chats"),
+    where("participants", "array-contains", currentUser.uid)
+);
       
       // Ascolto in tempo reale su tutte le chat (ottimizzazione futura: query solo su 'participants' include 'currentUser.uid')
       onSnapshot(q, (querySnapshot) => {

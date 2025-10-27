@@ -582,15 +582,17 @@ window.startNewChat = async function(offerId, offerTitle, sellerId, sellerName) 
 
 
     <div id="app-header" class="app-header">
-        <div class="flex justify-between items-center">
-             <div class="text-2xl font-black tracking-wide ecomunity-logo">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-leaf"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.1 10.4 17 10.8 21 12c-3.1 1.7-6.4 2.1-11 0a2 2 0 0 0-1.7 2.9c.7 2.8-.8 6.5-4.2 7A7 7 0 0 1 11 20"/></svg>
-                EcoMunity
-            </div>
-                    <button onclick="handleLogout()" class="mt-6 w-full py-3 text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition duration-150">
-            Disconnetti Account
+    <div class="flex justify-between items-center">
+         <div class="text-2xl font-black tracking-wide ecomunity-logo">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-leaf"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.1 10.4 17 10.8 21 12c-3.1 1.7-6.4 2.1-11 0a2 2 0 0 0-1.7 2.9c.7 2.8-.8 6.5-4.2 7A7 7 0 0 1 11 20"/></svg>
+            EcoMunity
+        </div>
+        
+        <button onclick="handleLogout()" class="logout-btn">
+            Logout
         </button>
     </div>
+</div>
 
     <div id="chat-list-screen" class="screen">
         <h2 class="text-xl font-bold mb-6 text-gray-700">Le Tue Chat</h2>

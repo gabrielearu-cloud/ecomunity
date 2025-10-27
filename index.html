@@ -382,7 +382,16 @@ window.navigateFromChat = function(screenId, element) {
   // NUOVA FUNZIONE: Inizia una chat con il proprietario dell'offerta
 window.startNewChat = async function(offerId, offerTitle, sellerId, sellerName) {
     const currentUser = auth.currentUser;
-    if (!currentUser || currentUser.uid === sellerId) {
+    
+    // DEBUG: CONTROLLA GLI ID PRIMA DI TUTTO
+    console.log("Acquirente (loggato):", currentUser ? currentUser.uid : "NON LOGGATO");
+    console.log("Venditore (offerta):", sellerId);
+
+    if (!currentUser) {
+        alert("Devi essere loggato per avviare una chat.");
+        return;
+    }
+    if (currentUser.uid === sellerId) {
         alert("Non puoi avviare una chat con te stesso.");
         return;
     }

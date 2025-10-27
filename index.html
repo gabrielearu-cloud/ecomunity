@@ -382,59 +382,37 @@ window.navigateFromChat = function(screenId, element) {
       }
   }
 
+// Devi inserire/sostituire questo blocco dopo la chiusura di requestFeedback()
+
+  // NUOVA FUNZIONE: Elimina l'offerta
+  window.deleteOffer = async function(docId) {
+      if (confirm("Sei sicuro di voler eliminare questa offerta? L'azione è irreversibile.")) {
+          try {
+              // Trova il riferimento al documento e lo elimina
+              await deleteDoc(doc(db, "offerte", docId));
+              console.log("Documento eliminato con ID: ", docId);
+              alert("Offerta eliminata con successo!");
+              // L'aggiornamento UI è automatico grazie a onSnapshot in loadOffers
+          } catch (e) {
+              console.error("Errore durante l'eliminazione del documento: ", e);
+              alert("Errore durante l'eliminazione. Controlla le regole di sicurezza (delete).");
+          }
+      }
+  }
 
   // NUOVA FUNZIONE: Avvia la chat, imposta l'offerta a 'reserved' e reindirizza
+  // Versione corretta che controlla l'esistenza della chat e aggiorna lo stato offerta.
   window.initiateChat = async function(offerId, ownerId, offerTitle) {
       const user = auth.currentUser;
       if (!user) {
           alert("Devi essere loggato per contattare il venditore.");
           return;
       }
-      
-      const offerRef = doc(db, "offerte", offerId);
-      
-      // Controllo per offerte già riservate
-      const offerSnap = await getDoc(offerRef);
-      if (offerSnap.exists() && offerSnap.data().status !== 'available') {
-           alert("Questa offerta non è più disponibile o è già riservata.");
-           loadOffers();
-           return;
+      if (user.uid === ownerId) {
+          alert("Non puoi avviare una chat con te stesso.");
+          return;
       }
-
-      try {
-          // 1. Aggiorna lo stato dell'offerta a 'reserved'
-          await updateDoc(offerRef, {
-              status: 'reserved',
-              reservedBy: user.uid, 
-              reservedByName: user.displayName
-          });
-          
-          // 2. Aggiunge un documento Chat (ID univoco basato su offerta e acquirente)
-          const chatId = `${offerId}_${user.uid}`; 
-          const ownerName = offerSnap.data().ownerName || 'Venditore';
-
-          await setDoc(doc(db, "chats", chatId), { 
-              offerId: offerId,
-              offerTitle: offerTitle,
-              participants: [ownerId, user.uid], 
-              buyerId: user.uid,
-              sellerId: ownerId,
-              lastMessage: `Chat avviata per ${offerTitle}.`,
-              lastMessageTimestamp: new Date()
-          });
-          
-          alert(`Hai riservato l'offerta e avviato la chat!`);
-          
-          // 3. Naviga alla schermata della lista chat e ricarica
-          window.navigate('chat-list-screen', document.getElementById('nav-chat'));
-          loadOffers(); 
-
-      } catch (e) {
-          console.error("Errore nell'avvio della chat:", e);
-          alert("Errore nell'avvio della chat. Riprova.");
-      }
-  }
-
+      
   // NUOVA FUNZIONE: Carica la lista delle chat
   function loadChatList() {
       const currentUser = auth.currentUser;
@@ -469,36 +447,7 @@ window.navigateFromChat = function(screenId, element) {
       });
   }
 
-  // Sostituisce la tua precedente loadChatMessages (assicurati di aver rimosso la vecchia)
-  function loadMessages(chatId) { 
-      const messagesContainer = document.getElementById('messages-container');
-      messagesContainer.innerHTML = ''; 
-      
-      const q = query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"));
-      const currentUser = auth.currentUser;
 
-      onSnapshot(q, (querySnapshot) => {
-          messagesContainer.innerHTML = ''; 
-          querySnapshot.forEach((doc) => {
-              const message = doc.data();
-              const isMine = message.senderId === currentUser.uid;
-              
-              const timeString = message.timestamp && message.timestamp.toDate ? message.timestamp.toDate().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'Ora Sconosciuta';
-
-              const messageClass = isMine 
-                  ? 'self-end bg-[#dcf8c6] text-gray-900 rounded-bl-xl rounded-tl-xl rounded-tr-xl' 
-                  : 'self-start bg-white text-gray-800 rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100';
-
-              messagesContainer.innerHTML += `
-                  <div class="max-w-[75%] p-3 shadow-sm ${messageClass}">
-                      <p class="text-sm">${message.text}</p>
-                      <span class="text-xs text-right block ${isMine ? 'text-gray-600' : 'text-gray-500'} mt-1">${timeString}</span>
-                  </div>
-              `;
-          });
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      });
-  }
 
     // --- 6. INTERAZIONE DATABASE (ESEMPIO DI LETTURA) ---
   // Funzione per leggere e popolare le offerte, ora con gestione stati (available, reserved, completed)

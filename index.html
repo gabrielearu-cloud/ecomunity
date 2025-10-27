@@ -575,7 +575,23 @@ window.startNewChat = async function(offerId, offerTitle, sellerId, sellerName) 
             display: block;
         }
 
-        /* >>> FINE NUOVO CODICE CSS DA COPIARE/INCOLLARE QUI <<< */
+      //* Stile per il pulsante Logout tondo nell'header */
+    .logout-btn {
+        background-color: #fca5a5; /* Rosso tenue */
+        color: #991b1b; /* Rosso scuro per il testo */
+        font-size: 0.75rem; /* Testo più piccolo */
+        font-weight: 600;
+        padding: 0.25rem 0.5rem; /* Padding ridotto */
+        border-radius: 9999px; /* Tondo/Pillola */
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .logout-btn:hover {
+        background-color: #f87171; /* Rosso più intenso all'hover */
+        color: white;
+    }
+
     </style>
 </head>
 <body class="antialiased text-gray-800">

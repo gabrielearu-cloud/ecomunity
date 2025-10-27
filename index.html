@@ -499,59 +499,6 @@ window.navigateFromChat = function(screenId, element) {
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
       });
   }
-    
-    // DEBUG: CONTROLLA GLI ID PRIMA DI TUTTO
-    console.log("Acquirente (loggato):", currentUser ? currentUser.uid : "NON LOGGATO");
-    console.log("Venditore (offerta):", sellerId);
-
-    if (!currentUser) {
-        alert("Devi essere loggato per avviare una chat.");
-        return;
-    }
-    if (currentUser.uid === sellerId) {
-        alert("Non puoi avviare una chat con te stesso.");
-        return;
-    }
-
-    // Costruisci un ID univoco per la chat (ordinando i due ID utente)
-    const participants = [currentUser.uid, sellerId].sort();
-    const chatQueryId = participants.join('_'); // Esempio: "userA_userB"
-
-    // Cerca se esiste già una chat con questo ID
-    const chatRef = doc(db, "chats", chatQueryId);
-    
-    try {
-        // Usa getDoc per verificare l'esistenza
-        const chatDoc = await getDoc(chatRef); // RICHIESTA getDoc IMPORTATO
-
-        if (chatDoc.exists()) {
-            // La chat esiste, aprila
-            openChat(chatQueryId, offerTitle);
-            return;
-        }
-
-        // La chat non esiste, creala
-        // Usa setDoc per creare il documento con un ID specifico
-        await setDoc(chatRef, { // RICHIESTA setDoc IMPORTATO
-            offerId: offerId,
-            offerTitle: offerTitle,
-            participants: participants,
-            sellerId: sellerId,
-            sellerName: sellerName,
-            buyerId: currentUser.uid,
-            buyerName: currentUser.displayName,
-            lastMessage: 'Chat avviata.',
-            lastMessageTimestamp: new Date()
-        });
-        
-        // Apri la chat appena creata
-        openChat(chatQueryId, offerTitle);
-        
-    } catch (e) {
-        console.error("Errore nell'avvio della chat: ", e);
-        alert("Impossibile avviare la chat. Riprova.");
-    }
-}
 
     // --- 6. INTERAZIONE DATABASE (ESEMPIO DI LETTURA) ---
   // Funzione per leggere e popolare le offerte, ora con gestione stati (available, reserved, completed)

@@ -214,7 +214,47 @@
           }
       }
   }
-  
+    // NUOVA FUNZIONE: Carica la lista delle chat
+  function loadChatList() {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+      
+      const q = query(collection(db, "chats"));
+      
+      // Ascolto in tempo reale su tutte le chat (ottimizzazione futura: query solo su 'participants' include 'currentUser.uid')
+      onSnapshot(q, (querySnapshot) => {
+          let chatsHtml = '';
+          let count = 0;
+          
+          querySnapshot.forEach((doc) => {
+              const chat = doc.data();
+              const chatId = doc.id;
+              
+              // Mostra solo le chat in cui l'utente è un partecipante
+              if (chat.participants.includes(currentUser.uid)) {
+                  count++;
+                  // Determina l'altro partecipante
+                  const otherUserId = chat.participants.find(uid => uid !== currentUser.uid);
+                  const isSeller = chat.sellerId === currentUser.uid;
+                  
+                  chatsHtml += `
+                      <div onclick="openChat('${chatId}', \`${chat.offerTitle}\`)" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:bg-gray-50 transition cursor-pointer">
+                          <p class="font-bold text-gray-800">${chat.offerTitle} (${isSeller ? 'Vendita' : 'Acquisto'})</p>
+                          <p class="text-sm text-gray-500 truncate">Ultimo messaggio: ${chat.lastMessage || 'Nessun messaggio'}</p>
+                      </div>
+                  `;
+              }
+          });
+
+          document.getElementById('chat-list-container').innerHTML = chatsHtml;
+          document.getElementById('empty-chats').style.display = count === 0 ? 'block' : 'none';
+      });
+  }
+
+  // Chiama loadChatList all'accesso
+  // Dove: Cerca il blocco 'if (user)' dentro onAuthStateChanged e aggiungi:
+  // loadChatList();
+
   // NUOVA FUNZIONE: MODIFICA OFFERTA (funzionalità iniziale)
   window.editOffer = function(docId, title, description) {
       alert("Funzione di modifica avviata. Caricamento dati annuncio: " + title);
@@ -514,7 +554,7 @@
             </div>
         </button>
         
-        <button class="tab-item" id="nav-chat" onclick="alert('La schermata Chat non è ancora implementata!')">
+                <button class="tab-item" id="nav-chat" onclick="navigate('chat-list-screen', this)">
             <div class="flex flex-col items-center p-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span class="text-xs mt-1">Chat</span>

@@ -146,7 +146,8 @@
 
         // Carica le offerte dal database
         loadOffers(); 
-
+        loadChatList(); 
+         loadChatMessages(); // Serve per inizializzare il listener dei messaggi
     } else {
         // Utente NON loggato
         console.log("Nessun utente loggato. Mostra schermata di Login.");
@@ -266,6 +267,51 @@
       console.log("ID da modificare:", docId);
       console.log("Titolo attuale:", title);
   }
+  // NUOVA FUNZIONE: Inizia una chat con il proprietario dell'offerta
+  window.startNewChat = async function(offerId, offerTitle, sellerId, sellerName) {
+      const currentUser = auth.currentUser;
+      if (!currentUser || currentUser.uid === sellerId) {
+          alert("Non puoi avviare una chat con te stesso.");
+          return;
+      }
+
+      // Costruisci un ID univoco per la chat (ordinando i due ID utente)
+      const participants = [currentUser.uid, sellerId].sort();
+      const chatQueryId = participants.join('_'); // Esempio: "userA_userB"
+
+      // Cerca se esiste già una chat con questo ID
+      const chatRef = doc(db, "chats", chatQueryId);
+      
+      try {
+          const chatDoc = await getDoc(chatRef);
+
+          if (chatDoc.exists()) {
+              // La chat esiste, aprila
+              openChat(chatQueryId, offerTitle);
+              return;
+          }
+
+          // La chat non esiste, creala
+          await setDoc(chatRef, {
+              offerId: offerId,
+              offerTitle: offerTitle,
+              participants: participants,
+              sellerId: sellerId,
+              sellerName: sellerName,
+              buyerId: currentUser.uid,
+              buyerName: currentUser.displayName,
+              lastMessage: 'Chat avviata.',
+              lastMessageTimestamp: new Date()
+          });
+          
+          // Apri la chat appena creata
+          openChat(chatQueryId, offerTitle);
+          
+      } catch (e) {
+          console.error("Errore nell'avvio della chat: ", e);
+          alert("Impossibile avviare la chat. Riprova.");
+      }
+  }
 
 
   // --- 6. INTERAZIONE DATABASE (ESEMPIO DI LETTURA) ---
@@ -303,10 +349,12 @@
 
               // PULSANTE 'CONTATTA' (mostrato solo se NON è il proprietario)
               const contactButton = isOwner ? '' : `
-                  <button class="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition">
+                  <button onclick="startNewChat('${docId}', \`${offer.title}\`, '${offer.ownerId}', \`${offer.ownerName}\`)" 
+                      class="px-3 py-1 bg-green-500 text-white text-sm font-medium rounded-full hover:bg-green-600 transition">
                       Contatta
                   </button>
               `;
+
 
               // Costruisci il blocco HTML per l'offerta
               const offerHtml = `
@@ -417,11 +465,41 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-leaf"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.1 10.4 17 10.8 21 12c-3.1 1.7-6.4 2.1-11 0a2 2 0 0 0-1.7 2.9c.7 2.8-.8 6.5-4.2 7A7 7 0 0 1 11 20"/></svg>
                 EcoMunity
             </div>
-            <button onclick="handleLogout()" class="text-sm font-medium py-1 px-3 border border-white rounded-full hover:bg-white hover:text-[#22c55e] transition duration-150">
-                Esci
+                    <button onclick="handleLogout()" class="mt-6 w-full py-3 text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition duration-150">
+            Disconnetti Account
+        </button>
+    </div>
+
+    <div id="chat-list-screen" class="screen">
+        <h2 class="text-xl font-bold mb-6 text-gray-700">Le Tue Chat</h2>
+        <div id="chat-list-container" class="space-y-3">
+            </div>
+        <p id="empty-chats" class="text-sm text-gray-500 text-center mt-4 hidden">Non hai chat attive. Invia un messaggio per iniziare una conversazione.</p>
+    </div>
+
+    <div id="chat-screen" class="screen fixed inset-0 bg-gray-50 z-50 p-4" style="display: none; padding-top: 64px; padding-bottom: 72px;">
+        <div class="fixed top-0 left-0 right-0 bg-[#22c55e] text-white p-4 flex items-center shadow-lg z-50">
+            <button onclick="navigate('chat-list-screen', document.getElementById('nav-chat'))" class="mr-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
             </button>
+            <h3 class="font-bold text-lg truncate" id="current-chat-title">Chat con...</h3>
+        </div>
+        
+        <div id="messages-container" class="flex flex-col space-y-3 overflow-y-auto h-full mb-4">
+            </div>
+        
+        <div class="fixed bottom-[72px] left-0 right-0 bg-white p-4 border-t border-gray-200">
+            <form id="message-form" onsubmit="sendMessage(event)" class="flex space-x-3">
+                <input type="hidden" id="current-chat-id">
+                <input type="text" id="message-input" required class="flex-1 border-gray-300 rounded-full p-3 focus:ring-[#22c55e] focus:border-[#22c55e]" placeholder="Scrivi un messaggio...">
+                <button type="submit" class="bg-[#22c55e] text-white font-bold px-4 rounded-full hover:bg-green-600 transition">
+                    Invia
+                </button>
+            </form>
         </div>
     </div>
+    </div>
+
 
     <div id="loading-screen" class="fixed inset-0 bg-white flex flex-col items-center justify-center p-6 z-50">
         <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-[#22c55e] mb-4"></div>

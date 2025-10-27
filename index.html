@@ -9,9 +9,9 @@
   // Importazioni per l'Autenticazione (Login Google)
   import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
   // Importazioni per il Database (Firestore - Interazioni/Pubblicazione)
-  // AGGIUNTE: doc, deleteDoc e updateDoc
-  import { getFirestore, collection, addDoc, query, onSnapshot, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
-
+  
+  // AGGIUNTE: doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy
+import { getFirestore, collection, addDoc, query, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   // Your web app's Firebase configuration (I tuoi dati restano invariati)
   const firebaseConfig = {
@@ -158,6 +158,118 @@
         document.getElementById('tab-bar').style.display = 'none';
     }
   });
+  
+// Variabile per tenere traccia della chat correntemente aperta
+let currentChatId = null;
+
+// Funzione per aprire una chat specifica
+window.openChat = function(chatId, offerTitle) {
+    currentChatId = chatId;
+    document.getElementById('current-chat-id').value = chatId;
+    document.getElementById('current-chat-title').textContent = offerTitle;
+    
+    // Passa alla schermata di chat
+    document.getElementById('chat-screen').style.display = 'flex';
+    
+    // Rimuovi l'header e la tab bar per la chat
+    document.getElementById('app-header').style.display = 'none';
+    document.getElementById('tab-bar').style.display = 'none';
+
+    // Carica i messaggi
+    loadChatMessages(chatId);
+}
+
+// Funzione per inviare un messaggio
+window.sendMessage = async function(event) {
+    event.preventDefault();
+    const messageInput = document.getElementById('message-input');
+    const messageText = messageInput.value.trim();
+    const chatId = document.getElementById('current-chat-id').value;
+    const currentUser = auth.currentUser;
+
+    if (!messageText || !chatId || !currentUser) {
+        return;
+    }
+
+    try {
+        // 1. Aggiungi il messaggio alla sottocollezione 'messages'
+        await addDoc(collection(db, "chats", chatId, "messages"), {
+            senderId: currentUser.uid,
+            senderName: currentUser.displayName,
+            text: messageText,
+            timestamp: new Date()
+        });
+
+        // 2. Aggiorna l'ultimo messaggio nel documento principale della chat (ottimizzazione)
+        const chatRef = doc(db, "chats", chatId);
+        await updateDoc(chatRef, {
+            lastMessage: messageText.substring(0, 50) + (messageText.length > 50 ? '...' : ''),
+            lastMessageTimestamp: new Date()
+        });
+
+        // Resetta il campo di input
+        messageInput.value = '';
+        
+    } catch (e) {
+        console.error("Errore nell'invio del messaggio: ", e);
+        alert("Impossibile inviare il messaggio.");
+    }
+}
+
+
+// Funzione per caricare e visualizzare i messaggi in tempo reale
+function loadChatMessages(chatId) {
+    if (!chatId) return;
+
+    const currentUser = auth.currentUser;
+    const messagesContainer = document.getElementById('messages-container');
+    
+    // Inizia l'ascolto in tempo reale sulla sottocollezione 'messages', ordinando per timestamp
+    const q = query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"));
+
+    onSnapshot(q, (querySnapshot) => {
+        let messagesHtml = '';
+        
+        querySnapshot.forEach((doc) => {
+            const msg = doc.data();
+            const isMe = msg.senderId === currentUser.uid;
+            
+            // Stile del messaggio a seconda del mittente
+            const messageClass = isMe 
+                ? 'self-end bg-[#dcf8c6] text-gray-900 rounded-bl-xl rounded-tl-xl rounded-tr-xl' 
+                : 'self-start bg-white text-gray-800 rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100';
+            
+            const timeString = msg.timestamp && msg.timestamp.toDate ? msg.timestamp.toDate().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'Ora Sconosciuta';
+
+            messagesHtml += `
+                <div class="max-w-[75%] p-3 shadow-sm ${messageClass}">
+                    <p class="text-sm">${msg.text}</p>
+                    <span class="text-xs text-right block ${isMe ? 'text-gray-600' : 'text-gray-500'} mt-1">${timeString}</span>
+                </div>
+            `;
+        });
+
+        messagesContainer.innerHTML = messagesHtml;
+        // Scorrimento automatico in basso (necessario per le chat)
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    });
+}
+
+// Funzione di navigazione per tornare dalla chat
+window.navigateFromChat = function(screenId, element) {
+    document.getElementById('chat-screen').style.display = 'none';
+    
+    // Riporta l'header e la tab bar
+    document.getElementById('app-header').style.display = 'block'; 
+    document.getElementById('tab-bar').style.display = 'flex'; 
+
+    // Esegui la navigazione standard
+    switchScreen(screenId);
+    document.querySelectorAll('.tab-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    element.classList.add('active');
+}
 
 
   // --- 5. INTERAZIONE DATABASE (ESEMPIO DI PUBBLICAZIONE) ---
@@ -268,51 +380,52 @@
       console.log("Titolo attuale:", title);
   }
   // NUOVA FUNZIONE: Inizia una chat con il proprietario dell'offerta
-  window.startNewChat = async function(offerId, offerTitle, sellerId, sellerName) {
-      const currentUser = auth.currentUser;
-      if (!currentUser || currentUser.uid === sellerId) {
-          alert("Non puoi avviare una chat con te stesso.");
-          return;
-      }
+window.startNewChat = async function(offerId, offerTitle, sellerId, sellerName) {
+    const currentUser = auth.currentUser;
+    if (!currentUser || currentUser.uid === sellerId) {
+        alert("Non puoi avviare una chat con te stesso.");
+        return;
+    }
 
-      // Costruisci un ID univoco per la chat (ordinando i due ID utente)
-      const participants = [currentUser.uid, sellerId].sort();
-      const chatQueryId = participants.join('_'); // Esempio: "userA_userB"
+    // Costruisci un ID univoco per la chat (ordinando i due ID utente)
+    const participants = [currentUser.uid, sellerId].sort();
+    const chatQueryId = participants.join('_'); // Esempio: "userA_userB"
 
-      // Cerca se esiste già una chat con questo ID
-      const chatRef = doc(db, "chats", chatQueryId);
-      
-      try {
-          const chatDoc = await getDoc(chatRef);
+    // Cerca se esiste già una chat con questo ID
+    const chatRef = doc(db, "chats", chatQueryId);
+    
+    try {
+        // Usa getDoc per verificare l'esistenza
+        const chatDoc = await getDoc(chatRef); // RICHIESTA getDoc IMPORTATO
 
-          if (chatDoc.exists()) {
-              // La chat esiste, aprila
-              openChat(chatQueryId, offerTitle);
-              return;
-          }
+        if (chatDoc.exists()) {
+            // La chat esiste, aprila
+            openChat(chatQueryId, offerTitle);
+            return;
+        }
 
-          // La chat non esiste, creala
-          await setDoc(chatRef, {
-              offerId: offerId,
-              offerTitle: offerTitle,
-              participants: participants,
-              sellerId: sellerId,
-              sellerName: sellerName,
-              buyerId: currentUser.uid,
-              buyerName: currentUser.displayName,
-              lastMessage: 'Chat avviata.',
-              lastMessageTimestamp: new Date()
-          });
-          
-          // Apri la chat appena creata
-          openChat(chatQueryId, offerTitle);
-          
-      } catch (e) {
-          console.error("Errore nell'avvio della chat: ", e);
-          alert("Impossibile avviare la chat. Riprova.");
-      }
-  }
-
+        // La chat non esiste, creala
+        // Usa setDoc per creare il documento con un ID specifico
+        await setDoc(chatRef, { // RICHIESTA setDoc IMPORTATO
+            offerId: offerId,
+            offerTitle: offerTitle,
+            participants: participants,
+            sellerId: sellerId,
+            sellerName: sellerName,
+            buyerId: currentUser.uid,
+            buyerName: currentUser.displayName,
+            lastMessage: 'Chat avviata.',
+            lastMessageTimestamp: new Date()
+        });
+        
+        // Apri la chat appena creata
+        openChat(chatQueryId, offerTitle);
+        
+    } catch (e) {
+        console.error("Errore nell'avvio della chat: ", e);
+        alert("Impossibile avviare la chat. Riprova.");
+    }
+}
 
   // --- 6. INTERAZIONE DATABASE (ESEMPIO DI LETTURA) ---
   // Funzione per leggere e popolare le offerte
@@ -479,7 +592,8 @@
 
     <div id="chat-screen" class="screen fixed inset-0 bg-gray-50 z-50 p-4" style="display: none; padding-top: 64px; padding-bottom: 72px;">
         <div class="fixed top-0 left-0 right-0 bg-[#22c55e] text-white p-4 flex items-center shadow-lg z-50">
-            <button onclick="navigate('chat-list-screen', document.getElementById('nav-chat'))" class="mr-3">
+            <button onclick="navigateFromChat('chat-list-screen', document.getElementById('nav-chat'))" class="mr-3">
+
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
             </button>
             <h3 class="font-bold text-lg truncate" id="current-chat-title">Chat con...</h3>

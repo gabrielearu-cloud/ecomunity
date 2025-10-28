@@ -270,7 +270,6 @@ window.navigateFromChat = function(screenId, element) {
     element.classList.add('active');
 }
 
-
   // --- 5. INTERAZIONE DATABASE (ESEMPIO DI PUBBLICAZIONE) ---
   // Funzione per salvare una nuova offerta su Firestore
   window.publishOffer = async function(event) {
@@ -279,6 +278,14 @@ window.navigateFromChat = function(screenId, element) {
     // Recupera i dati del form
     const title = document.getElementById('title').value;
     const description = document.getElementById('description').value;
+    // AGGIUNTA: Recupera il valore CP e assicurati che sia un numero intero
+    const cpValue = parseInt(document.getElementById('cp-value').value, 10);
+    
+    // Controllo base sul valore CP
+    if (isNaN(cpValue) || cpValue <= 0) {
+        alert("Inserisci un valore Karma (CP) valido e positivo.");
+        return;
+    }
     
     // Ottieni l'utente corrente per associare l'offerta
     const user = auth.currentUser;
@@ -292,6 +299,7 @@ window.navigateFromChat = function(screenId, element) {
             title: title,
             description: description,
             type: currentOfferType, // 'bene' o 'servizio'
+            cpValue: cpValue, // AGGIUNTA: Salva il valore CP
             ownerId: user.uid,
             ownerName: user.displayName,
             timestamp: new Date(),
@@ -821,7 +829,17 @@ window.navigateFromChat = function(screenId, element) {
                     <label for="description" class="block text-sm font-medium text-gray-700">Descrizione Dettagliata</label>
                     <textarea id="description" rows="4" required class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-[#22c55e] focus:border-[#22c55e]" placeholder="Descrivi l'oggetto o il servizio. Sii chiaro su cosa cerchi in cambio."></textarea>
                 </div>
+                                <div>
+                    <label for="description" class="block text-sm font-medium text-gray-700">Descrizione Dettagliata</label>
+                    <textarea id="description" rows="4" required class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-[#22c55e] focus:border-[#22c55e]" placeholder="Descrivi l'oggetto o il servizio. Sii chiaro su cosa cerchi in cambio."></textarea>
+                </div>
                 
+                <div>
+                    <label for="cp-value" class="block text-sm font-medium text-gray-700">Valore in Karma (CP)</label>
+                    <input type="number" id="cp-value" required min="1" class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-[#22c55e] focus:border-[#22c55e]" placeholder="Esempio: 50">
+                    <p class="mt-1 text-xs text-gray-500">I CP saranno assegnati all'acquirente al completamento dello scambio. Deve essere un valore positivo.</p>
+                </div>
+
                 <button type="submit" class="w-full bg-[#22c55e] text-white font-bold py-3 px-4 rounded-xl hover:bg-green-600 transition duration-150 shadow-md">
                     Pubblica Offerta
                 </button>

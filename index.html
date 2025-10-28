@@ -157,7 +157,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         console.log("Utente attivo:", user.uid, user.displayName);
 
         // **MODIFICHE PER GARANTIRE LA VISIBILITÀ SU TUTTI I BROWSER**
-        document.getElementById('app-header').style.display = 'block'; 
+        document.getElementById('app-header').style.display = 'flex'; // MODIFICATO: deve essere flex per giustificare il logout
         document.getElementById('tab-bar').style.display = 'flex'; 
         
         // Aggiorna l'UI del profilo se necessario (es. nome utente)
@@ -281,7 +281,7 @@ window.navigateFromChat = function(screenId, element) {
     document.getElementById('chat-screen').style.display = 'none';
     
     // Riporta l'header e la tab bar
-    document.getElementById('app-header').style.display = 'block'; 
+    document.getElementById('app-header').style.display = 'flex'; // MODIFICATO: deve essere flex
     document.getElementById('tab-bar').style.display = 'flex'; 
 
     // Esegui la navigazione standard
@@ -682,7 +682,7 @@ function loadOffers() {
               const typeColor = offer.type === 'bene' ? 'bg-gray-700' : 'bg-blue-600'; // MODIFICATO: Grigio per bene, Blu per servizio
               const iconSvg = offer.type === 'bene' 
                   ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-box"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`
-                  : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wrench"><path d="M.4 17.5a2.17 2.17 0 0 1 3.2-3.2l2.7 2.7l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2l.9 .9l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2l.9 .9l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2L12 12l9.1 9.1"/></svg>`;
+                  : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wrench"><path d="M.4 17.5a2.17 2.17 0 0 1 3.2-3.2l2.7 2.7l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2l.9 .9l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2L12 12l9.1 9.1"/></svg>`;
 
 
               const offerHtml = `
@@ -731,7 +731,7 @@ function loadOffers() {
           window.navigate('home-screen', document.getElementById('nav-home'));
           
           // **MODIFICHE PER GARANTIRE LA VISIBILITÀ SU TUTTI I BROWSER**
-          document.getElementById('app-header').style.display = 'block'; 
+          document.getElementById('app-header').style.display = 'flex'; // MODIFICATO: DEVE ESSERE FLEX
           document.getElementById('tab-bar').style.display = 'flex'; 
 
           loadOffers(); 
@@ -838,23 +838,29 @@ function loadOffers() {
 
     <div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg">
 
-        <header id="app-header" class="bg-white p-4 border-b border-gray-200">
-            <h1 class="text-xl font-bold text-green-400">EcoMunity</h1> </header>
+        <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-gray-700">EcoMunity</h1>
+            <button onclick="handleLogout()"
+                    class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-1 rounded-full shadow-md transition duration-150 ease-in-out">
+                Logout
+            </button>
+        </header>
 
         <main class="h-full overflow-y-auto pb-16">
 
             <section id="home-screen" class="screen active">
-                <div class="p-4 border-b border-green-200">
-                    <div class="flex mt-4 bg-green-100 rounded-lg p-1 space-x-1 shadow-md">
+                <div class="p-4 border-b border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-800">Annunci</h2>
+                    <div class="flex mt-4 bg-gray-100 rounded-lg p-1 space-x-1 shadow-md">
                         <button id="tab-btn-beni" 
                                 onclick="switchHomeTab('bene', this)" 
                                 class="flex-1 py-3 px-4 text-sm font-medium rounded-md 
-                                       bg-green-200 text-white shadow-lg shadow-green-400/50"> Beni Materiali 
+                                       bg-gray-700 text-white shadow-lg shadow-gray-700/50"> Beni Materiali 
                         </button>
                         <button id="tab-btn-servizi" 
                                 onclick="switchHomeTab('servizio', this)" 
-                                class="flex-1 py-3 px-4 text-sm font-medium text-green-700 rounded-md 
-                                       hover:bg-green-200">
+                                class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md 
+                                       hover:bg-gray-200">
                             Servizi/Aiuto
                         </button>
                     </div>

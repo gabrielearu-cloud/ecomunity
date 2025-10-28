@@ -381,26 +381,8 @@ window.navigateFromChat = function(screenId, element) {
           alert("Errore nel completare lo scambio. Controlla la console.");
       }
   }
-
-// Devi inserire/sostituire questo blocco dopo la chiusura di requestFeedback()
-
-  // NUOVA FUNZIONE: Elimina l'offerta
-  window.deleteOffer = async function(docId) {
-      if (confirm("Sei sicuro di voler eliminare questa offerta? L'azione è irreversibile.")) {
-          try {
-              // Trova il riferimento al documento e lo elimina
-              await deleteDoc(doc(db, "offerte", docId));
-              console.log("Documento eliminato con ID: ", docId);
-              alert("Offerta eliminata con successo!");
-              // L'aggiornamento UI è automatico grazie a onSnapshot in loadOffers
-          } catch (e) {
-              console.error("Errore durante l'eliminazione del documento: ", e);
-              alert("Errore durante l'eliminazione. Controlla le regole di sicurezza (delete).");
-          }
-      }
-  }
-
-  // NUOVA FUNZIONE: Avvia la chat, imposta l'offerta a 'reserved' e reindirizza
+  
+// NUOVA FUNZIONE: Avvia la chat, imposta l'offerta a 'reserved' e reindirizza
   // Versione corretta che controlla l'esistenza della chat e aggiorna lo stato offerta.
   window.initiateChat = async function(offerId, ownerId, offerTitle) {
       const user = auth.currentUser;
@@ -412,7 +394,57 @@ window.navigateFromChat = function(screenId, element) {
           alert("Non puoi avviare una chat con te stesso.");
           return;
       }
+
+      const offerRef = doc(db, "offerte", offerId);
       
+      try {
+          // 1. Controllo Stato Offerta
+          const offerSnap = await getDoc(offerRef);
+          if (offerSnap.exists() && offerSnap.data().status !== 'available') {
+               alert("Questa offerta non è più disponibile o è già riservata.");
+               loadOffers(); // Aggiorna la lista
+               return;
+          }
+
+          // 2. Aggiorna lo stato dell'offerta a 'reserved'
+          await updateDoc(offerRef, {
+              status: 'reserved',
+              reservedBy: user.uid, 
+              reservedByName: user.displayName
+          });
+          
+          // 3. Logica Chat: Costruisci ID univoco e cerca chat esistente
+          const participants = [ownerId, user.uid].sort();
+          const chatId = participants.join('_'); 
+          const chatRef = doc(db, "chats", chatId);
+          const chatDoc = await getDoc(chatRef);
+
+          if (!chatDoc.exists()) {
+              // Crea la chat solo se non esiste
+              await setDoc(chatRef, { 
+                  offerId: offerId,
+                  offerTitle: offerTitle,
+                  participants: participants, 
+                  sellerId: ownerId,
+                  buyerId: user.uid,
+                  lastMessage: `Chat avviata per ${offerTitle}.`,
+                  lastMessageTimestamp: new Date()
+              });
+          }
+          
+          alert(`Hai riservato l'offerta e avviato la chat!`);
+          
+          // 4. Naviga alla schermata della chat
+          window.navigate('chat-list-screen', document.getElementById('nav-chat'));
+          window.openChat(chatId, offerTitle); 
+          loadOffers(); // Aggiorna la lista
+
+      } catch (e) {
+          console.error("Errore nell'avvio della chat:", e);
+          alert("Errore nell'avvio della chat. Riprova. Potrebbe essere un problema di regole di sicurezza o un problema di connessione.");
+      }
+  }
+  
   // NUOVA FUNZIONE: Carica la lista delle chat
   function loadChatList() {
       const currentUser = auth.currentUser;
@@ -446,8 +478,6 @@ window.navigateFromChat = function(screenId, element) {
           document.getElementById('empty-chats').style.display = count === 0 ? 'block' : 'none';
       });
   }
-
-
 
     // --- 6. INTERAZIONE DATABASE (ESEMPIO DI LETTURA) ---
   // Funzione per leggere e popolare le offerte, ora con gestione stati (available, reserved, completed)

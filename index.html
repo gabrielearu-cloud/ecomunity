@@ -30,10 +30,11 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   let currentOfferType = 'bene';
   
-  // *** LOGICA MESSAGGI NON LETTI ***
-  let hasUnreadMessages = false; // Flag globale per pallino rosso TAB
-  let unreadChatIds = []; // Array per ID chat non lette (pallino BLU)
-  let allChatsData = []; // Cache locale per i dati delle chat
+  // *** LOGICA NOTIFICHE ***
+  let hasUnreadMessages = false; 
+  let unreadChatIds = []; 
+  let allChatsData = [];
+  let hasNewProfileUpdate = false; // <-- NUOVO: Flag per notifica profilo
   // *** FINE LOGICA ***
 
   // --- FUNZIONI DI GESTIONE UI ---
@@ -49,33 +50,61 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     }
   }
 
-  // Funzione per gestire i click sulla Tab Bar
-  // *** MODIFICATA: per forzare il re-render della lista chat ***
+  // *** MODIFICATA: per gestire notifica profilo ***
   window.navigate = function(screenId, element) {
     switchScreen(screenId);
-    // Aggiorna lo stato "attivo" della tab bar
     document.querySelectorAll('.tab-item').forEach(item => {
         item.classList.remove('active');
     });
     element.classList.add('active');
 
-    // *** MODIFICA CHIAVE ***
-    // Se stiamo navigando ALLA lista chat, ridisegnala
-    // per mostrare lo stato di lettura corretto.
     if (screenId === 'chat-list-screen') {
         renderChatList();
+    } else if (screenId === 'profile-screen') {
+        // Sto guardando il profilo, resetto il flag e nascondo il pallino
+        hasNewProfileUpdate = false;
+        updateProfileTabIndicator();
+        
+        // Rimuovo anche il badge "NOVITÀ" se esiste
+        const existingBadge = document.querySelector('#profile-data .new-kp-badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
     }
   }
 
-  // Funzione per mostrare/nascondere il pallino sulla tab chat
+  // Funzione per pallino rosso sulla tab chat
   function updateChatTabIndicator() {
       const chatTab = document.getElementById('nav-chat');
-      if (!chatTab) return; // Sicurezza
-
+      if (!chatTab) return; 
       let indicator = chatTab.querySelector('.unread-indicator');
       const iconContainer = chatTab.querySelector('div'); 
 
       if (hasUnreadMessages) {
+          if (!indicator) {
+              indicator = document.createElement('span');
+              indicator.className = 'unread-indicator absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white';
+              if (iconContainer && !iconContainer.classList.contains('relative')) {
+                  iconContainer.classList.add('relative');
+              }
+              iconContainer?.appendChild(indicator);
+          }
+          if (indicator) indicator.style.display = 'block';
+      } else {
+          if (indicator) {
+              indicator.style.display = 'none';
+          }
+      }
+  }
+
+  // *** NUOVA: Funzione per pallino rosso sulla tab profilo ***
+  function updateProfileTabIndicator() {
+      const profileTab = document.getElementById('nav-profile');
+      if (!profileTab) return; 
+      let indicator = profileTab.querySelector('.unread-indicator');
+      const iconContainer = profileTab.querySelector('div'); 
+
+      if (hasNewProfileUpdate) {
           if (!indicator) {
               indicator = document.createElement('span');
               indicator.className = 'unread-indicator absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white';
@@ -97,10 +126,8 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     currentOfferType = type;
     const btnBene = document.getElementById('type-bene');
     const btnServizio = document.getElementById('type-servizio');
-
     btnBene.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg');
     btnServizio.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg');
-
     btnBene.classList.add('text-gray-700', 'hover:bg-gray-200');
     btnServizio.classList.add('text-gray-700', 'hover:bg-gray-200');
 
@@ -118,19 +145,14 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       content.classList.add('hidden');
       content.classList.remove('active');
     });
-
     const btnBeni = document.getElementById('tab-btn-beni');
     const btnServizi = document.getElementById('tab-btn-servizi');
-
     btnBeni.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50');
     btnServizi.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50');
-
     btnBeni.classList.add('text-gray-700', 'hover:bg-gray-200');
     btnServizi.classList.add('text-gray-700', 'hover:bg-gray-200');
-
     document.getElementById('home-' + type).classList.remove('hidden');
     document.getElementById('home-' + type).classList.add('active');
-
     element.classList.remove('text-gray-700', 'hover:bg-gray-200');
 
     if (type === 'bene') {
@@ -145,7 +167,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   window.handleAuth = async function() {
     try {
         const result = await signInWithPopup(auth, googleProvider);
-        console.log("Accesso Google completato per:", result.user.displayName);
     } catch (error) {
         console.error("Errore di Autenticazione:", error.code, error.message);
         if (error.code !== 'auth/popup-closed-by-user') {
@@ -156,7 +177,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   window.handleLogout = async function() {
       await signOut(auth);
-      console.log("Utente disconnesso.");
   }
 
 
@@ -166,16 +186,13 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     document.getElementById('app-container').classList.remove('hidden');
 
     if (user) {
-        console.log("Utente attivo (listener 1):", user.uid, user.displayName);
         document.getElementById('app-header').style.display = 'flex';
         document.getElementById('tab-bar').style.display = 'flex';
-
         const profileNameHeader = document.getElementById('profile-name-header');
         if (profileNameHeader) {
             profileNameHeader.textContent = user.displayName || "Utente EcoMunity";
         }
     } else {
-        console.log("Nessun utente loggato. Mostra schermata di Login.");
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('app-header').style.display = 'none';
         document.getElementById('tab-bar').style.display = 'none';
@@ -186,7 +203,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   // --- GESTIONE CHAT (Funzioni) ---
   let currentChatId = null;
 
-  // *** MODIFICATA: gestione indicatori non letti ***
   window.openChat = function(chatId, offerTitle) {
       currentChatId = chatId;
       document.getElementById('current-chat-id').value = chatId;
@@ -196,18 +212,12 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       document.getElementById('app-header').style.display = 'none';
       document.getElementById('tab-bar').style.display = 'none';
 
-      // *** LOGICA MESSAGGI NON LETTI ***
-      // Rimuovi questa chat dagli ID non letti
       const index = unreadChatIds.indexOf(chatId);
       if (index > -1) {
           unreadChatIds.splice(index, 1);
-          console.log("Chat", chatId, "segnata come letta.");
       }
-
-      // Aggiorna il flag globale (pallino rosso) solo se non ci sono PIÙ chat non lette
       hasUnreadMessages = unreadChatIds.length > 0;
       updateChatTabIndicator(); 
-      // *** FINE LOGICA ***
 
       loadChatMessages(chatId);
   }
@@ -218,7 +228,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       const messageText = messageInput.value.trim();
       const chatId = document.getElementById('current-chat-id').value;
       const currentUser = auth.currentUser;
-
       if (!messageText || !chatId || !currentUser) return;
 
       try {
@@ -228,15 +237,12 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
               text: messageText,
               timestamp: new Date()
           });
-
           const chatRef = doc(db, "chats", chatId);
           await updateDoc(chatRef, {
               lastMessage: messageText.substring(0, 50) + (messageText.length > 50 ? '...' : ''),
               lastMessageTimestamp: new Date()
           });
-
           messageInput.value = '';
-
       } catch (e) {
           console.error("Errore nell'invio del messaggio: ", e);
           alert("Impossibile inviare il messaggio.");
@@ -245,23 +251,18 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   function loadChatMessages(chatId) {
       if (!chatId) return;
-
       const currentUser = auth.currentUser;
       const messagesContainer = document.getElementById('messages-container');
-
       const q = query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"));
 
       onSnapshot(q, (querySnapshot) => {
           let messagesHtml = '';
-
           querySnapshot.forEach((doc) => {
               const msg = doc.data();
               const isMe = msg.senderId === currentUser.uid;
-
               const messageClass = isMe
                   ? 'self-end bg-[#dcf8c6] text-gray-900 rounded-bl-xl rounded-tl-xl rounded-tr-xl'
                   : 'self-start bg-white text-gray-800 rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100';
-
               const timeString = msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
 
               messagesHtml += `
@@ -271,7 +272,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                   </div>
               `;
           });
-
           messagesContainer.innerHTML = messagesHtml;
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
       });
@@ -281,10 +281,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       document.getElementById('chat-screen').style.display = 'none';
       document.getElementById('app-header').style.display = 'flex';
       document.getElementById('tab-bar').style.display = 'flex';
-      
-      currentChatId = null; // Esco dalla chat
-
-      // Esegui la navigazione standard (che chiamerà renderChatList)
+      currentChatId = null; 
       window.navigate(screenId, element);
   }
 
@@ -294,7 +291,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       const title = document.getElementById('title').value;
       const description = document.getElementById('description').value;
       const cpValue = parseInt(document.getElementById('cp-value').value, 10);
-
       if (isNaN(cpValue) || cpValue <= 0) {
           alert("Inserisci un valore Community Points (CP) valido e positivo.");
           return;
@@ -304,13 +300,11 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           alert("Devi essere loggato per pubblicare un'offerta.");
           return;
       }
-
       try {
-          const docRef = await addDoc(collection(db, "offerte"), {
+          await addDoc(collection(db, "offerte"), {
               title: title, description: description, type: currentOfferType, cpValue: cpValue,
               ownerId: user.uid, ownerName: user.displayName, timestamp: new Date(), status: 'available'
           });
-          console.log("Offerta pubblicata con ID: ", docRef.id);
           alert("Offerta pubblicata con successo!");
           document.getElementById('publish-form').reset();
           window.navigate('home-screen', document.getElementById('nav-home'));
@@ -332,56 +326,136 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       }
   }
 
-  // --- GESTIONE FEEDBACK E STATI ---
+  // --- GESTIONE FEEDBACK E STATI (*** MODIFICATA PER MODAL ***) ---
 
+  // *** NUOVA: Funzione per chiudere il modal di feedback ***
+  window.closeFeedbackModal = function() {
+      const modal = document.getElementById('feedback-modal');
+      modal.style.display = 'none';
+      // Pulisce i dati
+      modal.dataset.docId = '';
+      modal.dataset.cpValue = '';
+      document.getElementById('feedback-offer-title').textContent = '';
+  }
+
+  // *** MODIFICATA: Ora apre solo il modal ***
   window.requestFeedback = async function(docId, cpValue) {
+      try {
+          const offerRef = doc(db, "offerte", docId);
+          const offerSnap = await getDoc(offerRef);
+          if (!offerSnap.exists()) return alert("Offerta non trovata.");
+
+          const offerTitle = offerSnap.data().title;
+          const modal = document.getElementById('feedback-modal');
+          
+          // Imposta i dati sul modal per usarli dopo
+          modal.dataset.docId = docId;
+          modal.dataset.cpValue = cpValue;
+          document.getElementById('feedback-offer-title').textContent = `Come valuti lo scambio per: "${offerTitle}"?`;
+          
+          modal.style.display = 'flex'; // Mostra il modal
+
+      } catch (e) {
+          console.error("Errore apertura modal feedback:", e);
+          alert("Impossibile caricare i dati per il feedback.");
+      }
+  }
+
+  // *** NUOVA: Funzione chiamata dai pulsanti del modal ***
+  window.submitFeedback = async function(feedbackType) {
+      const modal = document.getElementById('feedback-modal');
+      const docId = modal.dataset.docId;
+      const cpValue = parseInt(modal.dataset.cpValue, 10);
       const user = auth.currentUser;
-      if (!user) return alert("Errore di autenticazione.");
+
+      if (!user || !docId) return alert("Errore di autenticazione o dati mancanti.");
 
       const offerRef = doc(db, "offerte", docId);
-      const offerSnap = await getDoc(offerRef);
+      const offerSnap = await getDoc(offerRef); // Rileggiamo per sicurezza
 
       if (!offerSnap.exists() || offerSnap.data().status !== 'reserved' || offerSnap.data().ownerId !== user.uid) {
-          return alert("Impossibile completare: offerta non riservata o non sei il proprietario.");
+          window.closeFeedbackModal();
+          return alert("Impossibile completare: offerta non più riservata o non sei il proprietario.");
       }
       const reservedById = offerSnap.data().reservedBy;
       if (!reservedById) return alert("Errore: ID acquirente non trovato.");
 
-      const feedback = prompt("Come valuti questo scambio?\n1: Eccellente (+15 KP)\n2: Corretto (+10 KP)\n3: Insoddisfacente (-10 KP)");
-      let finalKP = 0, feedbackType = '';
-
-      switch (feedback) {
-          case '1': finalKP = 15; feedbackType = 'eccellente'; break;
-          case '2': finalKP = 10; feedbackType = 'corretto'; break;
-          case '3': finalKP = -10; feedbackType = 'insoddisfacente'; break;
+      let finalKP = 0;
+      switch (feedbackType) {
+          case 'eccellente': finalKP = 15; break;
+          case 'corretto': finalKP = 10; break;
+          case 'insoddisfacente': finalKP = -10; break;
           default: return alert("Selezione non valida.");
       }
-      if (feedbackType === 'insoddisfacente' && !confirm("Feedback negativo? L'utente riceverà -10 Karma.")) return;
+      
+      if (feedbackType === 'insoddisfacente' && !confirm("Feedback negativo? L'utente riceverà -10 Karma.")) {
+          return; // Non chiudere il modal, lascia che l'utente scelga di nuovo
+      }
 
       try {
-          await updateDoc(offerRef, { status: 'completed', feedback: feedbackType, cp_awarded: finalKP, completionDate: new Date() });
-          const userRef = doc(db, "users", reservedById);
-          const userSnap = await getDoc(userRef);
-          let currentKarma = 100;
-          if (userSnap.exists() && userSnap.data().karmaPoints !== undefined) currentKarma = userSnap.data().karmaPoints;
-          const newKarma = currentKarma + finalKP;
-          await setDoc(userRef, { karmaPoints: newKarma }, { merge: true });
-          console.log(`KP per ${reservedById} aggiornati a ${newKarma}`);
-          alert(`Scambio completato! Acquirente riceve ${finalKP} KP (Nuovo totale: ${newKarma}).`);
+          console.log("Inizio completamento scambio...");
+          
+          // Aggiornamento 1: L'offerta
+          await updateDoc(offerRef, { 
+              status: 'completed', 
+              feedback: feedbackType, 
+              cp_awarded: finalKP,
+              completionDate: new Date() 
+          });
+          console.log("Offerta aggiornata.");
+
+          // Aggiornamento 2: Profilo del COMPRATORE (reservedById)
+          const buyerRef = doc(db, "users", reservedById);
+          const buyerSnap = await getDoc(buyerRef);
+          let buyerKarma = 100, buyerSwaps = 0;
+          if (buyerSnap.exists()) {
+              buyerKarma = buyerSnap.data().karmaPoints || 100;
+              buyerSwaps = buyerSnap.data().completedSwaps || 0;
+          }
+          const newBuyerKarma = buyerKarma + finalKP;
+          const newBuyerSwaps = buyerSwaps + 1;
+          
+          await setDoc(buyerRef, { 
+              karmaPoints: newBuyerKarma,
+              completedSwaps: newBuyerSwaps 
+          }, { merge: true });
+          console.log(`Profilo compratore ${reservedById} aggiornato.`);
+
+          // Aggiornamento 3: Profilo del VENDITORE (currentUser.uid)
+          const sellerRef = doc(db, "users", user.uid);
+          const sellerSnap = await getDoc(sellerRef);
+          let sellerSwaps = 0;
+          if(sellerSnap.exists()) {
+              sellerSwaps = sellerSnap.data().completedSwaps || 0;
+          }
+          const newSellerSwaps = sellerSwaps + 1;
+
+          await setDoc(sellerRef, {
+              completedSwaps: newSellerSwaps
+          }, { merge: true });
+          console.log(`Profilo venditore ${user.uid} aggiornato.`);
+
+          // *** NOTIFICA! ***
+          hasNewProfileUpdate = true;
+          updateProfileTabIndicator(); // Mostra il pallino sulla tab
+          
+          alert(`Scambio completato! Acquirente (Karma: ${newBuyerKarma}). Tu (Scambi: ${newSellerSwaps}).`);
+
       } catch (e) {
-          console.error("Errore completamento scambio: ", e);
-          alert("Errore nel completare lo scambio.");
+          console.error("ERRORE CRITICO NEL COMPLETAMENTO SCAMBIO:", e);
+          alert("Errore nel completare lo scambio. Controlla la console (F12) per dettagli.");
+      } finally {
+          window.closeFeedbackModal(); // Chiude il modal in ogni caso
       }
   }
+
 
   window.reserveAndChat = async function(offerId, offerOwnerId, offerTitle) {
       const currentUser = auth.currentUser;
       if (!currentUser || currentUser.uid === offerOwnerId) return alert("Non puoi chattare per la tua offerta.");
-
       const offerRef = doc(db, "offerte", offerId);
       const offerSnap = await getDoc(offerRef);
       if (!offerSnap.exists()) return alert("Errore: Annuncio non trovato.");
-
       const offerData = offerSnap.data();
       if (offerData.status !== 'available') return alert("Offerta non più disponibile.");
 
@@ -391,7 +465,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
       if (!chatSnapshot.empty) {
           chatId = chatSnapshot.docs[0].id;
-          console.log("Chat esistente trovata:", chatId);
       } else {
           try {
               const chatDocRef = await addDoc(collection(db, "chats"), {
@@ -399,17 +472,14 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                   users: [offerOwnerId, currentUser.uid], createdAt: new Date(), lastMessage: 'Chat avviata.', lastMessageTimestamp: new Date()
               });
               chatId = chatDocRef.id;
-              console.log("Nuova chat creata:", chatId);
           } catch (e) {
               console.error("Errore creazione chat:", e);
               return alert("Impossibile avviare la chat.");
           }
       }
-
       try {
           await updateDoc(offerRef, { status: 'reserved', reservedBy: currentUser.uid, reservedAt: new Date() });
-          console.log(`Offerta ${offerId} riservata`);
-          window.openChat(chatId, offerTitle); // Apri chat DOPO aver riservato
+          window.openChat(chatId, offerTitle);
       } catch (e) {
           console.error("Errore riserva offerta:", e);
           alert("Impossibile riservare l'offerta.");
@@ -431,7 +501,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   // --- 6. GESTIONE DATI (CARICAMENTO) ---
 
-  // *** NUOVA FUNZIONE: per disegnare l'HTML della lista chat ***
   function renderChatList() {
       const chatListContainer = document.getElementById('chat-list');
       if (!chatListContainer) return;
@@ -442,40 +511,32 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           chatListContainer.innerHTML = '<p class="text-center text-gray-500 mt-8">Nessuna chat attiva.</p>';
           return;
       }
-
       let chatHtml = '';
       let isOddRow = false;
-
-      // Ordina i dati (già ordinati da Firestore, ma è una sicurezza)
       allChatsData.sort((a, b) => (b.data.lastMessageTimestamp?.toMillis() || 0) - (a.data.lastMessageTimestamp?.toMillis() || 0));
 
       allChatsData.forEach((chatDoc) => {
           const chat = chatDoc.data;
           const chatId = chatDoc.id;
-          const isUnread = unreadChatIds.includes(chatId); // Controlla se questa chat è non letta
-
+          const isUnread = unreadChatIds.includes(chatId); 
           const isOwner = chat.ownerId === currentUser.uid;
           const statusText = isOwner ? 'Offerta tua' : 'Tua prenotazione';
           const chatDisplayName = chat.offerTitle || 'Chat senza titolo';
           const rowBgClass = isOddRow ? 'bg-green-50' : 'bg-white';
           isOddRow = !isOddRow;
-
-          // Indicatore pallino per la riga
           const unreadIndicatorHtml = isUnread
               ? '<span class="block h-2.5 w-2.5 rounded-full bg-blue-500 mr-3 flex-shrink-0" title="Nuovi messaggi"></span>'
-              : '<span class="block h-2.5 w-2.5 mr-3 flex-shrink-0"></span>'; // Placeholder per allineamento
+              : '<span class="block h-2.5 w-2.5 mr-3 flex-shrink-0"></span>'; 
 
           chatHtml += `
-              <div onclick="openChat('${doc.id}', '${chat.offerTitle.replace(/'/g, "\\'")}')"
+              <div onclick="openChat('${chatId}', '${chat.offerTitle.replace(/'/g, "\\'")}')"
                    class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${rowBgClass}">
-                  
                   ${unreadIndicatorHtml}
-
                   <div class="flex-shrink-0 mr-3">
                       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square text-gray-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                   </div>
                   <div class="flex-1 min-w-0">
-                       <p class="text-sm ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'} truncate">${chatDisplayName}</p>
+                      <p class="text-sm ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'} truncate">${chatDisplayName}</p>
                       <p class="text-xs ${isUnread ? 'text-gray-700' : 'text-gray-500'} truncate mt-0.5">${chat.lastMessage}</p>
                   </div>
                   <div class="ml-4 flex flex-col items-end">
@@ -485,40 +546,31 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
               </div>
           `;
       });
-
       chatListContainer.innerHTML = chatHtml;
   }
 
-  // *** MODIFICATA: ora aggiorna solo i dati e chiama renderChatList ***
   function loadChatList() {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
-
       const q = query(
           collection(db, "chats"),
           where("users", "array-contains", currentUser.uid),
           orderBy("lastMessageTimestamp", "desc")
       );
-
       onSnapshot(q, (snapshot) => {
-          // Aggiorna la cache dei dati
           allChatsData = snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
-
           if (snapshot.empty) {
               hasUnreadMessages = false;
-              unreadChatIds = []; // Svuota l'array
+              unreadChatIds = []; 
               updateChatTabIndicator();
-              renderChatList(); // Disegna lo stato vuoto
+              renderChatList(); 
               return;
           }
-
-          let newMessagesAdded = false; // Flag per sapere se *questo* snapshot ha aggiunto nuove chat non lette
-
+          let newMessagesAdded = false; 
           snapshot.docChanges().forEach((change) => {
             if (change.type === "modified" && !change.doc.metadata.hasPendingWrites) {
                 const chatScreenVisible = document.getElementById('chat-screen').style.display === 'flex';
                 const changedChatId = change.doc.id;
-                
                 let isViewingThisChat = chatScreenVisible && currentChatId === changedChatId;
                 
                 if (!isViewingThisChat && !unreadChatIds.includes(changedChatId)) {
@@ -527,17 +579,12 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                 }
             }
           });
-
           if (newMessagesAdded) {
               hasUnreadMessages = true;
-              updateChatTabIndicator(); // Mostra il pallino rosso sulla tab
+              updateChatTabIndicator(); 
           }
-
-          // Disegna la lista (anche se non ci sono nuovi messaggi, 
-          // lo stato potrebbe essere cambiato)
           renderChatList();
-
-      }, (error) => { // Aggiunto gestore errori per onSnapshot
+      }, (error) => { 
           console.error("Errore listener chat list:", error);
           const chatListContainer = document.getElementById('chat-list');
           if (chatListContainer) chatListContainer.innerHTML = '<p class="text-center text-red-500 mt-8">Errore nel caricare le chat.</p>';
@@ -545,10 +592,10 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   }
 
 
-  // Funzione per caricare i dati del profilo (include creazione se non esiste)
+  // *** MODIFICATA: per mostrare il badge "NOVITÀ" ***
   function loadProfileData(userId) {
       const profileDataContainer = document.getElementById('profile-data');
-      if (!profileDataContainer) return; // Sicurezza
+      if (!profileDataContainer) return;
       const userRef = doc(db, "users", userId);
 
       onSnapshot(userRef, (docSnap) => {
@@ -585,6 +632,13 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
               progressPercentage = 100;
           }
 
+          // *** NUOVO: Logica per il badge ***
+          let newKpBadgeHtml = '';
+          if (hasNewProfileUpdate) {
+              // Aggiungiamo il badge. Verrà rimosso al prossimo click sulla tab.
+              newKpBadgeHtml = '<span class="new-kp-badge ml-2 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full animate-pulse">NOVITÀ</span>';
+          }
+          
           profileDataContainer.innerHTML = `
               <div class="mb-6">
                   <div class="flex justify-between items-center mb-1">
@@ -595,7 +649,9 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                       <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercentage}%"></div>
                   </div>
               </div>
-              <p class="text-3xl font-bold text-gray-900">${karma}</p>
+              <p class="text-3xl font-bold text-gray-900 flex items-center justify-center">
+                  ${karma}
+                  ${newKpBadgeHtml} </p>
               <p class="text-sm text-gray-500 mb-4">Punti Karma (KP)</p>
               <div class="flex justify-around w-full mt-4">
                   <div class="text-center">
@@ -610,7 +666,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           `;
           document.getElementById('profile-name-header').textContent = userData.displayName || auth.currentUser.displayName;
 
-      }, (error) => { // Gestore errori
+      }, (error) => { 
           console.error("Errore listener profilo:", error);
           profileDataContainer.innerHTML = '<p class="text-center text-red-500 mt-4">Errore nel caricare il profilo.</p>';
       });
@@ -620,7 +676,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   function loadOffers() {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
-
       const itemListBene = document.getElementById('item-list-bene');
       const itemListServizio = document.getElementById('item-list-servizio');
       const emptyBene = document.getElementById('empty-bene');
@@ -631,7 +686,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
       onSnapshot(q, (querySnapshot) => {
           let beniHtml = '', serviziHtml = '';
-
           querySnapshot.forEach((doc) => {
               const offer = doc.data();
               const docId = doc.id;
@@ -656,11 +710,12 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                       actionButton = `<button onclick="cancelReservation('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Annulla Prenotazione</button>`;
                   } else if (isOwner) {
                       const reservedByText = ''; 
+                      // *** MODIFICATO: passato cpValue a requestFeedback ***
                       ownerButtons = `<p class="text-sm font-semibold text-yellow-600 mt-2">Riservato ${reservedByText}</p><button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Completa Scambio</button>`;
                   } else {
                       actionButton = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Non Disponibile</button>`;
                   }
-              } else { // available
+              } else { 
                   statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Disponibile</span>`;
                   if (isOwner) {
                       ownerButtons = `<button onclick="deleteOffer('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Elimina Offerta</button>`;
@@ -668,7 +723,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                       actionButton = `<button onclick="reserveAndChat('${docId}', '${offer.ownerId}', '${offer.title.replace(/'/g, "\\'")}')" class="mt-2 w-full ${offer.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Riserva e Chat</button>`;
                   }
               }
-
               const typeColor = offer.type === 'bene' ? 'bg-green-600' : 'bg-blue-600';
               const iconSvg = offer.type === 'bene' ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-box"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>` : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wrench"><path d="M.4 17.5a2.17 2.17 0 0 1 3.2-3.2l2.7 2.7l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2l.9 .9l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2L12 12l9.1 9.1"/></svg>`;
 
@@ -692,16 +746,13 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
               `;
               if (offer.type === 'bene') beniHtml += offerHtml; else serviziHtml += offerHtml;
           });
-
           itemListBene.innerHTML = beniHtml;
           itemListServizio.innerHTML = serviziHtml;
           if (emptyBene) emptyBene.style.display = beniHtml ? 'none' : 'block';
           if (emptyServizio) emptyServizio.style.display = serviziHtml ? 'none' : 'block';
-
-      }, (error) => { // Gestore errori
+      }, (error) => { 
           console.error("Errore listener offerte:", error);
           if (itemListBene) itemListBene.innerHTML = '<p class="text-center text-red-500 mt-8">Errore nel caricare le offerte.</p>';
-          if (itemListServizio) itemListServizio.innerHTML = '';
       });
   }
 
@@ -714,14 +765,14 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                 loadOffers();
                 loadChatList();
                 loadProfileData(user.uid);
-                switchScreen('home-screen'); // Vai alla home dopo il login
+                switchScreen('home-screen');
                 document.getElementById('nav-home')?.classList.add('active');
             });
           } else {
                 loadOffers();
                 loadChatList();
                 loadProfileData(user.uid);
-                switchScreen('home-screen'); // Vai alla home dopo il login
+                switchScreen('home-screen');
                 document.getElementById('nav-home')?.classList.add('active');
           }
       }
@@ -759,13 +810,24 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   }
   #app-header { position: sticky; top: 0; z-index: 10; }
 
-  /* Stile per posizionare il pallino rosso */
   #tab-bar .tab-item > div {
-    position: relative; /* Necessario per posizionare l'absolute child */
+    position: relative; 
   }
-  /* Stile base per il pallino (verrà mostrato/nascosto da JS) */
   .unread-indicator {
+    display: none; 
+  }
+
+  /* *** NUOVO: Stili per il Modal di Feedback *** */
+  #feedback-modal {
     display: none; /* Nascosto di default */
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 150;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
   }
 
 </style>
@@ -881,7 +943,8 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
         <nav id="tab-bar" class="bg-white flex justify-around shadow-lg">
             <button class="tab-item active" id="nav-home" onclick="navigate('home-screen', this)">
-                <div class="flex flex-col items-center p-2"> <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-home"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <div class="flex flex-col items-center p-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-home"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <span class="text-xs mt-1">Home</span>
                 </div>
             </button>
@@ -898,8 +961,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                 </div>
             </button>
             <button class="tab-item" id="nav-profile" onclick="navigate('profile-screen', this)">
-                <div class="flex flex-col items-center p-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <div class="flex flex-col items-center p-2"> <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <span class="text-xs mt-1">Profilo</span>
                 </div>
             </button>
@@ -918,5 +980,35 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         </div>
 
     </div>
+    
+    <div id="feedback-modal" data-doc-id="" data-cp-value="">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">Completa Scambio</h3>
+            <p id="feedback-offer-title" class="text-sm text-gray-600 mb-6">Come valuti questo scambio?</p>
+            
+            <div class="space-y-3">
+                <button onclick="submitFeedback('eccellente')" class="w-full flex items-center justify-start p-3 rounded-lg bg-green-100 hover:bg-green-200 text-green-800 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-laugh mr-3"><circle cx="12" cy="12" r="10"/><path d="M18 13a6 6 0 0 1-12 0h12Z"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg>
+                    <span class="font-medium">Eccellente</span>
+                    <span class="ml-auto text-xs font-bold">+15 KP</span>
+                </button>
+                <button onclick="submitFeedback('corretto')" class="w-full flex items-center justify-start p-3 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-800 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-smile mr-3"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg>
+                    <span class="font-medium">Corretto</span>
+                    <span class="ml-auto text-xs font-bold">+10 KP</span>
+                </button>
+                <button onclick="submitFeedback('insoddisfacente')" class="w-full flex items-center justify-start p-3 rounded-lg bg-red-100 hover:bg-red-200 text-red-800 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-frown mr-3"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg>
+                    <span class="font-medium">Insoddisfacente</span>
+                    <span class="ml-auto text-xs font-bold">-10 KP</span>
+                </button>
+            </div>
+
+            <button onclick="closeFeedbackModal()" class="w-full text-center py-2 mt-6 text-sm text-gray-500 hover:text-gray-800">
+                Annulla
+            </button>
+        </div>
+    </div>
+
 </body>
 </html>

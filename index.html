@@ -66,18 +66,18 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     const btnBene = document.getElementById('type-bene');
     const btnServizio = document.getElementById('type-servizio');
 
-    // Rimuove tutti gli stili attivi (grigio, blu, ombra)
-    btnBene.classList.remove('bg-gray-700', 'bg-blue-600', 'text-white', 'shadow-lg'); // MODIFICATO: rimosso bg-[#22c55e], aggiunto bg-gray-700
-    btnServizio.classList.remove('bg-gray-700', 'bg-blue-600', 'text-white', 'shadow-lg');
+    // Rimuove tutti gli stili attivi (verde, blu, ombra)
+    btnBene.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg'); // MODIFICATO: rimosso bg-gray-700, aggiunto bg-green-600
+    btnServizio.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg');
     
     // Aggiunge stili non attivi
     btnBene.classList.add('text-gray-700', 'hover:bg-gray-200');
     btnServizio.classList.add('text-gray-700', 'hover:bg-gray-200');
 
     if (type === 'bene') {
-        // Bene: Grigio con ombra
+        // Bene: Verde con ombra
         btnBene.classList.remove('text-gray-700', 'hover:bg-gray-200');
-        btnBene.classList.add('bg-gray-700', 'text-white', 'shadow-lg'); // MODIFICATO: da bg-[#22c55e] a bg-gray-700
+        btnBene.classList.add('bg-green-600', 'text-white', 'shadow-lg'); // MODIFICATO: da bg-gray-700 a bg-green-600
     } else {
         // Servizio: Blu con ombra
         btnServizio.classList.remove('text-gray-700', 'hover:bg-gray-200');
@@ -96,9 +96,9 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     const btnBeni = document.getElementById('tab-btn-beni');
     const btnServizi = document.getElementById('tab-btn-servizi');
 
-    // Rimuove tutti gli stili attivi (grigio, blu, ombra)
-    btnBeni.classList.remove('bg-gray-700', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-gray-700/50', 'shadow-blue-600/50'); // MODIFICATO: rimosso bg-[#22c55e], aggiunto bg-gray-700 e shadow
-    btnServizi.classList.remove('bg-gray-700', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-gray-700/50', 'shadow-blue-600/50');
+    // Rimuove tutti gli stili attivi (verde, blu, ombra)
+    btnBeni.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50'); // MODIFICATO: rimosso bg-gray-700, aggiunto bg-green-600 e shadow
+    btnServizi.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50');
 
     // Aggiunge stili non attivi
     btnBeni.classList.add('text-gray-700', 'hover:bg-gray-200');
@@ -112,8 +112,8 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     element.classList.remove('text-gray-700', 'hover:bg-gray-200');
     
     if (type === 'bene') {
-        // Bene: Grigio scuro con ombra (più visibile)
-        element.classList.add('bg-gray-700', 'text-white', 'shadow-lg', 'shadow-gray-700/50'); // MODIFICATO: da bg-[#22c55e] a bg-gray-700 e shadow
+        // Bene: Verde scuro con ombra (più visibile)
+        element.classList.add('bg-green-600', 'text-white', 'shadow-lg', 'shadow-green-600/50'); // MODIFICATO: da bg-gray-700 a bg-green-600 e shadow
     } else { // type === 'servizio'
         // Servizio: Blu con ombra (più visibile)
         element.classList.add('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/50');
@@ -565,7 +565,7 @@ function loadChatList() {
                         <p class="text-xs text-gray-500 truncate mt-0.5">${chat.lastMessage}</p>
                     </div>
                     <div class="ml-4 flex flex-col items-end">
-                        <span class="text-xs font-medium ${isOwner ? 'text-gray-700' : 'text-blue-600'}">${statusText}</span> <span class="text-xs text-gray-400 mt-1">${chat.lastMessageTimestamp ? chat.lastMessageTimestamp.toDate().toLocaleDateString('it-IT') : 'N/D'}</span>
+                        <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${statusText}</span> <span class="text-xs text-gray-400 mt-1">${chat.lastMessageTimestamp ? chat.lastMessageTimestamp.toDate().toLocaleDateString('it-IT') : 'N/D'}</span>
                     </div>
                 </div>
             `;
@@ -662,24 +662,24 @@ function loadOffers() {
                       // Se sono il proprietario e l'offerta è riservata
                       ownerButtons = `
                         <p class="text-sm font-semibold text-yellow-600 mt-2">Riservato a ${offer.reservedBy}</p>
-                        <button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-2 w-full bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Completa Scambio</button> `;
+                        <button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Completa Scambio</button> `; // MODIFICATO: da bg-gray-700 a bg-green-600
                   } else {
                       // Se sono un terzo, non posso interagire
                       actionButton = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Non Disponibile</button>`;
                   }
               } else { // status === 'available'
-                  statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">Disponibile</span>`; // AGGIORNATO: Colore testo 'Beni' a grigio
+                  statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Disponibile</span>`; // MODIFICATO: Aggiunto BG verde chiaro per 'Disponibile'
                   if (isOwner) {
                       // Posso solo eliminare la mia offerta disponibile
                       ownerButtons = `<button onclick="deleteOffer('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Elimina Offerta</button>`;
                   } else {
                       // Posso riservare e chattare
-                      actionButton = `<button onclick="reserveAndChat('${docId}', '${offer.ownerId}', '${offer.title.replace(/'/g, "\\'")}')" class="mt-2 w-full ${offer.type === 'bene' ? 'bg-gray-700 hover:bg-gray-800' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Riserva e Chat</button>`; // AGGIORNATO: Colore bottone a grigio o blu
+                      actionButton = `<button onclick="reserveAndChat('${docId}', '${offer.ownerId}', '${offer.title.replace(/'/g, "\\'")}')" class="mt-2 w-full ${offer.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Riserva e Chat</button>`; // MODIFICATO: da bg-gray-700 a bg-green-600
                   }
               }
               
               // --- Creazione HTML Card ---
-              const typeColor = offer.type === 'bene' ? 'bg-gray-700' : 'bg-blue-600'; // MODIFICATO: Grigio per bene, Blu per servizio
+              const typeColor = offer.type === 'bene' ? 'bg-green-600' : 'bg-blue-600'; // MODIFICATO: Verde per bene, Blu per servizio
               const iconSvg = offer.type === 'bene' 
                   ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-box"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`
                   : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wrench"><path d="M.4 17.5a2.17 2.17 0 0 1 3.2-3.2l2.7 2.7l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2l.9 .9l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2L12 12l9.1 9.1"/></svg>`;
@@ -839,8 +839,7 @@ function loadOffers() {
     <div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg">
 
         <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-gray-700">EcoMunity</h1>
-            <button onclick="handleLogout()"
+            <h1 class="text-xl font-bold text-green-600">EcoMunity</h1> <button onclick="handleLogout()"
                     class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-1 rounded-full shadow-md transition duration-150 ease-in-out">
                 Logout
             </button>
@@ -855,8 +854,7 @@ function loadOffers() {
                         <button id="tab-btn-beni" 
                                 onclick="switchHomeTab('bene', this)" 
                                 class="flex-1 py-3 px-4 text-sm font-medium rounded-md 
-                                       bg-gray-700 text-white shadow-lg shadow-gray-700/50"> Beni Materiali 
-                        </button>
+                                       bg-green-600 text-white shadow-lg shadow-green-600/50"> Beni Materiali </button>
                         <button id="tab-btn-servizi" 
                                 onclick="switchHomeTab('servizio', this)" 
                                 class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md 
@@ -892,8 +890,7 @@ function loadOffers() {
                             <div class="flex bg-gray-100 rounded-lg p-1 space-x-1 shadow-md"> <button type="button" 
                                         id="type-bene" 
                                         onclick="toggleOfferType('bene')"
-                                        class="flex-1 py-3 px-4 text-sm font-medium rounded-md bg-gray-700 text-white shadow-lg"> Bene Materiale
-                                </button>
+                                        class="flex-1 py-3 px-4 text-sm font-medium rounded-md bg-green-600 text-white shadow-lg"> Bene Materiale </button>
                                 <button type="button" 
                                         id="type-servizio" 
                                         onclick="toggleOfferType('servizio')"
@@ -907,14 +904,12 @@ function loadOffers() {
                         <div class="mb-4">
                             <label for="title" class="block text-sm font-medium text-gray-700">Titolo</label>
                             <input type="text" id="title" required
-                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-700 focus:border-gray-700 sm:text-sm" placeholder="Es. Bicicletta usata, Lezione di chitarra">
-                        </div>
+                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600 sm:text-sm" placeholder="Es. Bicicletta usata, Lezione di chitarra"> </div>
         
                         <div class="mb-4">
                             <label for="description" class="block text-sm font-medium text-gray-700">Descrizione</label>
                             <textarea id="description" rows="3" required
-                                      class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-gray-700 focus:border-gray-700 sm:text-sm" placeholder="Descrivi brevemente cosa offri e perché."></textarea>
-                        </div>
+                                      class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600 sm:text-sm" placeholder="Descrivi brevemente cosa offri e perché."></textarea> </div>
                         
                         <div class="mb-6">
                             <label for="cp-value" class="block text-sm font-medium text-gray-700">Valore Karma (CP)</label>
@@ -925,8 +920,7 @@ function loadOffers() {
                         </div>
         
                         <button type="submit"
-                                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-gray-700 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-700"> Pubblica Offerta
-                        </button>
+                                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600"> Pubblica Offerta </button>
                     </form>
                 </div>
             </section>
@@ -975,10 +969,9 @@ function loadOffers() {
                 <input type="hidden" id="current-chat-id">
                 <div class="flex">
                     <input type="text" id="message-input" placeholder="Scrivi un messaggio..." required
-                           class="flex-1 px-4 py-2 border border-gray-300 rounded-l-full shadow-sm focus:outline-none focus:ring-gray-700 focus:border-gray-700"> <button type="submit"
-                            class="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded-r-full shadow-md flex items-center justify-center"> <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizonal"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
-                    </button>
-                </div>
+                           class="flex-1 px-4 py-2 border border-gray-300 rounded-l-full shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600"> <button type="submit"
+                            class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-r-full shadow-md flex items-center justify-center"> <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizonal"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
+                    </button> </div>
             </form>
         </div>
 
@@ -1015,9 +1008,7 @@ function loadOffers() {
         
         <div id="login-screen">
             <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-xs w-full">
-                <h2 class="text-3xl font-bold text-gray-700 mb-2">EcoMunity</h2> <p class="text-gray-600 mb-8">Scambio Etico e Comunitario</p>
-                
-                <button onclick="handleAuth()"
+                <h2 class="text-3xl font-bold text-green-600 mb-2">EcoMunity</h2> <p class="text-gray-600 mb-8">Scambio Etico e Comunitario</p> <button onclick="handleAuth()"
                         class="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12.24 10.24v3.54h6.08c-.2 1.25-.8 2.22-1.74 2.87-1.12.8-2.67 1.25-4.34 1.25-3.32 0-6.02-2.7-6.02-6.02s2.7-6.02 6.02-6.02c1.76 0 3.3.62 4.54 1.8l2.67-2.67c-1.8-1.7-4.1-2.76-6.42-2.76-4.97 0-9 4.03-9 9s4.03 9 9 9c4.87 0 8.78-3.4 8.78-8.78 0-.9-.08-1.7-.24-2.48h-8.54z" fill-rule="evenodd" clip-rule="evenodd"/></svg>
                     Accedi con Google

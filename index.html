@@ -839,8 +839,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
         <nav id="tab-bar" class="bg-white flex justify-around shadow-lg">
             <button class="tab-item active" id="nav-home" onclick="navigate('home-screen', this)">
-                <div class="flex flex-col items-center p-2"> {/* Aggiunto relative qui implicitamente dal JS */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-home"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <div class="flex flex-col items-center p-2"> <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-home"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <span class="text-xs mt-1">Home</span>
                 </div>
             </button>
@@ -851,7 +850,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                 </div>
             </button>
             <button class="tab-item" id="nav-chat" onclick="navigate('chat-list-screen', this)">
-                 {/* Il pallino rosso verrà aggiunto qui dal JS */}
                  <div class="flex flex-col items-center p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     <span class="text-xs mt-1">Chat</span>
@@ -860,6 +858,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
             <button class="tab-item" id="nav-profile" onclick="navigate('profile-screen', this)">
                 <div class="flex flex-col items-center p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+
                     <span class="text-xs mt-1">Profilo</span>
                 </div>
             </button>

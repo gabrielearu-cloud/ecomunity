@@ -692,8 +692,13 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       const emptyServizio = document.getElementById('empty-servizio');
       if (!itemListBene || !itemListServizio) return; 
 
-      const q = query(collection(db, "offerte"), orderBy("timestamp", "desc"));
-
+            
+          const q = query(
+          collection(db, "offerte"),
+          where("status", "!=", "completed"), // <-- FILTRA: non prendere quelle completate
+          orderBy("timestamp", "desc")
+      );
+      
       onSnapshot(q, (querySnapshot) => {
           let beniHtml = '', serviziHtml = '';
           querySnapshot.forEach((doc) => {

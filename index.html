@@ -421,19 +421,29 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           }, { merge: true });
           console.log(`Profilo compratore ${reservedById} aggiornato.`);
 
+          
+          // --- INIZIO BLOCCO MODIFICATO ---
           // Aggiornamento 3: Profilo del VENDITORE (currentUser.uid)
           const sellerRef = doc(db, "users", user.uid);
           const sellerSnap = await getDoc(sellerRef);
           let sellerSwaps = 0;
+          let sellerKarma = 100; // Default
+          
           if(sellerSnap.exists()) {
               sellerSwaps = sellerSnap.data().completedSwaps || 0;
+              sellerKarma = sellerSnap.data().karmaPoints || 100; // Leggiamo il karma attuale
           }
           const newSellerSwaps = sellerSwaps + 1;
 
+          // Inviamo SIA i nuovi scambi SIA il vecchio karma
+          // per soddisfare la regola (karmaPoints == karmaPoints)
           await setDoc(sellerRef, {
-              completedSwaps: newSellerSwaps
+              completedSwaps: newSellerSwaps,
+              karmaPoints: sellerKarma // <-- CAMPO AGGIUNTO
           }, { merge: true });
           console.log(`Profilo venditore ${user.uid} aggiornato.`);
+          // --- FINE BLOCCO MODIFICATO ---
+
 
           // *** NOTIFICA! ***
           hasNewProfileUpdate = true;

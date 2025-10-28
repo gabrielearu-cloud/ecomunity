@@ -318,6 +318,21 @@ window.navigateFromChat = function(screenId, element) {
         alert("Errore durante la pubblicazione. Controlla la console.");
     }
   }
+  // NUOVA FUNZIONE: ELIMINA OFFERTA
+  window.deleteOffer = async function(docId) {
+      if (confirm("Sei sicuro di voler eliminare questa offerta? L'azione è irreversibile.")) {
+          try {
+              // Trova il riferimento al documento e lo elimina
+              await deleteDoc(doc(db, "offerte", docId));
+              console.log("Documento eliminato con ID:", docId);
+              alert("Offerta eliminata con successo!");
+              // L'aggiornamento UI è automatico grazie a onSnapshot in loadOffers
+          } catch (e) {
+              console.error("Errore durante l'eliminazione del documento: ", e);
+              alert("Errore durante l'eliminazione. Controlla le regole di sicurezza (write).");
+          }
+      }
+  }
 
    // ************************************************************
   // ** NUOVE FUNZIONI DI GESTIONE CHAT, STATO E ASSEGNAZIONE CP **

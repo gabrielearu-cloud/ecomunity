@@ -29,7 +29,12 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   const googleProvider = new GoogleAuthProvider();
 
   let currentOfferType = 'bene';
-  let hasUnreadMessages = false; // Flag globale per i messaggi non letti
+  
+  // *** LOGICA MESSAGGI NON LETTI ***
+  let hasUnreadMessages = false; // Flag globale per pallino rosso TAB
+  let unreadChatIds = []; // Array per ID chat non lette (pallino BLU)
+  let allChatsData = []; // Cache locale per i dati delle chat
+  // *** FINE LOGICA ***
 
   // --- FUNZIONI DI GESTIONE UI ---
 
@@ -45,7 +50,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   }
 
   // Funzione per gestire i click sulla Tab Bar
-  // *** MODIFICATA per resettare l'indicatore chat ***
+  // *** MODIFICATA: per forzare il re-render della lista chat ***
   window.navigate = function(screenId, element) {
     switchScreen(screenId);
     // Aggiorna lo stato "attivo" della tab bar
@@ -54,36 +59,35 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     });
     element.classList.add('active');
 
-    // Se l'utente clicca sulla tab Chat, resetta il flag e nasconde l'indicatore
+    // *** MODIFICA CHIAVE ***
+    // Se stiamo navigando ALLA lista chat, ridisegnala
+    // per mostrare lo stato di lettura corretto.
     if (screenId === 'chat-list-screen') {
-        hasUnreadMessages = false;
-        updateChatTabIndicator();
+        renderChatList();
     }
   }
 
-  // *** NUOVA FUNZIONE per mostrare/nascondere il pallino sulla tab chat ***
+  // Funzione per mostrare/nascondere il pallino sulla tab chat
   function updateChatTabIndicator() {
       const chatTab = document.getElementById('nav-chat');
-      if (!chatTab) return; // Sicurezza: se la tab non esiste ancora
+      if (!chatTab) return; // Sicurezza
 
       let indicator = chatTab.querySelector('.unread-indicator');
-      const iconContainer = chatTab.querySelector('div'); // Il div che contiene SVG e span
+      const iconContainer = chatTab.querySelector('div'); 
 
       if (hasUnreadMessages) {
           if (!indicator) {
-              // Crea il pallino se non esiste
               indicator = document.createElement('span');
               indicator.className = 'unread-indicator absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white';
-              // Aggiungi 'relative' al contenitore se non c'è già (assicurato anche dal CSS)
               if (iconContainer && !iconContainer.classList.contains('relative')) {
                   iconContainer.classList.add('relative');
               }
-              iconContainer?.appendChild(indicator); // Aggiungi il pallino al div interno
+              iconContainer?.appendChild(indicator);
           }
-          if (indicator) indicator.style.display = 'block'; // Mostra il pallino
+          if (indicator) indicator.style.display = 'block';
       } else {
           if (indicator) {
-              indicator.style.display = 'none'; // Nasconde il pallino
+              indicator.style.display = 'none';
           }
       }
   }
@@ -157,7 +161,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
 
   // --- 4. GESTIONE STATO UTENTE (ON LOAD - Listener #1) ---
-  // Gestisce solo UI base (header/tab/login screen) e nome profilo header
   onAuthStateChanged(auth, (user) => {
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app-container').classList.remove('hidden');
@@ -171,8 +174,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         if (profileNameHeader) {
             profileNameHeader.textContent = user.displayName || "Utente EcoMunity";
         }
-
-        // Non chiamiamo switchScreen o loadData qui, lo fa il listener #2
     } else {
         console.log("Nessun utente loggato. Mostra schermata di Login.");
         document.getElementById('login-screen').style.display = 'flex';
@@ -185,6 +186,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   // --- GESTIONE CHAT (Funzioni) ---
   let currentChatId = null;
 
+  // *** MODIFICATA: gestione indicatori non letti ***
   window.openChat = function(chatId, offerTitle) {
       currentChatId = chatId;
       document.getElementById('current-chat-id').value = chatId;
@@ -194,9 +196,18 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       document.getElementById('app-header').style.display = 'none';
       document.getElementById('tab-bar').style.display = 'none';
 
-      // Quando apri una chat, resetta l'indicatore (anche se eri già in lista)
-      hasUnreadMessages = false;
-      updateChatTabIndicator();
+      // *** LOGICA MESSAGGI NON LETTI ***
+      // Rimuovi questa chat dagli ID non letti
+      const index = unreadChatIds.indexOf(chatId);
+      if (index > -1) {
+          unreadChatIds.splice(index, 1);
+          console.log("Chat", chatId, "segnata come letta.");
+      }
+
+      // Aggiorna il flag globale (pallino rosso) solo se non ci sono PIÙ chat non lette
+      hasUnreadMessages = unreadChatIds.length > 0;
+      updateChatTabIndicator(); 
+      // *** FINE LOGICA ***
 
       loadChatMessages(chatId);
   }
@@ -270,8 +281,10 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       document.getElementById('chat-screen').style.display = 'none';
       document.getElementById('app-header').style.display = 'flex';
       document.getElementById('tab-bar').style.display = 'flex';
+      
+      currentChatId = null; // Esco dalla chat
 
-      // Esegui la navigazione standard (che resetterà anche l'indicatore se screenId è chat-list-screen)
+      // Esegui la navigazione standard (che chiamerà renderChatList)
       window.navigate(screenId, element);
   }
 
@@ -355,7 +368,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           await setDoc(userRef, { karmaPoints: newKarma }, { merge: true });
           console.log(`KP per ${reservedById} aggiornati a ${newKarma}`);
           alert(`Scambio completato! Acquirente riceve ${finalKP} KP (Nuovo totale: ${newKarma}).`);
-          // loadOffers(); // Non necessario, onSnapshot aggiorna
       } catch (e) {
           console.error("Errore completamento scambio: ", e);
           alert("Errore nel completare lo scambio.");
@@ -410,7 +422,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       try {
           await updateDoc(offerRef, { status: 'available', reservedBy: null, reservedAt: null });
           alert("Prenotazione annullata.");
-          // loadOffers(); // Non necessario, onSnapshot aggiorna
       } catch (e) {
           console.error("Errore annullamento: ", e);
           alert("Impossibile annullare.");
@@ -420,14 +431,68 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   // --- 6. GESTIONE DATI (CARICAMENTO) ---
 
-  // Funzione per caricare la lista delle chat
-  // *** MODIFICATA per Zebra Striping e Indicatore Non Letto ***
-  function loadChatList() {
+  // *** NUOVA FUNZIONE: per disegnare l'HTML della lista chat ***
+  function renderChatList() {
+      const chatListContainer = document.getElementById('chat-list');
+      if (!chatListContainer) return;
       const currentUser = auth.currentUser;
       if (!currentUser) return;
 
-      const chatListContainer = document.getElementById('chat-list');
-      if (!chatListContainer) return; // Sicurezza: elemento non trovato?
+      if (allChatsData.length === 0) {
+          chatListContainer.innerHTML = '<p class="text-center text-gray-500 mt-8">Nessuna chat attiva.</p>';
+          return;
+      }
+
+      let chatHtml = '';
+      let isOddRow = false;
+
+      // Ordina i dati (già ordinati da Firestore, ma è una sicurezza)
+      allChatsData.sort((a, b) => (b.data.lastMessageTimestamp?.toMillis() || 0) - (a.data.lastMessageTimestamp?.toMillis() || 0));
+
+      allChatsData.forEach((chatDoc) => {
+          const chat = chatDoc.data;
+          const chatId = chatDoc.id;
+          const isUnread = unreadChatIds.includes(chatId); // Controlla se questa chat è non letta
+
+          const isOwner = chat.ownerId === currentUser.uid;
+          const statusText = isOwner ? 'Offerta tua' : 'Tua prenotazione';
+          const chatDisplayName = chat.offerTitle || 'Chat senza titolo';
+          const rowBgClass = isOddRow ? 'bg-green-50' : 'bg-white';
+          isOddRow = !isOddRow;
+
+          // Indicatore pallino per la riga
+          const unreadIndicatorHtml = isUnread
+              ? '<span class="block h-2.5 w-2.5 rounded-full bg-blue-500 mr-3 flex-shrink-0" title="Nuovi messaggi"></span>'
+              : '<span class="block h-2.5 w-2.5 mr-3 flex-shrink-0"></span>'; // Placeholder per allineamento
+
+          chatHtml += `
+              <div onclick="openChat('${doc.id}', '${chat.offerTitle.replace(/'/g, "\\'")}')"
+                   class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${rowBgClass}">
+                  
+                  ${unreadIndicatorHtml}
+
+                  <div class="flex-shrink-0 mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square text-gray-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                       <p class="text-sm ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'} truncate">${chatDisplayName}</p>
+                      <p class="text-xs ${isUnread ? 'text-gray-700' : 'text-gray-500'} truncate mt-0.5">${chat.lastMessage}</p>
+                  </div>
+                  <div class="ml-4 flex flex-col items-end">
+                      <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${statusText}</span>
+                      <span class="text-xs text-gray-400 mt-1">${chat.lastMessageTimestamp?.toDate ? chat.lastMessageTimestamp.toDate().toLocaleDateString('it-IT') : 'N/D'}</span>
+                  </div>
+              </div>
+          `;
+      });
+
+      chatListContainer.innerHTML = chatHtml;
+  }
+
+  // *** MODIFICATA: ora aggiorna solo i dati e chiama renderChatList ***
+  function loadChatList() {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
 
       const q = query(
           collection(db, "chats"),
@@ -435,66 +500,47 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           orderBy("lastMessageTimestamp", "desc")
       );
 
-      let isOddRow = false; // Per lo striping
-
       onSnapshot(q, (snapshot) => {
-          let chatHtml = '';
+          // Aggiorna la cache dei dati
+          allChatsData = snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
+
           if (snapshot.empty) {
-              chatListContainer.innerHTML = '<p class="text-center text-gray-500 mt-8">Nessuna chat attiva.</p>';
               hasUnreadMessages = false;
+              unreadChatIds = []; // Svuota l'array
               updateChatTabIndicator();
+              renderChatList(); // Disegna lo stato vuoto
               return;
           }
 
-          let foundNewMessageOutsideChat = false;
+          let newMessagesAdded = false; // Flag per sapere se *questo* snapshot ha aggiunto nuove chat non lette
+
           snapshot.docChanges().forEach((change) => {
             if (change.type === "modified" && !change.doc.metadata.hasPendingWrites) {
-                const currentScreen = document.querySelector('.screen.active')?.id;
                 const chatScreenVisible = document.getElementById('chat-screen').style.display === 'flex';
-                // Se NON sono nella lista chat E NON sono dentro una chat specifica...
-                if (currentScreen !== 'chat-list-screen' && !chatScreenVisible) {
-                    // ...allora considero questa modifica come "non letta".
-                    foundNewMessageOutsideChat = true;
+                const changedChatId = change.doc.id;
+                
+                let isViewingThisChat = chatScreenVisible && currentChatId === changedChatId;
+                
+                if (!isViewingThisChat && !unreadChatIds.includes(changedChatId)) {
+                    unreadChatIds.push(changedChatId);
+                    newMessagesAdded = true;
                 }
             }
           });
 
-          if (foundNewMessageOutsideChat) {
+          if (newMessagesAdded) {
               hasUnreadMessages = true;
-              updateChatTabIndicator();
+              updateChatTabIndicator(); // Mostra il pallino rosso sulla tab
           }
 
-          isOddRow = false; // Resetta ad ogni refresh
-          snapshot.forEach((doc) => {
-              const chat = doc.data();
-              const isOwner = chat.ownerId === currentUser.uid;
-              const statusText = isOwner ? 'Offerta tua' : 'Tua prenotazione';
-              const chatDisplayName = chat.offerTitle || 'Chat senza titolo';
-              const rowBgClass = isOddRow ? 'bg-green-50' : 'bg-white';
-              isOddRow = !isOddRow;
+          // Disegna la lista (anche se non ci sono nuovi messaggi, 
+          // lo stato potrebbe essere cambiato)
+          renderChatList();
 
-              chatHtml += `
-                  <div onclick="openChat('${doc.id}', '${chat.offerTitle.replace(/'/g, "\\'")}')"
-                       class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${rowBgClass}">
-                      <div class="flex-shrink-0 mr-4">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square text-gray-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                      </div>
-                      <div class="flex-1 min-w-0">
-                          <p class="text-sm font-semibold text-gray-800 truncate">${chatDisplayName}</p>
-                          <p class="text-xs text-gray-500 truncate mt-0.5">${chat.lastMessage}</p>
-                      </div>
-                      <div class="ml-4 flex flex-col items-end">
-                          <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${statusText}</span>
-                          <span class="text-xs text-gray-400 mt-1">${chat.lastMessageTimestamp?.toDate ? chat.lastMessageTimestamp.toDate().toLocaleDateString('it-IT') : 'N/D'}</span>
-                      </div>
-                  </div>
-              `;
-          });
-
-          chatListContainer.innerHTML = chatHtml;
       }, (error) => { // Aggiunto gestore errori per onSnapshot
           console.error("Errore listener chat list:", error);
-          chatListContainer.innerHTML = '<p class="text-center text-red-500 mt-8">Errore nel caricare le chat.</p>';
+          const chatListContainer = document.getElementById('chat-list');
+          if (chatListContainer) chatListContainer.innerHTML = '<p class="text-center text-red-500 mt-8">Errore nel caricare le chat.</p>';
       });
   }
 
@@ -512,7 +558,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                   displayName: auth.currentUser.displayName, email: auth.currentUser.email,
                   karmaPoints: 100, completedSwaps: 0
               }).catch(e => console.error("Errore creazione profilo:", e));
-              // Verrà richiamato onSnapshot dopo la creazione
               return;
           }
 
@@ -537,7 +582,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           let progressText = `Prossimo livello: ${nextLevelKP} KP`;
           if (progressPercentage >= 100 && currentLevel >= levelThresholds.length) {
               progressText = "Livello Massimo!";
-              progressPercentage = 100; // Assicura che sia 100%
+              progressPercentage = 100;
           }
 
           profileDataContainer.innerHTML = `
@@ -580,7 +625,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       const itemListServizio = document.getElementById('item-list-servizio');
       const emptyBene = document.getElementById('empty-bene');
       const emptyServizio = document.getElementById('empty-servizio');
-      if (!itemListBene || !itemListServizio) return; // Sicurezza
+      if (!itemListBene || !itemListServizio) return; 
 
       const q = query(collection(db, "offerte"), orderBy("timestamp", "desc"));
 
@@ -590,7 +635,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           querySnapshot.forEach((doc) => {
               const offer = doc.data();
               const docId = doc.id;
-              const cpValue = offer.cpValue || 10; // Valore CP
+              const cpValue = offer.cpValue || 10;
               const isOwner = offer.ownerId === currentUser.uid;
               const isReserved = offer.status === 'reserved';
               const isCompleted = offer.status === 'completed';
@@ -610,7 +655,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                   if (isReservedByMe) {
                       actionButton = `<button onclick="cancelReservation('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Annulla Prenotazione</button>`;
                   } else if (isOwner) {
-                      const reservedByText = ''; // Potremmo recuperare il nome utente qui in futuro
+                      const reservedByText = ''; 
                       ownerButtons = `<p class="text-sm font-semibold text-yellow-600 mt-2">Riservato ${reservedByText}</p><button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Completa Scambio</button>`;
                   } else {
                       actionButton = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Non Disponibile</button>`;
@@ -656,16 +701,14 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       }, (error) => { // Gestore errori
           console.error("Errore listener offerte:", error);
           if (itemListBene) itemListBene.innerHTML = '<p class="text-center text-red-500 mt-8">Errore nel caricare le offerte.</p>';
-          if (itemListServizio) itemListServizio.innerHTML = ''; // Nascondi errore duplicato
+          if (itemListServizio) itemListServizio.innerHTML = '';
       });
   }
 
   // --- 7. INIZIALIZZAZIONE (Listener #2) ---
-  // Questo listener avvia il caricamento dei dati DOPO che l'utente è confermato
   onAuthStateChanged(auth, (user) => {
       if (user) {
           console.log("Utente confermato (listener 2), caricamento dati...");
-          // Assicurati che il DOM sia pronto (anche se con 'module' dovrebbe esserlo)
           if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 loadOffers();
@@ -682,7 +725,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                 document.getElementById('nav-home')?.classList.add('active');
           }
       }
-      // Il caso 'else' (logout) è gestito dal listener #1
   });
 </script>
 
@@ -858,7 +900,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
             <button class="tab-item" id="nav-profile" onclick="navigate('profile-screen', this)">
                 <div class="flex flex-col items-center p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-
                     <span class="text-xs mt-1">Profilo</span>
                 </div>
             </button>

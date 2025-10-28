@@ -8,10 +8,10 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
   // Importazioni per l'Autenticazione (Login Google)
   import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-  // Importazioni per il Database (Firestore - Interazioni/Pubblicazione)
   
   // AGGIUNTE: doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy
-import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy } 
+  // *** MODIFICA: Aggiunto getDocs (necessario per reserveAndChat) ***
+import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy, getDocs } 
 from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   // Your web app's Firebase configuration (I tuoi dati restano invariati)
@@ -358,50 +358,61 @@ window.navigateFromChat = function(screenId, element) {
 // ************************************************************
 // ** NUOVE FUNZIONI DI GESTIONE CHAT, STATO E ASSEGNAZIONE CP **
 // ************************************************************
+
+// *** INIZIO BLOCCO MODIFICATO ***
 // NUOVA FUNZIONE: Richiede il feedback, gestisce l'assegnazione di CP e imposta lo stato a 'completed'
-window.requestFeedback = async function(docId, cpValue) {
+// QUESTA FUNZIONE È STATA COMPLETAMENTE AGGIORNATA CON LE NUOVE REGOLE KARMA
+window.requestFeedback = async function(docId, cpValue) { // cpValue (il valore dell'offerta) ora è meno rilevante, ma lo teniamo
     const user = auth.currentUser;
     if (!user) {
         alert("Errore di autenticazione.");
         return;
     }
+    
     const offerRef = doc(db, "offerte", docId);
     const offerSnap = await getDoc(offerRef); // Ottiene lo stato attuale
+    
     if (!offerSnap.exists() || offerSnap.data().status !== 'reserved' || offerSnap.data().ownerId !== user.uid) {
         alert("Impossibile completare. L'offerta non è riservata o non sei il proprietario.");
         return;
     }
 
-    // Semplice richiesta di feedback tramite prompt per simulare le 3 opzioni (SIMULAZIONE CP/Karma)
+    const reservedById = offerSnap.data().reservedBy;
+    if (!reservedById) {
+        alert("Errore: ID acquirente non trovato.");
+        return;
+    }
+
+    // Aggiornato il prompt con il nuovo sistema Karma
     const feedback = prompt(
-        "L'oggetto è stato ritirato con successo? Scegli un'opzione:\n" +
-        "1: Andato a Buon Fine (Assegna 100% CP)\n" +
-        "2: Meritevole (Extra CP, +120%)\n" +
-        "3: Qualcosa Non ha Funzionato (0 CP, Bassa affidabilità)"
+        "Come valuti questo scambio?\n" +
+        "1: Eccellente (Assegna +15 Karma Point all'acquirente)\n" +
+        "2: Corretto (Assegna +10 Karma Point all'acquirente)\n" +
+        "3: Insoddisfacente (Toglie -10 Karma Point all'acquirente)"
     );
 
     let finalCP = 0;
     let feedbackType = '';
 
     switch (feedback) {
-        case '1':
-            finalCP = cpValue; // 100% del valore (Es. 50 CP)
-            feedbackType = 'success';
+        case '1': // Eccellente
+            finalCP = 15;
+            feedbackType = 'eccellente';
             break;
-        case '2':
-            finalCP = Math.round(cpValue * 1.2); // 120% del valore (Es. 60 CP)
-            feedbackType = 'merit';
+        case '2': // Corretto
+            finalCP = 10;
+            feedbackType = 'corretto';
             break;
-        case '3':
-            finalCP = 0; // Nessun CP
-            feedbackType = 'fail';
+        case '3': // Insoddisfacente
+            finalCP = -10;
+            feedbackType = 'insoddisfacente';
             break;
         default:
             alert("Selezione non valida. Annullato.");
             return;
     }
     
-    if (feedbackType === 'fail' && !confirm("Sei sicuro di voler dare un feedback negativo? L'acquirente non riceverà CP.")) {
+    if (feedbackType === 'insoddisfacente' && !confirm("Sei sicuro di voler dare un feedback negativo? L'utente riceverà -10 Karma.")) {
         return;
     }
 
@@ -410,18 +421,37 @@ window.requestFeedback = async function(docId, cpValue) {
         await updateDoc(offerRef, {
             status: 'completed',
             feedback: feedbackType,
-            cp_awarded: finalCP,
+            cp_awarded: finalCP, // Salva il valore di Karma assegnato (15, 10 o -10)
             completionDate: new Date()
         });
 
-        // 2. Notifica e ricarica
-        alert(`Scambio completato! L'acquirente riceverà ${finalCP} CP.`);
-        loadOffers();
+        // 2. Logica Aggiuntiva: Aggiorna il punteggio Karma dell'ACQUIRENTE
+        const userRef = doc(db, "users", reservedById);
+        const userSnap = await getDoc(userRef);
+        
+        let currentKarma = 100; // Default se l'utente non esiste ancora
+        if (userSnap.exists() && userSnap.data().karmaPoints !== undefined) {
+            currentKarma = userSnap.data().karmaPoints;
+        }
+        
+        const newKarma = currentKarma + finalCP;
+        
+        // setDoc con merge = true aggiorna il campo o crea il documento se non esiste
+        await setDoc(userRef, { 
+            karmaPoints: newKarma 
+        }, { merge: true }); 
+
+        console.log(`Punti Karma per ${reservedById} aggiornati da ${currentKarma} a ${newKarma}`);
+
+        // 3. Notifica e ricarica
+        alert(`Scambio completato! L'acquirente ha ricevuto ${finalCP} Punti Karma.\nIl suo nuovo totale è ${newKarma}.`);
+        loadOffers(); // Ricarica la lista offerte
     } catch (e) {
         console.error("Errore durante il completamento dello scambio: ", e);
         alert("Errore nel completare lo scambio. Controlla la console.");
     }
 }
+// *** FINE BLOCCO MODIFICATO ***
 
 
 // NUOVA FUNZIONE: Avvia la chat, imposta l'offerta a 'reserved' e reindirizza
@@ -450,7 +480,7 @@ window.reserveAndChat = async function(offerId, offerOwnerId, offerTitle) {
         where("offerId", "==", offerId),
         where("users", "array-contains", currentUser.uid) // Controlla se l'utente è già nella chat
     );
-    const chatSnapshot = await getDocs(chatQuery);
+    const chatSnapshot = await getDocs(chatQuery); // *** USA getDocs (importato) ***
     
     let chatId;
 
@@ -586,13 +616,13 @@ function loadProfileData(userId) {
     setDoc(userRef, { 
         displayName: auth.currentUser.displayName, 
         email: auth.currentUser.email,
-        karmaPoints: 100 // Valore iniziale
+        karmaPoints: 100 // Valore iniziale se non esiste
     }, { merge: true }); // Merge: true non sovrascrive se esiste, aggiunge se manca
 
     onSnapshot(userRef, (docSnap) => {
         if (docSnap.exists()) {
             const userData = docSnap.data();
-            const karma = userData.karmaPoints || 0;
+            const karma = userData.karmaPoints || 0; // Prende 0 se 'karmaPoints' è undefined
             const completedSwaps = userData.completedSwaps || 0;
             
             profileDataContainer.innerHTML = `
@@ -611,14 +641,10 @@ function loadProfileData(userId) {
             // Aggiorna l'header con il nome utente
             document.getElementById('profile-name-header').textContent = auth.currentUser.displayName;
 
-            // Ricarica anche le offerte per aggiornare l'UI dei bottoni
-            loadOffers();
-
         } else {
             console.log("Documento utente non trovato, creato uno di base.");
         }
     });
-
 }
 
 // Funzione principale per caricare e visualizzare le offerte
@@ -649,7 +675,9 @@ function loadOffers() {
               if (isCompleted) {
                   statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Completato</span>`;
                   if (isOwner) {
-                      ownerButtons = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Scambio Completato</button>`;
+                      // Mostra il feedback dato
+                      const feedbackMsg = offer.feedback ? `(Feedback: ${offer.feedback}, ${offer.cp_awarded} CP)` : '';
+                      ownerButtons = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Scambio Completato ${feedbackMsg}</button>`;
                   }
               } else if (isReserved) {
                   const statusColor = isReservedByMe ? 'bg-blue-200 text-blue-800' : 'bg-yellow-200 text-yellow-800';
@@ -660,26 +688,28 @@ function loadOffers() {
                       actionButton = `<button onclick="cancelReservation('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Annulla Prenotazione</button>`;
                   } else if (isOwner) {
                       // Se sono il proprietario e l'offerta è riservata
+                      // Aggiungiamo un testo che mostra chi ha riservato
+                      const reservedByText = offer.reservedBy ? `(Riservato)` : ''; // In futuro qui nome utente
                       ownerButtons = `
-                        <p class="text-sm font-semibold text-yellow-600 mt-2">Riservato a ${offer.reservedBy}</p>
-                        <button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Completa Scambio</button> `; // MODIFICATO: da bg-gray-700 a bg-green-600
+                        <p class="text-sm font-semibold text-yellow-600 mt-2">Riservato ${reservedByText}</p>
+                        <button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Completa Scambio</button> `;
                   } else {
                       // Se sono un terzo, non posso interagire
                       actionButton = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Non Disponibile</button>`;
                   }
               } else { // status === 'available'
-                  statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Disponibile</span>`; // MODIFICATO: Aggiunto BG verde chiaro per 'Disponibile'
+                  statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Disponibile</span>`;
                   if (isOwner) {
                       // Posso solo eliminare la mia offerta disponibile
                       ownerButtons = `<button onclick="deleteOffer('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Elimina Offerta</button>`;
                   } else {
                       // Posso riservare e chattare
-                      actionButton = `<button onclick="reserveAndChat('${docId}', '${offer.ownerId}', '${offer.title.replace(/'/g, "\\'")}')" class="mt-2 w-full ${offer.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Riserva e Chat</button>`; // MODIFICATO: da bg-gray-700 a bg-green-600
+                      actionButton = `<button onclick="reserveAndChat('${docId}', '${offer.ownerId}', '${offer.title.replace(/'/g, "\\'")}')" class="mt-2 w-full ${offer.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Riserva e Chat</button>`;
                   }
               }
               
               // --- Creazione HTML Card ---
-              const typeColor = offer.type === 'bene' ? 'bg-green-600' : 'bg-blue-600'; // MODIFICATO: Verde per bene, Blu per servizio
+              const typeColor = offer.type === 'bene' ? 'bg-green-600' : 'bg-blue-600';
               const iconSvg = offer.type === 'bene' 
                   ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-box"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`
                   : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wrench"><path d="M.4 17.5a2.17 2.17 0 0 1 3.2-3.2l2.7 2.7l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2l.9 .9l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2L12 12l9.1 9.1"/></svg>`;

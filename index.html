@@ -501,6 +501,31 @@ window.navigateFromChat = function(screenId, element) {
           document.getElementById('empty-chats').style.display = count === 0 ? 'block' : 'none';
       });
   }
+// NUOVA FUNZIONE: Carica i dati del profilo e il totale CP
+function loadProfileData(userId) {
+    const userRef = doc(db, "users", userId);
+    
+    // Ascolta in tempo reale le modifiche al documento utente (per i CP)
+    onSnapshot(userRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const userData = docSnap.data();
+            // L'ID del campo per i CP deve essere 'cpTotal'
+            const cpTotal = userData.cpTotal || 0;
+            
+            // Aggiorna l'elemento che mostra i CP nel profilo
+            const cpElement = document.getElementById('profile-cp-total');
+            if (cpElement) {
+                cpElement.textContent = `${cpTotal} CP`;
+            }
+        } else {
+            // Se il documento utente non esiste (primo login), lo crea con 0 CP
+            setDoc(userRef, { 
+                cpTotal: 0,
+                lastLogin: new Date()
+            }, { merge: true });
+        }
+    });
+}
 
         // --- 6. INTERAZIONE DATABASE (LETTURA E POPOLAZIONE OFFERTE) ---
   // Funzione per leggere e popolare le offerte, ora con gestione stati (available, reserved, completed)

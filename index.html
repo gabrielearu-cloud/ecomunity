@@ -305,7 +305,7 @@ window.navigateFromChat = function(screenId, element) {
     
     // Controllo base sul valore CP
     if (isNaN(cpValue) || cpValue <= 0) {
-        alert("Inserisci un valore Karma (CP) valido e positivo.");
+        alert("Inserisci un valore Karma (KP) valido e positivo.");
         return;
     }
     
@@ -321,7 +321,7 @@ window.navigateFromChat = function(screenId, element) {
             title: title,
             description: description,
             type: currentOfferType, // 'bene' o 'servizio'
-            cpValue: cpValue, // AGGIUNTA: Salva il valore CP
+            cpValue: cpValue, // AGGIUNTA: Salva il valore KP
             ownerId: user.uid,
             ownerName: user.displayName,
             timestamp: new Date(),
@@ -356,11 +356,10 @@ window.navigateFromChat = function(screenId, element) {
   }
 
 // ************************************************************
-// ** NUOVE FUNZIONI DI GESTIONE CHAT, STATO E ASSEGNAZIONE CP **
+// ** NUOVE FUNZIONI DI GESTIONE CHAT, STATO E ASSEGNAZIONE KP **
 // ************************************************************
 
-// *** INIZIO BLOCCO MODIFICATO ***
-// NUOVA FUNZIONE: Richiede il feedback, gestisce l'assegnazione di CP e imposta lo stato a 'completed'
+// NUOVA FUNZIONE: Richiede il feedback, gestisce l'assegnazione di KP e imposta lo stato a 'completed'
 // QUESTA FUNZIONE È STATA COMPLETAMENTE AGGIORNATA CON LE NUOVE REGOLE KARMA
 window.requestFeedback = async function(docId, cpValue) { // cpValue (il valore dell'offerta) ora è meno rilevante, ma lo teniamo
     const user = auth.currentUser;
@@ -391,20 +390,20 @@ window.requestFeedback = async function(docId, cpValue) { // cpValue (il valore 
         "3: Insoddisfacente (Toglie -10 Karma Point all'acquirente)"
     );
 
-    let finalCP = 0;
+    let finalKP = 0; // Modificato da CP a KP
     let feedbackType = '';
 
     switch (feedback) {
         case '1': // Eccellente
-            finalCP = 15;
+            finalKP = 15;
             feedbackType = 'eccellente';
             break;
         case '2': // Corretto
-            finalCP = 10;
+            finalKP = 10;
             feedbackType = 'corretto';
             break;
         case '3': // Insoddisfacente
-            finalCP = -10;
+            finalKP = -10;
             feedbackType = 'insoddisfacente';
             break;
         default:
@@ -421,7 +420,7 @@ window.requestFeedback = async function(docId, cpValue) { // cpValue (il valore 
         await updateDoc(offerRef, {
             status: 'completed',
             feedback: feedbackType,
-            cp_awarded: finalCP, // Salva il valore di Karma assegnato (15, 10 o -10)
+            cp_awarded: finalKP, // Salva il valore di Karma assegnato (15, 10 o -10)
             completionDate: new Date()
         });
 
@@ -434,7 +433,7 @@ window.requestFeedback = async function(docId, cpValue) { // cpValue (il valore 
             currentKarma = userSnap.data().karmaPoints;
         }
         
-        const newKarma = currentKarma + finalCP;
+        const newKarma = currentKarma + finalKP;
         
         // setDoc con merge = true aggiorna il campo o crea il documento se non esiste
         await setDoc(userRef, { 
@@ -444,14 +443,13 @@ window.requestFeedback = async function(docId, cpValue) { // cpValue (il valore 
         console.log(`Punti Karma per ${reservedById} aggiornati da ${currentKarma} a ${newKarma}`);
 
         // 3. Notifica e ricarica
-        alert(`Scambio completato! L'acquirente ha ricevuto ${finalCP} Punti Karma.\nIl suo nuovo totale è ${newKarma}.`);
+        alert(`Scambio completato! L'acquirente ha ricevuto ${finalKP} Punti Karma.\nIl suo nuovo totale è ${newKarma}.`);
         loadOffers(); // Ricarica la lista offerte
     } catch (e) {
         console.error("Errore durante il completamento dello scambio: ", e);
         alert("Errore nel completare lo scambio. Controlla la console.");
     }
 }
-// *** FINE BLOCCO MODIFICATO ***
 
 
 // NUOVA FUNZIONE: Avvia la chat, imposta l'offerta a 'reserved' e reindirizza
@@ -606,6 +604,7 @@ function loadChatList() {
 }
 
 
+// *** INIZIO BLOCCO MODIFICATO (loadProfileData) ***
 // Funzione per caricare i dati del profilo
 function loadProfileData(userId) {
     const profileDataContainer = document.getElementById('profile-data');
@@ -625,12 +624,61 @@ function loadProfileData(userId) {
             const karma = userData.karmaPoints || 0; // Prende 0 se 'karmaPoints' è undefined
             const completedSwaps = userData.completedSwaps || 0;
             
+            // --- INIZIO NUOVA LOGICA LIVELLO ---
+            // Definiamo i punti KP necessari per ogni livello (puoi cambiarli facilmente)
+            // Livello 1: 0-149, Livello 2: 150-299, Livello 3: 300-499, etc.
+            const levelThresholds = [0, 150, 300, 500, 1000]; // KP richiesti per Lvl 1, 2, 3, 4, 5
+            
+            let currentLevel = 1;
+            let currentLevelKP = levelThresholds[0]; // KP di partenza del livello attuale
+            let nextLevelKP = levelThresholds[1]; // KP necessari per il prossimo livello
+
+            // Trova il livello corrente
+            for (let i = levelThresholds.length - 1; i >= 0; i--) {
+                if (karma >= levelThresholds[i]) {
+                    currentLevel = i + 1;
+                    currentLevelKP = levelThresholds[i];
+                    nextLevelKP = (i + 1 < levelThresholds.length) ? levelThresholds[i + 1] : levelThresholds[i];
+                    break;
+                }
+            }
+            
+            // Calcola il progresso nel livello attuale
+            const progressToNextLevel = nextLevelKP - currentLevelKP;
+            const userProgressInLevel = karma - currentLevelKP;
+            
+            // Evita divisione per zero se il livello max è raggiunto
+            let progressPercentage = 0;
+            if (progressToNextLevel > 0) {
+                 progressPercentage = Math.floor((userProgressInLevel / progressToNextLevel) * 100);
+            } else {
+                 progressPercentage = 100; // Livello massimo raggiunto
+            }
+            
+            // Gestione caso livello massimo
+            let progressText = `Prossimo livello: ${nextLevelKP} KP`;
+            if (progressPercentage >= 100 && currentLevel === levelThresholds.length) {
+                 progressPercentage = 100;
+                 progressText = "Livello Massimo Raggiunto!";
+            }
+            // --- FINE NUOVA LOGICA LIVELLO ---
+            
+            // Aggiorna l'HTML con la barra di progresso e (KP)
             profileDataContainer.innerHTML = `
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-base font-semibold text-green-600">Livello ${currentLevel}</span>
+                        <span class="text-sm text-gray-500">${progressText}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                        <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercentage}%"></div>
+                    </div>
+                </div>
                 <p class="text-3xl font-bold text-gray-900">${karma}</p>
-                <p class="text-sm text-gray-500 mb-4">Punti Karma (CP)</p>
-                <div class="flex justify-around w-full mt-4">
+                <p class="text-sm text-gray-500 mb-4">Punti Karma (KP)</p> <div class="flex justify-around w-full mt-4">
                     <div class="text-center">
-                        <p class="text-xl font-semibold text-gray-700">${completedSwaps}</p> <p class="text-xs text-gray-500">Scambi Completati</p>
+                        <p class="text-xl font-semibold text-gray-700">${completedSwaps}</p> 
+                        <p class="text-xs text-gray-500">Scambi Completati</p>
                     </div>
                     <div class="text-center">
                         <p class="text-xl font-semibold text-yellow-600">${karma}</p>
@@ -645,7 +693,10 @@ function loadProfileData(userId) {
             console.log("Documento utente non trovato, creato uno di base.");
         }
     });
+
 }
+// *** FINE BLOCCO MODIFICATO (loadProfileData) ***
+
 
 // Funzione principale per caricare e visualizzare le offerte
 function loadOffers() {
@@ -661,7 +712,7 @@ function loadOffers() {
           querySnapshot.forEach((doc) => {
               const offer = doc.data();
               const docId = doc.id;
-              const cpValue = offer.cpValue || 10;
+              const cpValue = offer.cpValue || 10; // Questo ora è il "valore" dell'offerta, non il karma assegnato
               const isOwner = offer.ownerId === currentUser.uid;
               const isReserved = offer.status === 'reserved';
               const isCompleted = offer.status === 'completed';
@@ -676,7 +727,7 @@ function loadOffers() {
                   statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Completato</span>`;
                   if (isOwner) {
                       // Mostra il feedback dato
-                      const feedbackMsg = offer.feedback ? `(Feedback: ${offer.feedback}, ${offer.cp_awarded} CP)` : '';
+                      const feedbackMsg = offer.feedback ? `(Feedback: ${offer.feedback}, ${offer.cp_awarded} KP)` : '';
                       ownerButtons = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Scambio Completato ${feedbackMsg}</button>`;
                   }
               } else if (isReserved) {
@@ -727,8 +778,7 @@ function loadOffers() {
                     <div>
                         <p class="text-sm text-gray-600">${offer.description}</p>
                         <p class="text-xs text-gray-400 mt-1">Offerto da: ${offer.ownerName}</p>
-                        <p class="text-sm font-bold text-yellow-600 mt-2">Valore: ${cpValue} CP</p>
-                        ${ownerButtons}
+                        <p class="text-sm font-bold text-yellow-600 mt-2">Valore: ${cpValue} KP</p> ${ownerButtons}
                     </div>
                     ${actionButton}
                 </div>
@@ -942,8 +992,7 @@ function loadOffers() {
                                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600 sm:text-sm" placeholder="Descrivi brevemente cosa offri e perché."></textarea> </div>
                         
                         <div class="mb-6">
-                            <label for="cp-value" class="block text-sm font-medium text-gray-700">Valore Karma (CP)</label>
-                            <input type="number" id="cp-value" required min="1" value="10"
+                            <label for="cp-value" class="block text-sm font-medium text-gray-700">Valore Karma (KP)</label> <input type="number" id="cp-value" required min="1" value="10"
                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
                                    placeholder="Valore atteso dello scambio in Punti Karma">
                             <p class="mt-2 text-xs text-gray-500">Un valore giusto aiuta a bilanciare la comunità.</p>

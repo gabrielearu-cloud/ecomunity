@@ -6,15 +6,11 @@
 <script type="module">
   // --- 1. IMPORTAZIONI COMPLETE FIREBASE ---
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-  // Importazioni per l'Autenticazione (Login Google)
   import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-  
-  // AGGIUNTE: doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy
-  // *** MODIFICA: Aggiunto getDocs (necessario per reserveAndChat) ***
-import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy, getDocs } 
+  import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy, getDocs } 
 from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
-  // Your web app's Firebase configuration (I tuoi dati restano invariati)
+  // Your web app's Firebase configuration
   const firebaseConfig = {
     apiKey: "AIzaSyCTwU75eJLGpuz5jw_gkhHdgYrHUkN__AY",
     authDomain: "ecomunity-app.firebaseapp.com",
@@ -28,16 +24,14 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   const app = initializeApp(firebaseConfig);
   
   // --- 2. INIZIALIZZAZIONE SERVIZI FIREBASE ---
-  const auth = getAuth(app); // Servizio di Autenticazione
-  const db = getFirestore(app); // Servizio Database Firestore
-  const googleProvider = new GoogleAuthProvider(); // Provider per Google Login
+  const auth = getAuth(app); 
+  const db = getFirestore(app); 
+  const googleProvider = new GoogleAuthProvider(); 
   
-  // Variabile per tenere traccia del tipo di offerta (bene o servizio)
   let currentOfferType = 'bene';
 
   // --- FUNZIONI DI GESTIONE UI ---
   
-  // Funzione per cambiare schermata
   function switchScreen(screenId) {
     document.querySelectorAll('.screen').forEach(screen => {
       screen.classList.remove('active');
@@ -45,49 +39,39 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     const screenToShow = document.getElementById(screenId);
     if (screenToShow) {
         screenToShow.classList.add('active');
-        // Nasconde sempre la schermata di login quando si entra nell'app
         document.getElementById('login-screen').style.display = 'none'; 
     }
   }
 
-  // Funzione per gestire i click sulla Tab Bar
   window.navigate = function(screenId, element) {
     switchScreen(screenId);
-    // Aggiorna lo stato "attivo" della tab bar
     document.querySelectorAll('.tab-item').forEach(item => {
         item.classList.remove('active');
     });
     element.classList.add('active');
   }
 
-  // Funzione per il toggle del tipo di offerta nella schermata di Pubblicazione
   window.toggleOfferType = function(type) {
     currentOfferType = type;
     const btnBene = document.getElementById('type-bene');
     const btnServizio = document.getElementById('type-servizio');
 
-    // Rimuove tutti gli stili attivi (verde, blu, ombra)
-    btnBene.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg'); // MODIFICATO: rimosso bg-gray-700, aggiunto bg-green-600
+    btnBene.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg'); 
     btnServizio.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg');
     
-    // Aggiunge stili non attivi
     btnBene.classList.add('text-gray-700', 'hover:bg-gray-200');
     btnServizio.classList.add('text-gray-700', 'hover:bg-gray-200');
 
     if (type === 'bene') {
-        // Bene: Verde con ombra
         btnBene.classList.remove('text-gray-700', 'hover:bg-gray-200');
-        btnBene.classList.add('bg-green-600', 'text-white', 'shadow-lg'); // MODIFICATO: da bg-gray-700 a bg-green-600
+        btnBene.classList.add('bg-green-600', 'text-white', 'shadow-lg'); 
     } else {
-        // Servizio: Blu con ombra
         btnServizio.classList.remove('text-gray-700', 'hover:bg-gray-200');
         btnServizio.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
     }
   }
 
-  // NUOVA FUNZIONE: per cambiare tra scheda Beni e Servizi sulla Home
   window.switchHomeTab = function(type, element) {
-    // Nasconde tutti i contenuti della Home Tab
     document.querySelectorAll('.home-tab-content').forEach(content => {
       content.classList.add('hidden');
       content.classList.remove('active');
@@ -96,40 +80,31 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     const btnBeni = document.getElementById('tab-btn-beni');
     const btnServizi = document.getElementById('tab-btn-servizi');
 
-    // Rimuove tutti gli stili attivi (verde, blu, ombra)
-    btnBeni.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50'); // MODIFICATO: rimosso bg-gray-700, aggiunto bg-green-600 e shadow
+    btnBeni.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50'); 
     btnServizi.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50');
 
-    // Aggiunge stili non attivi
     btnBeni.classList.add('text-gray-700', 'hover:bg-gray-200');
     btnServizi.classList.add('text-gray-700', 'hover:bg-gray-200');
 
-    // Mostra il contenuto corretto
     document.getElementById('home-' + type).classList.remove('hidden');
     document.getElementById('home-' + type).classList.add('active');
 
-    // Applica lo stile attivo al bottone e rimuove lo stile non attivo
     element.classList.remove('text-gray-700', 'hover:bg-gray-200');
     
     if (type === 'bene') {
-        // Bene: Verde scuro con ombra (più visibile)
-        element.classList.add('bg-green-600', 'text-white', 'shadow-lg', 'shadow-green-600/50'); // MODIFICATO: da bg-gray-700 a bg-green-600 e shadow
-    } else { // type === 'servizio'
-        // Servizio: Blu con ombra (più visibile)
+        element.classList.add('bg-green-600', 'text-white', 'shadow-lg', 'shadow-green-600/50'); 
+    } else { 
         element.classList.add('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/50');
     }
   }
 
 
   // --- 3. FUNZIONE DI AUTENTICAZIONE GOOGLE ---
-  // Funzione chiamata dal pulsante di login (aggiunta a window per l'onclick)
   window.handleAuth = async function() {
     try {
         const result = await signInWithPopup(auth, googleProvider);
-        // L'utente si è loggato con successo. onAuthStateChanged gestirà l'UI.
         console.log("Accesso Google completato per:", result.user.displayName);
     } catch (error) {
-        // Gestione degli errori (es. l'utente ha chiuso il popup)
         console.error("Errore di Autenticazione:", error.code, error.message);
         if (error.code !== 'auth/popup-closed-by-user') {
             alert("Errore di accesso. Riprova: " + error.message);
@@ -137,71 +112,63 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     }
   };
 
-  // Funzione di Logout (da collegare a un pulsante nella schermata Profilo)
   window.handleLogout = async function() {
       await signOut(auth);
       console.log("Utente disconnesso.");
-      // onAuthStateChanged gestirà il reindirizzamento alla schermata di Login
   }
 
 
   // --- 4. GESTIONE STATO UTENTE (ON LOAD) ---
-  // Controlla lo stato di autenticazione all'avvio dell'app
+  // *** INIZIO BLOCCO CORRETTO 1 (Errore Log) ***
   onAuthStateChanged(auth, (user) => {
-    // 1. Nasconde la schermata di caricamento
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app-container').classList.remove('hidden');
     
     if (user) {
-        // Utente loggato (Registrato o Ri-loggato)
         console.log("Utente attivo:", user.uid, user.displayName);
 
-        // **MODIFICHE PER GARANTIRE LA VISIBILITÀ SU TUTTI I BROWSER**
-        document.getElementById('app-header').style.display = 'flex'; // MODIFICATO: deve essere flex per giustificare il logout
+        document.getElementById('app-header').style.display = 'flex'; 
         document.getElementById('tab-bar').style.display = 'flex'; 
         
-        // Aggiorna l'UI del profilo se necessario (es. nome utente)
-        document.getElementById('profile-name').textContent = user.displayName || "Utente EcoMunity";
+        // CORREZIONE: L'ID era 'profile-name-header', non 'profile-name'
+        const profileNameHeader = document.getElementById('profile-name-header');
+        if (profileNameHeader) {
+            profileNameHeader.textContent = user.displayName || "Utente EcoMunity";
+        }
         
-        // Passa alla schermata Home e attiva l'icona
         switchScreen('home-screen');
         document.getElementById('nav-home').classList.add('active');
 
-        // Carica le offerte dal database
-        loadOffers(); 
-        loadChatList(); // Serve per inizializzare il listener dei messaggi
+        // loadOffers() e loadChatList() vengono chiamati dal *secondo*
+        // listener onAuthStateChanged in fondo al file (Sezione 7)
+        // Questo è sporco, ma rispecchia il tuo file originale.
+        
     } else {
-        // Utente NON loggato
         console.log("Nessun utente loggato. Mostra schermata di Login.");
-        // Mostra la schermata di Login (deve essere in display:flex per il centraggio)
         document.getElementById('login-screen').style.display = 'flex';
-        // Nasconde l'header e la tab bar quando non loggato
         document.getElementById('app-header').style.display = 'none';
         document.getElementById('tab-bar').style.display = 'none';
     }
   });
+  // *** FINE BLOCCO CORRETTO 1 ***
+
   
-// Variabile per tenere traccia della chat correntemente aperta
+// --- GESTIONE CHAT (Funzioni) ---
 let currentChatId = null;
 
-// Funzione per aprire una chat specifica
 window.openChat = function(chatId, offerTitle) {
     currentChatId = chatId;
     document.getElementById('current-chat-id').value = chatId;
     document.getElementById('current-chat-title').textContent = offerTitle;
     
-    // Passa alla schermata di chat
     document.getElementById('chat-screen').style.display = 'flex';
     
-    // Rimuovi l'header e la tab bar per la chat
     document.getElementById('app-header').style.display = 'none';
     document.getElementById('tab-bar').style.display = 'none';
 
-    // Carica i messaggi
     loadChatMessages(chatId);
 }
 
-// Funzione per inviare un messaggio
 window.sendMessage = async function(event) {
     event.preventDefault();
     const messageInput = document.getElementById('message-input');
@@ -214,7 +181,6 @@ window.sendMessage = async function(event) {
     }
 
     try {
-        // 1. Aggiungi il messaggio alla sottocollezione 'messages'
         await addDoc(collection(db, "chats", chatId, "messages"), {
             senderId: currentUser.uid,
             senderName: currentUser.displayName,
@@ -222,14 +188,12 @@ window.sendMessage = async function(event) {
             timestamp: new Date()
         });
 
-        // 2. Aggiorna l'ultimo messaggio nel documento principale della chat (ottimizzazione)
         const chatRef = doc(db, "chats", chatId);
         await updateDoc(chatRef, {
             lastMessage: messageText.substring(0, 50) + (messageText.length > 50 ? '...' : ''),
             lastMessageTimestamp: new Date()
         });
 
-        // Resetta il campo di input
         messageInput.value = '';
         
     } catch (e) {
@@ -238,14 +202,12 @@ window.sendMessage = async function(event) {
     }
 }
 
-// Funzione per caricare e visualizzare i messaggi in tempo reale
 function loadChatMessages(chatId) {
     if (!chatId) return;
 
     const currentUser = auth.currentUser;
     const messagesContainer = document.getElementById('messages-container');
     
-    // Inizia l'ascolto in tempo reale sulla sottocollezione 'messages', ordinando per timestamp
     const q = query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"));
 
     onSnapshot(q, (querySnapshot) => {
@@ -255,7 +217,6 @@ function loadChatMessages(chatId) {
             const msg = doc.data();
             const isMe = msg.senderId === currentUser.uid;
             
-            // Stile del messaggio a seconda del mittente
             const messageClass = isMe 
                 ? 'self-end bg-[#dcf8c6] text-gray-900 rounded-bl-xl rounded-tl-xl rounded-tr-xl' 
                 : 'self-start bg-white text-gray-800 rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100';
@@ -271,20 +232,16 @@ function loadChatMessages(chatId) {
         });
 
         messagesContainer.innerHTML = messagesHtml;
-        // Scorrimento automatico in basso (necessario per le chat)
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     });
 }
 
-// Funzione di navigazione per tornare dalla chat
 window.navigateFromChat = function(screenId, element) {
     document.getElementById('chat-screen').style.display = 'none';
     
-    // Riporta l'header e la tab bar
-    document.getElementById('app-header').style.display = 'flex'; // MODIFICATO: deve essere flex
+    document.getElementById('app-header').style.display = 'flex'; 
     document.getElementById('tab-bar').style.display = 'flex'; 
 
-    // Esegui la navigazione standard
     switchScreen(screenId);
     document.querySelectorAll('.tab-item').forEach(item => {
         item.classList.remove('active');
@@ -292,25 +249,19 @@ window.navigateFromChat = function(screenId, element) {
     element.classList.add('active');
 }
 
-  // --- 5. INTERAZIONE DATABASE (ESEMPIO DI PUBBLICAZIONE) ---
-  // Funzione per salvare una nuova offerta su Firestore
+  // --- 5. INTERAZIONE DATABASE (OFFERTE) ---
   window.publishOffer = async function(event) {
-    event.preventDefault(); // Impedisce il ricaricamento della pagina
+    event.preventDefault(); 
     
-    // Recupera i dati del form
     const title = document.getElementById('title').value;
     const description = document.getElementById('description').value;
-    // AGGIUNTA: Recupera il valore CP e assicurati che sia un numero intero
     const cpValue = parseInt(document.getElementById('cp-value').value, 10);
     
-    // Controllo base sul valore CP
-    // *** MODIFICATO: L'alert ora usa CP (Community Points) ***
     if (isNaN(cpValue) || cpValue <= 0) {
         alert("Inserisci un valore Community Points (CP) valido e positivo.");
         return;
     }
     
-    // Ottieni l'utente corrente per associare l'offerta
     const user = auth.currentUser;
     if (!user) {
         alert("Devi essere loggato per pubblicare un'offerta.");
@@ -321,8 +272,8 @@ window.navigateFromChat = function(screenId, element) {
         const docRef = await addDoc(collection(db, "offerte"), {
             title: title,
             description: description,
-            type: currentOfferType, // 'bene' o 'servizio'
-            cpValue: cpValue, // Questo è il VALORE (CP)
+            type: currentOfferType, 
+            cpValue: cpValue, // Questo è CP (Valore)
             ownerId: user.uid,
             ownerName: user.displayName,
             timestamp: new Date(),
@@ -331,7 +282,6 @@ window.navigateFromChat = function(screenId, element) {
         
         console.log("Documento scritto con ID: ", docRef.id);
         alert("Offerta pubblicata con successo!");
-        // Reset del form e navigazione alla home
         document.getElementById('publish-form').reset();
         window.navigate('home-screen', document.getElementById('nav-home'));
     } catch (e) {
@@ -340,15 +290,12 @@ window.navigateFromChat = function(screenId, element) {
     }
   }
   
-  // NUOVA FUNZIONE: ELIMINA OFFERTA
   window.deleteOffer = async function(docId) {
     if (confirm("Sei sicuro di voler eliminare questa offerta? L'azione è irreversibile.")) {
         try {
-            // Trova il riferimento al documento e lo elimina
             await deleteDoc(doc(db, "offerte", docId));
             console.log("Documento eliminato con ID:", docId);
             alert("Offerta eliminata con successo!");
-            // L'aggiornamento UI è automatico grazie a onSnapshot in loadOffers
         } catch (e) {
             console.error("Errore durante l'eliminazione del documento: ", e);
             alert("Errore durante l'eliminazione. Controlla le regole di sicurezza (write).");
@@ -356,13 +303,9 @@ window.navigateFromChat = function(screenId, element) {
     }
   }
 
-// ************************************************************
-// ** NUOVE FUNZIONI DI GESTIONE CHAT, STATO E ASSEGNAZIONE KP **
-// ************************************************************
+// --- GESTIONE FEEDBACK E STATI ---
 
-// NUOVA FUNZIONE: Richiede il feedback, gestisce l'assegnazione di KP e imposta lo stato a 'completed'
-// QUESTA FUNZIONE È CORRETTA E ASSEGNA KP (Karma Points)
-window.requestFeedback = async function(docId, cpValue) { // cpValue non è usato per il calcolo, solo passato
+window.requestFeedback = async function(docId, cpValue) { 
     const user = auth.currentUser;
     if (!user) {
         alert("Errore di autenticazione.");
@@ -370,7 +313,7 @@ window.requestFeedback = async function(docId, cpValue) { // cpValue non è usat
     }
     
     const offerRef = doc(db, "offerte", docId);
-    const offerSnap = await getDoc(offerRef); // Ottiene lo stato attuale
+    const offerSnap = await getDoc(offerRef); 
     
     if (!offerSnap.exists() || offerSnap.data().status !== 'reserved' || offerSnap.data().ownerId !== user.uid) {
         alert("Impossibile completare. L'offerta non è riservata o non sei il proprietario.");
@@ -383,7 +326,6 @@ window.requestFeedback = async function(docId, cpValue) { // cpValue non è usat
         return;
     }
 
-    // Aggiornato il prompt con il sistema Karma (KP)
     const feedback = prompt(
         "Come valuti questo scambio?\n" +
         "1: Eccellente (Assegna +15 Karma Point all'acquirente)\n" +
@@ -391,19 +333,19 @@ window.requestFeedback = async function(docId, cpValue) { // cpValue non è usat
         "3: Insoddisfacente (Toglie -10 Karma Point all'acquirente)"
     );
 
-    let finalKP = 0; // Questo è KARMA
+    let finalKP = 0; // Questo è KARMA (KP)
     let feedbackType = '';
 
     switch (feedback) {
-        case '1': // Eccellente
+        case '1': 
             finalKP = 15;
             feedbackType = 'eccellente';
             break;
-        case '2': // Corretto
+        case '2': 
             finalKP = 10;
             feedbackType = 'corretto';
             break;
-        case '3': // Insoddisfacente
+        case '3': 
             finalKP = -10;
             feedbackType = 'insoddisfacente';
             break;
@@ -417,35 +359,34 @@ window.requestFeedback = async function(docId, cpValue) { // cpValue non è usat
     }
 
     try {
-        // 1. Aggiornamento Stato Offerta a 'completed'
+        // 1. Aggiorna l'Offerta
         await updateDoc(offerRef, {
             status: 'completed',
             feedback: feedbackType,
-            cp_awarded: finalKP, // Salva il valore di Karma (KP) assegnato
+            cp_awarded: finalKP, // Salva il KP assegnato
             completionDate: new Date()
         });
 
-        // 2. Logica Aggiuntiva: Aggiorna il punteggio Karma (KP) dell'ACQUIRENTE
+        // 2. Aggiorna il profilo KP dell'ACQUIRENTE
         const userRef = doc(db, "users", reservedById);
         const userSnap = await getDoc(userRef);
         
-        let currentKarma = 100; // Default se l'utente non esiste ancora
+        let currentKarma = 100; 
         if (userSnap.exists() && userSnap.data().karmaPoints !== undefined) {
             currentKarma = userSnap.data().karmaPoints;
         }
         
         const newKarma = currentKarma + finalKP;
         
-        // setDoc con merge = true aggiorna il campo o crea il documento se non esiste
+        // Questo ora funzionerà grazie alle nuove Regole (Caso B)
         await setDoc(userRef, { 
             karmaPoints: newKarma 
-        }, { merge: true }); 
+        }, { merge: true }); // setDoc con merge = true aggiornerà solo i KP
 
         console.log(`Punti Karma (KP) per ${reservedById} aggiornati da ${currentKarma} a ${newKarma}`);
 
-        // 3. Notifica e ricarica
         alert(`Scambio completato! L'acquirente ha ricevuto ${finalKP} Punti Karma.\nIl suo nuovo totale è ${newKarma}.`);
-        loadOffers(); // Ricarica la lista offerte
+        loadOffers(); 
     } catch (e) {
         console.error("Errore durante il completamento dello scambio: ", e);
         alert("Errore nel completare lo scambio. Controlla la console.");
@@ -453,8 +394,7 @@ window.requestFeedback = async function(docId, cpValue) { // cpValue non è usat
 }
 
 
-// NUOVA FUNZIONE: Avvia la chat, imposta l'offerta a 'reserved' e reindirizza
-// Versione corretta che controlla l'esistenza della chat e aggiorna lo stato
+// *** INIZIO BLOCCO CORRETTO 3 (Crash Silenzioso) ***
 window.reserveAndChat = async function(offerId, offerOwnerId, offerTitle) {
     const currentUser = auth.currentUser;
     if (!currentUser || currentUser.uid === offerOwnerId) {
@@ -464,6 +404,14 @@ window.reserveAndChat = async function(offerId, offerOwnerId, offerTitle) {
 
     const offerRef = doc(db, "offerte", offerId);
     const offerSnap = await getDoc(offerRef);
+
+    // CORREZIONE: Controlliamo se l'annuncio esiste PRIMA di leggerlo
+    if (!offerSnap.exists()) {
+        alert("Errore: Annuncio non trovato. Potrebbe essere stato eliminato.");
+        loadOffers(); // Ricarica la lista per rimuoverlo
+        return;
+    }
+
     const offerData = offerSnap.data();
 
     // 1. Blocco se l'offerta non è 'available'
@@ -473,18 +421,17 @@ window.reserveAndChat = async function(offerId, offerOwnerId, offerTitle) {
         return;
     }
 
-    // 2. Tenta di trovare una chat esistente (tra owner e buyer per questa offerta)
+    // 2. Tenta di trovare una chat esistente
     const chatQuery = query(
         collection(db, "chats"),
         where("offerId", "==", offerId),
-        where("users", "array-contains", currentUser.uid) // Controlla se l'utente è già nella chat
+        where("users", "array-contains", currentUser.uid) 
     );
-    const chatSnapshot = await getDocs(chatQuery); // *** USA getDocs (importato) ***
+    const chatSnapshot = await getDocs(chatQuery); 
     
     let chatId;
 
     if (!chatSnapshot.empty) {
-        // Chat esistente: recupera l'ID
         chatId = chatSnapshot.docs[0].id;
         console.log("Chat esistente trovata:", chatId);
     } else {
@@ -509,11 +456,11 @@ window.reserveAndChat = async function(offerId, offerOwnerId, offerTitle) {
         }
     }
 
-    // 3. Aggiorna lo stato dell'offerta a 'reserved' in Firestore
+    // 3. Aggiorna lo stato dell'offerta a 'reserved'
     try {
         await updateDoc(offerRef, {
             status: 'reserved',
-            reservedBy: currentUser.uid, // Aggiungi l'ID di chi l'ha riservata
+            reservedBy: currentUser.uid, 
             reservedAt: new Date()
         });
         console.log(`Stato offerta ${offerId} aggiornato a 'reserved'`);
@@ -526,8 +473,8 @@ window.reserveAndChat = async function(offerId, offerOwnerId, offerTitle) {
     // 4. Apri la schermata di chat
     window.openChat(chatId, offerTitle);
 }
+// *** FINE BLOCCO CORRETTO 3 ***
 
-// NUOVA FUNZIONE: Resetta lo stato dell'offerta (dall'acquirente)
 window.cancelReservation = async function(docId) {
     if (!confirm("Sei sicuro di voler annullare la prenotazione? L'offerta tornerà disponibile a tutti.")) {
         return;
@@ -541,7 +488,7 @@ window.cancelReservation = async function(docId) {
             reservedAt: null
         });
         alert("Prenotazione annullata. L'offerta è di nuovo disponibile.");
-        loadOffers(); // Ricarica per aggiornare l'UI
+        loadOffers(); 
     } catch (e) {
         console.error("Errore durante l'annullamento della prenotazione:", e);
         alert("Impossibile annullare. Riprova.");
@@ -549,20 +496,18 @@ window.cancelReservation = async function(docId) {
 }
 
 
-// --- 6. GESTIONE DATI (OFFERTE e CHAT) ---
+// --- 6. GESTIONE DATI (CARICAMENTO) ---
 
-// Funzione per caricare la lista delle chat
 function loadChatList() {
     const currentUser = auth.currentUser;
     if (!currentUser) return;
     
     const chatListContainer = document.getElementById('chat-list');
 
-    // Query per le chat in cui l'utente è un partecipante
     const q = query(
         collection(db, "chats"), 
         where("users", "array-contains", currentUser.uid),
-        orderBy("lastMessageTimestamp", "desc") // Ordina per messaggio più recente
+        orderBy("lastMessageTimestamp", "desc") 
     );
 
     onSnapshot(q, (snapshot) => {
@@ -575,12 +520,7 @@ function loadChatList() {
         snapshot.forEach((doc) => {
             const chat = doc.data();
             const isOwner = chat.ownerId === currentUser.uid;
-            // Identifica l'altro utente
-            const otherUserName = isOwner ? chat.buyerId : chat.ownerId; // Nota: Qui andrebbe recuperato il nome utente! Per ora usiamo solo offerTitle.
             const statusText = isOwner ? 'Offerta tua' : 'Tua prenotazione';
-
-            // Determina il nome da mostrare nella lista chat
-            // Per semplicità, mostriamo il titolo dell'offerta
             const chatDisplayName = chat.offerTitle || 'Chat senza titolo';
 
             chatHtml += `
@@ -605,103 +545,99 @@ function loadChatList() {
 }
 
 
-// Funzione per caricare i dati del profilo
-// QUESTA FUNZIONE È CORRETTA E USA KP (Karma Points)
+// *** INIZIO BLOCCO CORRETTO 2 (Errore Log) ***
 function loadProfileData(userId) {
     const profileDataContainer = document.getElementById('profile-data');
-    // Ipotizziamo una collezione 'users' per i dati di Karma
     const userRef = doc(db, "users", userId); 
 
-    // Esempio: assicurati che il documento utente esista
-    setDoc(userRef, { 
-        displayName: auth.currentUser.displayName, 
-        email: auth.currentUser.email,
-        karmaPoints: 100 // Valore iniziale se non esiste
-    }, { merge: true }); // Merge: true non sovrascrive se esiste, aggiunge se manca
-
     onSnapshot(userRef, (docSnap) => {
-        if (docSnap.exists()) {
-            const userData = docSnap.data();
-            const karma = userData.karmaPoints || 0; // Questo è KP (REPUTAZIONE)
-            const completedSwaps = userData.completedSwaps || 0;
-            
-            // --- INIZIO NUOVA LOGICA LIVELLO (basata su KP) ---
-            const levelThresholds = [0, 150, 300, 500, 1000]; // KP richiesti per Lvl 1, 2, 3, 4, 5
-            
-            let currentLevel = 1;
-            let currentLevelKP = levelThresholds[0]; // KP di partenza del livello attuale
-            let nextLevelKP = levelThresholds[1]; // KP necessari per il prossimo livello
-
-            // Trova il livello corrente
-            for (let i = levelThresholds.length - 1; i >= 0; i--) {
-                if (karma >= levelThresholds[i]) {
-                    currentLevel = i + 1;
-                    currentLevelKP = levelThresholds[i];
-                    nextLevelKP = (i + 1 < levelThresholds.length) ? levelThresholds[i + 1] : levelThresholds[i];
-                    break;
-                }
-            }
-            
-            // Calcola il progresso nel livello attuale
-            const progressToNextLevel = nextLevelKP - currentLevelKP;
-            const userProgressInLevel = karma - currentLevelKP;
-            
-            // Evita divisione per zero se il livello max è raggiunto
-            let progressPercentage = 0;
-            if (progressToNextLevel > 0) {
-                 progressPercentage = Math.floor((userProgressInLevel / progressToNextLevel) * 100);
-            } else {
-                 progressPercentage = 100; // Livello massimo raggiunto
-            }
-            
-            // Gestione caso livello massimo
-            let progressText = `Prossimo livello: ${nextLevelKP} KP`;
-            if (progressPercentage >= 100 && currentLevel === levelThresholds.length) {
-                 progressPercentage = 100;
-                 progressText = "Livello Massimo Raggiunto!";
-            }
-            // --- FINE NUOVA LOGICA LIVELLO ---
-            
-            // Aggiorna l'HTML con la barra di progresso e (KP)
-            profileDataContainer.innerHTML = `
-                <div class="mb-6">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-base font-semibold text-green-600">Livello ${currentLevel}</span>
-                        <span class="text-sm text-gray-500">${progressText}</span>
-                    </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                        <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercentage}%"></div>
-                    </div>
-                </div>
-                <p class="text-3xl font-bold text-gray-900">${karma}</p>
-                <p class="text-sm text-gray-500 mb-4">Punti Karma (KP)</p> <div class="flex justify-around w-full mt-4">
-                    <div class="text-center">
-                        <p class="text-xl font-semibold text-gray-700">${completedSwaps}</p> 
-                        <p class="text-xs text-gray-500">Scambi Completati</p>
-                    </div>
-                    <div class="text-center">
-                        <p class="text-xl font-semibold text-yellow-600">${karma}</p>
-                        <p class="text-xs text-gray-500">Affidabilità</p>
-                    </div>
-                </div>
-            `;
-            // Aggiorna l'header con il nome utente
-            document.getElementById('profile-name-header').textContent = auth.currentUser.displayName;
-
-        } else {
+        
+        // CORREZIONE: Prima controlliamo se esiste.
+        // Se non esiste, lo CREIAMO e usciamo.
+        // onSnapshot verrà richiamato automaticamente dopo la creazione.
+        if (!docSnap.exists()) {
             console.log("Documento utente non trovato, creato uno di base.");
+            setDoc(userRef, { 
+                displayName: auth.currentUser.displayName, 
+                email: auth.currentUser.email,
+                karmaPoints: 100, // Valore iniziale KP
+                completedSwaps: 0
+            });
+            return; // Usciamo, aspettiamo il prossimo snapshot
         }
+
+        // Se siamo qui, il documento ESISTE. Leggiamo i dati.
+        const userData = docSnap.data();
+        const karma = userData.karmaPoints || 0; // Questo è KP (REPUTAZIONE)
+        const completedSwaps = userData.completedSwaps || 0;
+        
+        // --- LOGICA LIVELLO (basata su KP) ---
+        const levelThresholds = [0, 150, 300, 500, 1000]; // KP richiesti
+        
+        let currentLevel = 1;
+        let currentLevelKP = levelThresholds[0]; 
+        let nextLevelKP = levelThresholds[1]; 
+
+        for (let i = levelThresholds.length - 1; i >= 0; i--) {
+            if (karma >= levelThresholds[i]) {
+                currentLevel = i + 1;
+                currentLevelKP = levelThresholds[i];
+                nextLevelKP = (i + 1 < levelThresholds.length) ? levelThresholds[i + 1] : levelThresholds[i];
+                break;
+            }
+        }
+        
+        const progressToNextLevel = nextLevelKP - currentLevelKP;
+        const userProgressInLevel = karma - currentLevelKP;
+        
+        let progressPercentage = 0;
+        if (progressToNextLevel > 0) {
+              progressPercentage = Math.floor((userProgressInLevel / progressToNextLevel) * 100);
+        } else {
+              progressPercentage = 100;
+        }
+        
+        let progressText = `Prossimo livello: ${nextLevelKP} KP`;
+        if (progressPercentage >= 100 && currentLevel === levelThresholds.length) {
+              progressPercentage = 100;
+              progressText = "Livello Massimo Raggiunto!";
+        }
+        
+        profileDataContainer.innerHTML = `
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-base font-semibold text-green-600">Livello ${currentLevel}</span>
+                    <span class="text-sm text-gray-500">${progressText}</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                    <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercentage}%"></div>
+                </div>
+            </div>
+            <p class="text-3xl font-bold text-gray-900">${karma}</p>
+            <p class="text-sm text-gray-500 mb-4">Punti Karma (KP)</p>
+            <div class="flex justify-around w-full mt-4">
+                <div class="text-center">
+                    <p class="text-xl font-semibold text-gray-700">${completedSwaps}</p> 
+                    <p class="text-xs text-gray-500">Scambi Completati</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-xl font-semibold text-yellow-600">${karma}</p>
+                    <p class="text-xs text-gray-500">Affidabilità</p>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('profile-name-header').textContent = userData.displayName || auth.currentUser.displayName;
     });
-
 }
+// *** FINE BLOCCO CORRETTO 2 ***
 
 
-// Funzione principale per caricare e visualizzare le offerte
 function loadOffers() {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
 
-      const q = query(collection(db, "offerte"), orderBy("timestamp", "desc")); // Ordina per data (più recente)
+      const q = query(collection(db, "offerte"), orderBy("timestamp", "desc")); 
 
       onSnapshot(q, (querySnapshot) => {
           let beniHtml = '';
@@ -710,22 +646,20 @@ function loadOffers() {
           querySnapshot.forEach((doc) => {
               const offer = doc.data();
               const docId = doc.id;
-              const cpValue = offer.cpValue || 10; // Questo è il VALORE (CP)
+              const cpValue = offer.cpValue || 10; // Questo è CP (Valore)
               const isOwner = offer.ownerId === currentUser.uid;
               const isReserved = offer.status === 'reserved';
               const isCompleted = offer.status === 'completed';
               const isReservedByMe = isReserved && offer.reservedBy === currentUser.uid;
 
               let actionButton = '';
-              let ownerButtons = ''; // Bottoni aggiuntivi per il proprietario (es. Elimina)
+              let ownerButtons = ''; 
               let statusTag = '';
 
-              // --- Logica dei Bottoni ---
               if (isCompleted) {
                   statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Completato</span>`;
                   if (isOwner) {
-                      // Mostra il feedback dato
-                      const feedbackMsg = offer.feedback ? `(Feedback: ${offer.feedback}, ${offer.cp_awarded} KP)` : ''; // Corretto, il feedback è KP
+                      const feedbackMsg = offer.feedback ? `(Feedback: ${offer.feedback}, ${offer.cp_awarded} KP)` : ''; // KP
                       ownerButtons = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Scambio Completato ${feedbackMsg}</button>`;
                   }
               } else if (isReserved) {
@@ -733,30 +667,24 @@ function loadOffers() {
                   statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor}">${isReservedByMe ? 'Prenotato da te' : 'Riservato'}</span>`;
 
                   if (isReservedByMe) {
-                      // Se l'ho riservata io, posso annullare
                       actionButton = `<button onclick="cancelReservation('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Annulla Prenotazione</button>`;
                   } else if (isOwner) {
-                      // Se sono il proprietario e l'offerta è riservata
                       const reservedByText = offer.reservedBy ? `(Riservato)` : ''; 
                       ownerButtons = `
                         <p class="text-sm font-semibold text-yellow-600 mt-2">Riservato ${reservedByText}</p>
                         <button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Completa Scambio</button> `;
                   } else {
-                      // Se sono un terzo, non posso interagire
                       actionButton = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Non Disponibile</button>`;
                   }
               } else { // status === 'available'
                   statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Disponibile</span>`;
                   if (isOwner) {
-                      // Posso solo eliminare la mia offerta disponibile
                       ownerButtons = `<button onclick="deleteOffer('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Elimina Offerta</button>`;
                   } else {
-                      // Posso riservare e chattare
                       actionButton = `<button onclick="reserveAndChat('${docId}', '${offer.ownerId}', '${offer.title.replace(/'/g, "\\'")}')" class="mt-2 w-full ${offer.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Riserva e Chat</button>`;
                   }
               }
               
-              // --- Creazione HTML Card ---
               const typeColor = offer.type === 'bene' ? 'bg-green-600' : 'bg-blue-600';
               const iconSvg = offer.type === 'bene' 
                   ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-box"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`
@@ -775,8 +703,7 @@ function loadOffers() {
                     <div>
                         <p class="text-sm text-gray-600">${offer.description}</p>
                         <p class="text-xs text-gray-400 mt-1">Offerto da: ${offer.ownerName}</p>
-                        <p class="text-sm font-bold text-yellow-600 mt-2">Valore: ${cpValue} CP</p>
-                        ${ownerButtons}
+                        <p class="text-sm font-bold text-yellow-600 mt-2">Valore: ${cpValue} CP</p> ${ownerButtons}
                     </div>
                     ${actionButton}
                 </div>
@@ -789,7 +716,6 @@ function loadOffers() {
               }
           });
 
-          // Aggiorna l'HTML della Home Screen
           document.getElementById('item-list-bene').innerHTML = beniHtml;
           document.getElementById('item-list-servizio').innerHTML = serviziHtml;
           document.getElementById('empty-bene').style.display = beniHtml ? 'none' : 'block';
@@ -797,89 +723,54 @@ function loadOffers() {
       });
   }
 
-  // --- 7. INIZIALIZZAZIONE ---
-  // Listener di autenticazione: gestisce login/logout e carica i dati iniziali
+  // --- 7. INIZIALIZZAZIONE (SECONDO LISTENER) ---
+  // Questo listener è quello che avvia il caricamento dati
   onAuthStateChanged(auth, (user) => {
-      // 1. Nasconde la schermata di caricamento
-      document.getElementById('loading-screen').style.display = 'none';
-      document.getElementById('app-container').classList.remove('hidden');
-
+      // (Il primo listener gestisce solo il loading screen e l'header)
       if (user) {
-          // Utente loggato
-          window.navigate('home-screen', document.getElementById('nav-home'));
-          
-          // **MODIFICHE PER GARANTIRE LA VISIBILITÀ SU TUTTI I BROWSER**
-          document.getElementById('app-header').style.display = 'flex'; // MODIFICATO: DEVE ESSERE FLEX
-          document.getElementById('tab-bar').style.display = 'flex'; 
-
           loadOffers(); 
           loadChatList(); 
           loadProfileData(user.uid); 
-      } else {
-          // Utente NON loggato
-          document.getElementById('login-screen').style.display = 'flex';
-          document.getElementById('app-header').style.display = 'none';
-          document.getElementById('tab-bar').style.display = 'none';
       }
+      // Il caso 'else' (logout) è gestito dal primo listener
   });
 </script>
 
 
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 <style>
-  /* Nasconde tutte le schermate tranne l'attiva, impostazione di default per il routing a singola pagina */
-  .screen:not(.active) {
-    display: none;
-  }
-  
-  /* Stile di base per le schermate per usare il flexbox */
+  .screen:not(.active) { display: none; }
   .screen {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 56px - 64px); /* Altezza meno Header (56px) e Tab Bar (64px) */
+    height: calc(100vh - 56px - 64px); 
     overflow-y: auto;
-    padding-bottom: 20px; /* Spazio extra in basso */
+    padding-bottom: 20px; 
   }
-
-  /* Stile specifico per la schermata Home con padding sopra e sotto */
-  #home-screen {
-    height: calc(100vh - 56px - 64px);
-  }
-
-  /* Stile per la schermata di chat (a schermo intero temporaneamente) */
+  #home-screen { height: calc(100vh - 56px - 64px); }
   #chat-screen {
-    display: none; /* Inizialmente nascosto */
+    display: none; 
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
     background-color: white;
     z-index: 50;
     flex-direction: column;
   }
-  
-  /* Stile per la schermata di login (centrata) */
   #login-screen {
-      display: none; /* Inizialmente nascosto */
+      display: none; 
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       background-color: #f7f7f7;
-      z-index: 100; /* Assicurati che sia sopra tutto */
+      z-index: 100; 
       justify-content: center;
       align-items: center;
   }
-
-  /* Stile per lo spinner di caricamento */
   #loading-screen {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
     background-color: white;
     z-index: 200;
     display: flex;
@@ -887,18 +778,12 @@ function loadOffers() {
     align-items: center;
     flex-direction: column;
   }
-
-  /* Rende la Tab Bar fissa in basso */
   #tab-bar {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 0; left: 0; right: 0;
       border-top: 1px solid #e5e7eb;
       z-index: 10;
   }
-  
-  /* Rende l'Header fisso in alto */
   #app-header {
       position: sticky;
       top: 0;
@@ -941,28 +826,21 @@ function loadOffers() {
                         </button>
                     </div>
                 </div>
-
                 <div id="home-bene" class="home-tab-content p-4 grid grid-cols-1 gap-4 active">
                     <p id="empty-bene" class="text-center text-gray-500 mt-8 hidden">Nessun bene materiale disponibile al momento.</p>
-                    <div id="item-list-bene" class="grid grid-cols-1 gap-4">
-                        </div>
+                    <div id="item-list-bene" class="grid grid-cols-1 gap-4"></div>
                 </div>
-
                 <div id="home-servizio" class="home-tab-content p-4 grid grid-cols-1 gap-4 hidden">
                     <p id="empty-servizio" class="text-center text-gray-500 mt-8 hidden">Nessun servizio o aiuto disponibile al momento.</p>
-                    <div id="item-list-servizio" class="grid grid-cols-1 gap-4">
-                        </div>
+                    <div id="item-list-servizio" class="grid grid-cols-1 gap-4"></div>
                 </div>
-
             </section>
-
 
             <section id="publish-screen" class="screen">
                 <div class="p-4 flex-1 overflow-y-auto">
                     <h2 class="text-xl font-semibold text-gray-800 mb-4">Pubblica una Nuova Offerta</h2>
                     
                     <form id="publish-form" onsubmit="publishOffer(event)">
-                        
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Tipo di Offerta</label>
                             <div class="flex bg-gray-100 rounded-lg p-1 space-x-1 shadow-md"> <button type="button" 
@@ -977,18 +855,14 @@ function loadOffers() {
                                 </button>
                             </div>
                         </div>
-
-
                         <div class="mb-4">
                             <label for="title" class="block text-sm font-medium text-gray-700">Titolo</label>
                             <input type="text" id="title" required
                                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600 sm:text-sm" placeholder="Es. Bicicletta usata, Lezione di chitarra"> </div>
-        
                         <div class="mb-4">
                             <label for="description" class="block text-sm font-medium text-gray-700">Descrizione</label>
                             <textarea id="description" rows="3" required
                                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600 sm:text-sm" placeholder="Descrivi brevemente cosa offri e perché."></textarea> </div>
-                        
                         <div class="mb-6">
                             <label for="cp-value" class="block text-sm font-medium text-gray-700">Valore Community Points (CP)</label>
                             <input type="number" id="cp-value" required min="1" value="10"
@@ -996,7 +870,6 @@ function loadOffers() {
                                    placeholder="Valore atteso dello scambio in Punti Community">
                             <p class="mt-2 text-xs text-gray-500">Un valore giusto aiuta a bilanciare la comunità.</p>
                         </div>
-        
                         <button type="submit"
                                 class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600"> Pubblica Offerta </button>
                     </form>
@@ -1007,8 +880,7 @@ function loadOffers() {
                 <div class="p-4 border-b border-gray-200">
                     <h2 class="text-xl font-semibold text-gray-800">Le Tue Chat</h2>
                 </div>
-                <div id="chat-list" class="flex-1 overflow-y-auto">
-                    </div>
+                <div id="chat-list" class="flex-1 overflow-y-auto"></div>
             </section>
             
             <section id="profile-screen" class="screen items-center">
@@ -1016,13 +888,10 @@ function loadOffers() {
                     <h2 id="profile-name-header" class="text-2xl font-bold text-gray-800 mb-1">Nome Utente</h2>
                     <p class="text-sm text-gray-500">Membro EcoMunity</p>
                 </div>
-                
                 <div id="profile-data" class="w-full text-center p-6 mt-4 bg-white rounded-lg shadow-md border border-gray-100">
                     </div>
-                
                 <div class="mt-8 w-full p-4">
                     <h3 class="text-lg font-semibold text-gray-700 mb-3">Opzioni</h3>
-                    
                     <button onclick="handleLogout()"
                             class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                         Logout
@@ -1039,10 +908,7 @@ function loadOffers() {
                 </button>
                 <h2 id="current-chat-title" class="text-lg font-semibold text-gray-800 truncate flex-1">Chat Titolo</h2>
             </header>
-
-            <div id="messages-container" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-3">
-                </div>
-
+            <div id="messages-container" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-3"></div>
             <form onsubmit="sendMessage(event)" class="p-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
                 <input type="hidden" id="current-chat-id">
                 <div class="flex">
@@ -1054,28 +920,24 @@ function loadOffers() {
         </div>
 
         <nav id="tab-bar" class="bg-white flex justify-around shadow-lg">
-            
             <button class="tab-item active" id="nav-home" onclick="navigate('home-screen', this)">
                 <div class="flex flex-col items-center p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-home"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <span class="text-xs mt-1">Home</span>
                 </div>
             </button>
-            
             <button class="tab-item" id="nav-publish" onclick="navigate('publish-screen', this)">
                 <div class="flex flex-col items-center p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-circle"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
                     <span class="text-xs mt-1">Pubblica</span>
                 </div>
             </button>
-            
             <button class="tab-item" id="nav-chat" onclick="navigate('chat-list-screen', this)">
                 <div class="flex flex-col items-center p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     <span class="text-xs mt-1">Chat</span>
                 </div>
             </button>
-            
             <button class="tab-item" id="nav-profile" onclick="navigate('profile-screen', this)">
                 <div class="flex flex-col items-center p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>

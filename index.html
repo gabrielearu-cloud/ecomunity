@@ -7,7 +7,7 @@
   // --- 1. IMPORTAZIONI COMPLETE FIREBASE ---
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
   import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-  import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy, getDocs } 
+  import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy, getDocs }
 from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   // Your web app's Firebase configuration
@@ -22,16 +22,17 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   // Inizializza Firebase
   const app = initializeApp(firebaseConfig);
-  
+
   // --- 2. INIZIALIZZAZIONE SERVIZI FIREBASE ---
-  const auth = getAuth(app); 
-  const db = getFirestore(app); 
-  const googleProvider = new GoogleAuthProvider(); 
-  
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const googleProvider = new GoogleAuthProvider();
+
   let currentOfferType = 'bene';
+  let hasUnreadMessages = false; // Flag globale per i messaggi non letti
 
   // --- FUNZIONI DI GESTIONE UI ---
-  
+
   function switchScreen(screenId) {
     document.querySelectorAll('.screen').forEach(screen => {
       screen.classList.remove('active');
@@ -39,32 +40,69 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     const screenToShow = document.getElementById(screenId);
     if (screenToShow) {
         screenToShow.classList.add('active');
-        document.getElementById('login-screen').style.display = 'none'; 
+        document.getElementById('login-screen').style.display = 'none';
     }
   }
 
+  // Funzione per gestire i click sulla Tab Bar
+  // *** MODIFICATA per resettare l'indicatore chat ***
   window.navigate = function(screenId, element) {
     switchScreen(screenId);
+    // Aggiorna lo stato "attivo" della tab bar
     document.querySelectorAll('.tab-item').forEach(item => {
         item.classList.remove('active');
     });
     element.classList.add('active');
+
+    // Se l'utente clicca sulla tab Chat, resetta il flag e nasconde l'indicatore
+    if (screenId === 'chat-list-screen') {
+        hasUnreadMessages = false;
+        updateChatTabIndicator();
+    }
   }
+
+  // *** NUOVA FUNZIONE per mostrare/nascondere il pallino sulla tab chat ***
+  function updateChatTabIndicator() {
+      const chatTab = document.getElementById('nav-chat');
+      if (!chatTab) return; // Sicurezza: se la tab non esiste ancora
+
+      let indicator = chatTab.querySelector('.unread-indicator');
+      const iconContainer = chatTab.querySelector('div'); // Il div che contiene SVG e span
+
+      if (hasUnreadMessages) {
+          if (!indicator) {
+              // Crea il pallino se non esiste
+              indicator = document.createElement('span');
+              indicator.className = 'unread-indicator absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white';
+              // Aggiungi 'relative' al contenitore se non c'è già (assicurato anche dal CSS)
+              if (iconContainer && !iconContainer.classList.contains('relative')) {
+                  iconContainer.classList.add('relative');
+              }
+              iconContainer?.appendChild(indicator); // Aggiungi il pallino al div interno
+          }
+          if (indicator) indicator.style.display = 'block'; // Mostra il pallino
+      } else {
+          if (indicator) {
+              indicator.style.display = 'none'; // Nasconde il pallino
+          }
+      }
+  }
+
 
   window.toggleOfferType = function(type) {
     currentOfferType = type;
     const btnBene = document.getElementById('type-bene');
     const btnServizio = document.getElementById('type-servizio');
 
-    btnBene.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg'); 
+    btnBene.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg');
     btnServizio.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg');
-    
+
     btnBene.classList.add('text-gray-700', 'hover:bg-gray-200');
     btnServizio.classList.add('text-gray-700', 'hover:bg-gray-200');
 
     if (type === 'bene') {
         btnBene.classList.remove('text-gray-700', 'hover:bg-gray-200');
-        btnBene.classList.add('bg-green-600', 'text-white', 'shadow-lg'); 
+        btnBene.classList.add('bg-green-600', 'text-white', 'shadow-lg');
     } else {
         btnServizio.classList.remove('text-gray-700', 'hover:bg-gray-200');
         btnServizio.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
@@ -76,11 +114,11 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       content.classList.add('hidden');
       content.classList.remove('active');
     });
-    
+
     const btnBeni = document.getElementById('tab-btn-beni');
     const btnServizi = document.getElementById('tab-btn-servizi');
 
-    btnBeni.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50'); 
+    btnBeni.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50');
     btnServizi.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50');
 
     btnBeni.classList.add('text-gray-700', 'hover:bg-gray-200');
@@ -90,10 +128,10 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
     document.getElementById('home-' + type).classList.add('active');
 
     element.classList.remove('text-gray-700', 'hover:bg-gray-200');
-    
+
     if (type === 'bene') {
-        element.classList.add('bg-green-600', 'text-white', 'shadow-lg', 'shadow-green-600/50'); 
-    } else { 
+        element.classList.add('bg-green-600', 'text-white', 'shadow-lg', 'shadow-green-600/50');
+    } else {
         element.classList.add('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/50');
     }
   }
@@ -118,31 +156,23 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   }
 
 
-  // --- 4. GESTIONE STATO UTENTE (ON LOAD) ---
-  // *** INIZIO BLOCCO CORRETTO 1 (Errore Log) ***
+  // --- 4. GESTIONE STATO UTENTE (ON LOAD - Listener #1) ---
+  // Gestisce solo UI base (header/tab/login screen) e nome profilo header
   onAuthStateChanged(auth, (user) => {
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app-container').classList.remove('hidden');
-    
-    if (user) {
-        console.log("Utente attivo:", user.uid, user.displayName);
 
-        document.getElementById('app-header').style.display = 'flex'; 
-        document.getElementById('tab-bar').style.display = 'flex'; 
-        
-        // CORREZIONE: L'ID era 'profile-name-header', non 'profile-name'
+    if (user) {
+        console.log("Utente attivo (listener 1):", user.uid, user.displayName);
+        document.getElementById('app-header').style.display = 'flex';
+        document.getElementById('tab-bar').style.display = 'flex';
+
         const profileNameHeader = document.getElementById('profile-name-header');
         if (profileNameHeader) {
             profileNameHeader.textContent = user.displayName || "Utente EcoMunity";
         }
-        
-        switchScreen('home-screen');
-        document.getElementById('nav-home').classList.add('active');
 
-        // loadOffers() e loadChatList() vengono chiamati dal *secondo*
-        // listener onAuthStateChanged in fondo al file (Sezione 7)
-        // Questo è sporco, ma rispecchia il tuo file originale.
-        
+        // Non chiamiamo switchScreen o loadData qui, lo fa il listener #2
     } else {
         console.log("Nessun utente loggato. Mostra schermata di Login.");
         document.getElementById('login-screen').style.display = 'flex';
@@ -150,533 +180,442 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         document.getElementById('tab-bar').style.display = 'none';
     }
   });
-  // *** FINE BLOCCO CORRETTO 1 ***
 
-  
-// --- GESTIONE CHAT (Funzioni) ---
-let currentChatId = null;
 
-window.openChat = function(chatId, offerTitle) {
-    currentChatId = chatId;
-    document.getElementById('current-chat-id').value = chatId;
-    document.getElementById('current-chat-title').textContent = offerTitle;
-    
-    document.getElementById('chat-screen').style.display = 'flex';
-    
-    document.getElementById('app-header').style.display = 'none';
-    document.getElementById('tab-bar').style.display = 'none';
+  // --- GESTIONE CHAT (Funzioni) ---
+  let currentChatId = null;
 
-    loadChatMessages(chatId);
-}
+  window.openChat = function(chatId, offerTitle) {
+      currentChatId = chatId;
+      document.getElementById('current-chat-id').value = chatId;
+      document.getElementById('current-chat-title').textContent = offerTitle;
 
-window.sendMessage = async function(event) {
-    event.preventDefault();
-    const messageInput = document.getElementById('message-input');
-    const messageText = messageInput.value.trim();
-    const chatId = document.getElementById('current-chat-id').value;
-    const currentUser = auth.currentUser;
+      document.getElementById('chat-screen').style.display = 'flex';
+      document.getElementById('app-header').style.display = 'none';
+      document.getElementById('tab-bar').style.display = 'none';
 
-    if (!messageText || !chatId || !currentUser) {
-        return;
-    }
+      // Quando apri una chat, resetta l'indicatore (anche se eri già in lista)
+      hasUnreadMessages = false;
+      updateChatTabIndicator();
 
-    try {
-        await addDoc(collection(db, "chats", chatId, "messages"), {
-            senderId: currentUser.uid,
-            senderName: currentUser.displayName,
-            text: messageText,
-            timestamp: new Date()
-        });
+      loadChatMessages(chatId);
+  }
 
-        const chatRef = doc(db, "chats", chatId);
-        await updateDoc(chatRef, {
-            lastMessage: messageText.substring(0, 50) + (messageText.length > 50 ? '...' : ''),
-            lastMessageTimestamp: new Date()
-        });
+  window.sendMessage = async function(event) {
+      event.preventDefault();
+      const messageInput = document.getElementById('message-input');
+      const messageText = messageInput.value.trim();
+      const chatId = document.getElementById('current-chat-id').value;
+      const currentUser = auth.currentUser;
 
-        messageInput.value = '';
-        
-    } catch (e) {
-        console.error("Errore nell'invio del messaggio: ", e);
-        alert("Impossibile inviare il messaggio.");
-    }
-}
+      if (!messageText || !chatId || !currentUser) return;
 
-function loadChatMessages(chatId) {
-    if (!chatId) return;
+      try {
+          await addDoc(collection(db, "chats", chatId, "messages"), {
+              senderId: currentUser.uid,
+              senderName: currentUser.displayName,
+              text: messageText,
+              timestamp: new Date()
+          });
 
-    const currentUser = auth.currentUser;
-    const messagesContainer = document.getElementById('messages-container');
-    
-    const q = query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"));
+          const chatRef = doc(db, "chats", chatId);
+          await updateDoc(chatRef, {
+              lastMessage: messageText.substring(0, 50) + (messageText.length > 50 ? '...' : ''),
+              lastMessageTimestamp: new Date()
+          });
 
-    onSnapshot(q, (querySnapshot) => {
-        let messagesHtml = '';
-        
-        querySnapshot.forEach((doc) => {
-            const msg = doc.data();
-            const isMe = msg.senderId === currentUser.uid;
-            
-            const messageClass = isMe 
-                ? 'self-end bg-[#dcf8c6] text-gray-900 rounded-bl-xl rounded-tl-xl rounded-tr-xl' 
-                : 'self-start bg-white text-gray-800 rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100';
-            
-            const timeString = msg.timestamp && msg.timestamp.toDate ? msg.timestamp.toDate().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : 'Ora Sconosciuta';
+          messageInput.value = '';
 
-            messagesHtml += `
-                <div class="max-w-[75%] p-3 shadow-sm ${messageClass}">
-                    <p class="text-sm">${msg.text}</p>
-                    <span class="text-xs text-right block ${isMe ? 'text-gray-600' : 'text-gray-500'} mt-1">${timeString}</span>
-                </div>
-            `;
-        });
+      } catch (e) {
+          console.error("Errore nell'invio del messaggio: ", e);
+          alert("Impossibile inviare il messaggio.");
+      }
+  }
 
-        messagesContainer.innerHTML = messagesHtml;
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    });
-}
+  function loadChatMessages(chatId) {
+      if (!chatId) return;
 
-window.navigateFromChat = function(screenId, element) {
-    document.getElementById('chat-screen').style.display = 'none';
-    
-    document.getElementById('app-header').style.display = 'flex'; 
-    document.getElementById('tab-bar').style.display = 'flex'; 
+      const currentUser = auth.currentUser;
+      const messagesContainer = document.getElementById('messages-container');
 
-    switchScreen(screenId);
-    document.querySelectorAll('.tab-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    element.classList.add('active');
-}
+      const q = query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"));
+
+      onSnapshot(q, (querySnapshot) => {
+          let messagesHtml = '';
+
+          querySnapshot.forEach((doc) => {
+              const msg = doc.data();
+              const isMe = msg.senderId === currentUser.uid;
+
+              const messageClass = isMe
+                  ? 'self-end bg-[#dcf8c6] text-gray-900 rounded-bl-xl rounded-tl-xl rounded-tr-xl'
+                  : 'self-start bg-white text-gray-800 rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100';
+
+              const timeString = msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+
+              messagesHtml += `
+                  <div class="max-w-[75%] p-3 shadow-sm ${messageClass}">
+                      <p class="text-sm">${msg.text}</p>
+                      <span class="text-xs text-right block ${isMe ? 'text-gray-600' : 'text-gray-500'} mt-1">${timeString}</span>
+                  </div>
+              `;
+          });
+
+          messagesContainer.innerHTML = messagesHtml;
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      });
+  }
+
+  window.navigateFromChat = function(screenId, element) {
+      document.getElementById('chat-screen').style.display = 'none';
+      document.getElementById('app-header').style.display = 'flex';
+      document.getElementById('tab-bar').style.display = 'flex';
+
+      // Esegui la navigazione standard (che resetterà anche l'indicatore se screenId è chat-list-screen)
+      window.navigate(screenId, element);
+  }
 
   // --- 5. INTERAZIONE DATABASE (OFFERTE) ---
   window.publishOffer = async function(event) {
-    event.preventDefault(); 
-    
-    const title = document.getElementById('title').value;
-    const description = document.getElementById('description').value;
-    const cpValue = parseInt(document.getElementById('cp-value').value, 10);
-    
-    if (isNaN(cpValue) || cpValue <= 0) {
-        alert("Inserisci un valore Community Points (CP) valido e positivo.");
-        return;
-    }
-    
-    const user = auth.currentUser;
-    if (!user) {
-        alert("Devi essere loggato per pubblicare un'offerta.");
-        return;
-    }
+      event.preventDefault();
+      const title = document.getElementById('title').value;
+      const description = document.getElementById('description').value;
+      const cpValue = parseInt(document.getElementById('cp-value').value, 10);
 
-    try {
-        const docRef = await addDoc(collection(db, "offerte"), {
-            title: title,
-            description: description,
-            type: currentOfferType, 
-            cpValue: cpValue, // Questo è CP (Valore)
-            ownerId: user.uid,
-            ownerName: user.displayName,
-            timestamp: new Date(),
-            status: 'available'
-        });
-        
-        console.log("Documento scritto con ID: ", docRef.id);
-        alert("Offerta pubblicata con successo!");
-        document.getElementById('publish-form').reset();
-        window.navigate('home-screen', document.getElementById('nav-home'));
-    } catch (e) {
-        console.error("Errore durante l'aggiunta del documento: ", e);
-        alert("Errore durante la pubblicazione. Controlla la console.");
-    }
+      if (isNaN(cpValue) || cpValue <= 0) {
+          alert("Inserisci un valore Community Points (CP) valido e positivo.");
+          return;
+      }
+      const user = auth.currentUser;
+      if (!user) {
+          alert("Devi essere loggato per pubblicare un'offerta.");
+          return;
+      }
+
+      try {
+          const docRef = await addDoc(collection(db, "offerte"), {
+              title: title, description: description, type: currentOfferType, cpValue: cpValue,
+              ownerId: user.uid, ownerName: user.displayName, timestamp: new Date(), status: 'available'
+          });
+          console.log("Offerta pubblicata con ID: ", docRef.id);
+          alert("Offerta pubblicata con successo!");
+          document.getElementById('publish-form').reset();
+          window.navigate('home-screen', document.getElementById('nav-home'));
+      } catch (e) {
+          console.error("Errore pubblicazione: ", e);
+          alert("Errore durante la pubblicazione.");
+      }
   }
-  
+
   window.deleteOffer = async function(docId) {
-    if (confirm("Sei sicuro di voler eliminare questa offerta? L'azione è irreversibile.")) {
-        try {
-            await deleteDoc(doc(db, "offerte", docId));
-            console.log("Documento eliminato con ID:", docId);
-            alert("Offerta eliminata con successo!");
-        } catch (e) {
-            console.error("Errore durante l'eliminazione del documento: ", e);
-            alert("Errore durante l'eliminazione. Controlla le regole di sicurezza (write).");
-        }
-    }
+      if (confirm("Sei sicuro di voler eliminare questa offerta?")) {
+          try {
+              await deleteDoc(doc(db, "offerte", docId));
+              alert("Offerta eliminata!");
+          } catch (e) {
+              console.error("Errore eliminazione: ", e);
+              alert("Errore durante l'eliminazione.");
+          }
+      }
   }
 
-// --- GESTIONE FEEDBACK E STATI ---
+  // --- GESTIONE FEEDBACK E STATI ---
 
-window.requestFeedback = async function(docId, cpValue) { 
-    const user = auth.currentUser;
-    if (!user) {
-        alert("Errore di autenticazione.");
-        return;
-    }
-    
-    const offerRef = doc(db, "offerte", docId);
-    const offerSnap = await getDoc(offerRef); 
-    
-    if (!offerSnap.exists() || offerSnap.data().status !== 'reserved' || offerSnap.data().ownerId !== user.uid) {
-        alert("Impossibile completare. L'offerta non è riservata o non sei il proprietario.");
-        return;
-    }
+  window.requestFeedback = async function(docId, cpValue) {
+      const user = auth.currentUser;
+      if (!user) return alert("Errore di autenticazione.");
 
-    const reservedById = offerSnap.data().reservedBy;
-    if (!reservedById) {
-        alert("Errore: ID acquirente non trovato.");
-        return;
-    }
+      const offerRef = doc(db, "offerte", docId);
+      const offerSnap = await getDoc(offerRef);
 
-    const feedback = prompt(
-        "Come valuti questo scambio?\n" +
-        "1: Eccellente (Assegna +15 Karma Point all'acquirente)\n" +
-        "2: Corretto (Assegna +10 Karma Point all'acquirente)\n" +
-        "3: Insoddisfacente (Toglie -10 Karma Point all'acquirente)"
-    );
+      if (!offerSnap.exists() || offerSnap.data().status !== 'reserved' || offerSnap.data().ownerId !== user.uid) {
+          return alert("Impossibile completare: offerta non riservata o non sei il proprietario.");
+      }
+      const reservedById = offerSnap.data().reservedBy;
+      if (!reservedById) return alert("Errore: ID acquirente non trovato.");
 
-    let finalKP = 0; // Questo è KARMA (KP)
-    let feedbackType = '';
+      const feedback = prompt("Come valuti questo scambio?\n1: Eccellente (+15 KP)\n2: Corretto (+10 KP)\n3: Insoddisfacente (-10 KP)");
+      let finalKP = 0, feedbackType = '';
 
-    switch (feedback) {
-        case '1': 
-            finalKP = 15;
-            feedbackType = 'eccellente';
-            break;
-        case '2': 
-            finalKP = 10;
-            feedbackType = 'corretto';
-            break;
-        case '3': 
-            finalKP = -10;
-            feedbackType = 'insoddisfacente';
-            break;
-        default:
-            alert("Selezione non valida. Annullato.");
-            return;
-    }
-    
-    if (feedbackType === 'insoddisfacente' && !confirm("Sei sicuro di voler dare un feedback negativo? L'utente riceverà -10 Karma.")) {
-        return;
-    }
+      switch (feedback) {
+          case '1': finalKP = 15; feedbackType = 'eccellente'; break;
+          case '2': finalKP = 10; feedbackType = 'corretto'; break;
+          case '3': finalKP = -10; feedbackType = 'insoddisfacente'; break;
+          default: return alert("Selezione non valida.");
+      }
+      if (feedbackType === 'insoddisfacente' && !confirm("Feedback negativo? L'utente riceverà -10 Karma.")) return;
 
-    try {
-        // 1. Aggiorna l'Offerta
-        await updateDoc(offerRef, {
-            status: 'completed',
-            feedback: feedbackType,
-            cp_awarded: finalKP, // Salva il KP assegnato
-            completionDate: new Date()
-        });
+      try {
+          await updateDoc(offerRef, { status: 'completed', feedback: feedbackType, cp_awarded: finalKP, completionDate: new Date() });
+          const userRef = doc(db, "users", reservedById);
+          const userSnap = await getDoc(userRef);
+          let currentKarma = 100;
+          if (userSnap.exists() && userSnap.data().karmaPoints !== undefined) currentKarma = userSnap.data().karmaPoints;
+          const newKarma = currentKarma + finalKP;
+          await setDoc(userRef, { karmaPoints: newKarma }, { merge: true });
+          console.log(`KP per ${reservedById} aggiornati a ${newKarma}`);
+          alert(`Scambio completato! Acquirente riceve ${finalKP} KP (Nuovo totale: ${newKarma}).`);
+          // loadOffers(); // Non necessario, onSnapshot aggiorna
+      } catch (e) {
+          console.error("Errore completamento scambio: ", e);
+          alert("Errore nel completare lo scambio.");
+      }
+  }
 
-        // 2. Aggiorna il profilo KP dell'ACQUIRENTE
-        const userRef = doc(db, "users", reservedById);
-        const userSnap = await getDoc(userRef);
-        
-        let currentKarma = 100; 
-        if (userSnap.exists() && userSnap.data().karmaPoints !== undefined) {
-            currentKarma = userSnap.data().karmaPoints;
-        }
-        
-        const newKarma = currentKarma + finalKP;
-        
-        // Questo ora funzionerà grazie alle nuove Regole (Caso B)
-        await setDoc(userRef, { 
-            karmaPoints: newKarma 
-        }, { merge: true }); // setDoc con merge = true aggiornerà solo i KP
+  window.reserveAndChat = async function(offerId, offerOwnerId, offerTitle) {
+      const currentUser = auth.currentUser;
+      if (!currentUser || currentUser.uid === offerOwnerId) return alert("Non puoi chattare per la tua offerta.");
 
-        console.log(`Punti Karma (KP) per ${reservedById} aggiornati da ${currentKarma} a ${newKarma}`);
+      const offerRef = doc(db, "offerte", offerId);
+      const offerSnap = await getDoc(offerRef);
+      if (!offerSnap.exists()) return alert("Errore: Annuncio non trovato.");
 
-        alert(`Scambio completato! L'acquirente ha ricevuto ${finalKP} Punti Karma.\nIl suo nuovo totale è ${newKarma}.`);
-        loadOffers(); 
-    } catch (e) {
-        console.error("Errore durante il completamento dello scambio: ", e);
-        alert("Errore nel completare lo scambio. Controlla la console.");
-    }
-}
+      const offerData = offerSnap.data();
+      if (offerData.status !== 'available') return alert("Offerta non più disponibile.");
 
+      const chatQuery = query(collection(db, "chats"), where("offerId", "==", offerId), where("users", "array-contains", currentUser.uid));
+      const chatSnapshot = await getDocs(chatQuery);
+      let chatId;
 
-// *** INIZIO BLOCCO CORRETTO 3 (Crash Silenzioso) ***
-window.reserveAndChat = async function(offerId, offerOwnerId, offerTitle) {
-    const currentUser = auth.currentUser;
-    if (!currentUser || currentUser.uid === offerOwnerId) {
-        alert("Non puoi avviare una chat per la tua offerta o non sei loggato.");
-        return;
-    }
+      if (!chatSnapshot.empty) {
+          chatId = chatSnapshot.docs[0].id;
+          console.log("Chat esistente trovata:", chatId);
+      } else {
+          try {
+              const chatDocRef = await addDoc(collection(db, "chats"), {
+                  offerId: offerId, offerTitle: offerTitle, ownerId: offerOwnerId, buyerId: currentUser.uid,
+                  users: [offerOwnerId, currentUser.uid], createdAt: new Date(), lastMessage: 'Chat avviata.', lastMessageTimestamp: new Date()
+              });
+              chatId = chatDocRef.id;
+              console.log("Nuova chat creata:", chatId);
+          } catch (e) {
+              console.error("Errore creazione chat:", e);
+              return alert("Impossibile avviare la chat.");
+          }
+      }
 
-    const offerRef = doc(db, "offerte", offerId);
-    const offerSnap = await getDoc(offerRef);
+      try {
+          await updateDoc(offerRef, { status: 'reserved', reservedBy: currentUser.uid, reservedAt: new Date() });
+          console.log(`Offerta ${offerId} riservata`);
+          window.openChat(chatId, offerTitle); // Apri chat DOPO aver riservato
+      } catch (e) {
+          console.error("Errore riserva offerta:", e);
+          alert("Impossibile riservare l'offerta.");
+      }
+  }
 
-    // CORREZIONE: Controlliamo se l'annuncio esiste PRIMA di leggerlo
-    if (!offerSnap.exists()) {
-        alert("Errore: Annuncio non trovato. Potrebbe essere stato eliminato.");
-        loadOffers(); // Ricarica la lista per rimuoverlo
-        return;
-    }
-
-    const offerData = offerSnap.data();
-
-    // 1. Blocco se l'offerta non è 'available'
-    if (offerData.status !== 'available') {
-        alert("Questa offerta non è più disponibile.");
-        loadOffers();
-        return;
-    }
-
-    // 2. Tenta di trovare una chat esistente
-    const chatQuery = query(
-        collection(db, "chats"),
-        where("offerId", "==", offerId),
-        where("users", "array-contains", currentUser.uid) 
-    );
-    const chatSnapshot = await getDocs(chatQuery); 
-    
-    let chatId;
-
-    if (!chatSnapshot.empty) {
-        chatId = chatSnapshot.docs[0].id;
-        console.log("Chat esistente trovata:", chatId);
-    } else {
-        // Chat NON esistente: creane una nuova
-        try {
-            const chatDocRef = await addDoc(collection(db, "chats"), {
-                offerId: offerId,
-                offerTitle: offerTitle,
-                ownerId: offerOwnerId,
-                buyerId: currentUser.uid,
-                users: [offerOwnerId, currentUser.uid],
-                createdAt: new Date(),
-                lastMessage: 'Chat avviata.',
-                lastMessageTimestamp: new Date()
-            });
-            chatId = chatDocRef.id;
-            console.log("Nuova chat creata con ID:", chatId);
-        } catch (e) {
-            console.error("Errore durante la creazione della chat:", e);
-            alert("Impossibile avviare la chat.");
-            return;
-        }
-    }
-
-    // 3. Aggiorna lo stato dell'offerta a 'reserved'
-    try {
-        await updateDoc(offerRef, {
-            status: 'reserved',
-            reservedBy: currentUser.uid, 
-            reservedAt: new Date()
-        });
-        console.log(`Stato offerta ${offerId} aggiornato a 'reserved'`);
-    } catch (e) {
-        console.error("Errore nell'aggiornamento dello stato offerta:", e);
-        alert("Impossibile riservare l'offerta. Controlla la console.");
-        return;
-    }
-
-    // 4. Apri la schermata di chat
-    window.openChat(chatId, offerTitle);
-}
-// *** FINE BLOCCO CORRETTO 3 ***
-
-window.cancelReservation = async function(docId) {
-    if (!confirm("Sei sicuro di voler annullare la prenotazione? L'offerta tornerà disponibile a tutti.")) {
-        return;
-    }
-
-    const offerRef = doc(db, "offerte", docId);
-    try {
-        await updateDoc(offerRef, {
-            status: 'available',
-            reservedBy: null,
-            reservedAt: null
-        });
-        alert("Prenotazione annullata. L'offerta è di nuovo disponibile.");
-        loadOffers(); 
-    } catch (e) {
-        console.error("Errore durante l'annullamento della prenotazione:", e);
-        alert("Impossibile annullare. Riprova.");
-    }
-}
+  window.cancelReservation = async function(docId) {
+      if (!confirm("Annullare la prenotazione? L'offerta tornerà disponibile.")) return;
+      const offerRef = doc(db, "offerte", docId);
+      try {
+          await updateDoc(offerRef, { status: 'available', reservedBy: null, reservedAt: null });
+          alert("Prenotazione annullata.");
+          // loadOffers(); // Non necessario, onSnapshot aggiorna
+      } catch (e) {
+          console.error("Errore annullamento: ", e);
+          alert("Impossibile annullare.");
+      }
+  }
 
 
-// --- 6. GESTIONE DATI (CARICAMENTO) ---
+  // --- 6. GESTIONE DATI (CARICAMENTO) ---
 
-function loadChatList() {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-    
-    const chatListContainer = document.getElementById('chat-list');
-
-    const q = query(
-        collection(db, "chats"), 
-        where("users", "array-contains", currentUser.uid),
-        orderBy("lastMessageTimestamp", "desc") 
-    );
-
-    onSnapshot(q, (snapshot) => {
-        let chatHtml = '';
-        if (snapshot.empty) {
-            chatListContainer.innerHTML = '<p class="text-center text-gray-500 mt-8">Nessuna chat attiva.</p>';
-            return;
-        }
-
-        snapshot.forEach((doc) => {
-            const chat = doc.data();
-            const isOwner = chat.ownerId === currentUser.uid;
-            const statusText = isOwner ? 'Offerta tua' : 'Tua prenotazione';
-            const chatDisplayName = chat.offerTitle || 'Chat senza titolo';
-
-            chatHtml += `
-                <div onclick="openChat('${doc.id}', '${chat.offerTitle.replace(/'/g, "\\'")}')" 
-                     class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer">
-                    <div class="flex-shrink-0 mr-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square text-gray-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm font-semibold text-gray-800 truncate">${chatDisplayName}</p>
-                        <p class="text-xs text-gray-500 truncate mt-0.5">${chat.lastMessage}</p>
-                    </div>
-                    <div class="ml-4 flex flex-col items-end">
-                        <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${statusText}</span> <span class="text-xs text-gray-400 mt-1">${chat.lastMessageTimestamp ? chat.lastMessageTimestamp.toDate().toLocaleDateString('it-IT') : 'N/D'}</span>
-                    </div>
-                </div>
-            `;
-        });
-
-        chatListContainer.innerHTML = chatHtml;
-    });
-}
-
-
-// *** INIZIO BLOCCO CORRETTO 2 (Errore Log) ***
-function loadProfileData(userId) {
-    const profileDataContainer = document.getElementById('profile-data');
-    const userRef = doc(db, "users", userId); 
-
-    onSnapshot(userRef, (docSnap) => {
-        
-        // CORREZIONE: Prima controlliamo se esiste.
-        // Se non esiste, lo CREIAMO e usciamo.
-        // onSnapshot verrà richiamato automaticamente dopo la creazione.
-        if (!docSnap.exists()) {
-            console.log("Documento utente non trovato, creato uno di base.");
-            setDoc(userRef, { 
-                displayName: auth.currentUser.displayName, 
-                email: auth.currentUser.email,
-                karmaPoints: 100, // Valore iniziale KP
-                completedSwaps: 0
-            });
-            return; // Usciamo, aspettiamo il prossimo snapshot
-        }
-
-        // Se siamo qui, il documento ESISTE. Leggiamo i dati.
-        const userData = docSnap.data();
-        const karma = userData.karmaPoints || 0; // Questo è KP (REPUTAZIONE)
-        const completedSwaps = userData.completedSwaps || 0;
-        
-        // --- LOGICA LIVELLO (basata su KP) ---
-        const levelThresholds = [0, 150, 300, 500, 1000]; // KP richiesti
-        
-        let currentLevel = 1;
-        let currentLevelKP = levelThresholds[0]; 
-        let nextLevelKP = levelThresholds[1]; 
-
-        for (let i = levelThresholds.length - 1; i >= 0; i--) {
-            if (karma >= levelThresholds[i]) {
-                currentLevel = i + 1;
-                currentLevelKP = levelThresholds[i];
-                nextLevelKP = (i + 1 < levelThresholds.length) ? levelThresholds[i + 1] : levelThresholds[i];
-                break;
-            }
-        }
-        
-        const progressToNextLevel = nextLevelKP - currentLevelKP;
-        const userProgressInLevel = karma - currentLevelKP;
-        
-        let progressPercentage = 0;
-        if (progressToNextLevel > 0) {
-              progressPercentage = Math.floor((userProgressInLevel / progressToNextLevel) * 100);
-        } else {
-              progressPercentage = 100;
-        }
-        
-        let progressText = `Prossimo livello: ${nextLevelKP} KP`;
-        if (progressPercentage >= 100 && currentLevel === levelThresholds.length) {
-              progressPercentage = 100;
-              progressText = "Livello Massimo Raggiunto!";
-        }
-        
-        profileDataContainer.innerHTML = `
-            <div class="mb-6">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-base font-semibold text-green-600">Livello ${currentLevel}</span>
-                    <span class="text-sm text-gray-500">${progressText}</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                    <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercentage}%"></div>
-                </div>
-            </div>
-            <p class="text-3xl font-bold text-gray-900">${karma}</p>
-            <p class="text-sm text-gray-500 mb-4">Punti Karma (KP)</p>
-            <div class="flex justify-around w-full mt-4">
-                <div class="text-center">
-                    <p class="text-xl font-semibold text-gray-700">${completedSwaps}</p> 
-                    <p class="text-xs text-gray-500">Scambi Completati</p>
-                </div>
-                <div class="text-center">
-                    <p class="text-xl font-semibold text-yellow-600">${karma}</p>
-                    <p class="text-xs text-gray-500">Affidabilità</p>
-                </div>
-            </div>
-        `;
-        
-        document.getElementById('profile-name-header').textContent = userData.displayName || auth.currentUser.displayName;
-    });
-}
-// *** FINE BLOCCO CORRETTO 2 ***
-
-
-function loadOffers() {
+  // Funzione per caricare la lista delle chat
+  // *** MODIFICATA per Zebra Striping e Indicatore Non Letto ***
+  function loadChatList() {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
 
-      const q = query(collection(db, "offerte"), orderBy("timestamp", "desc")); 
+      const chatListContainer = document.getElementById('chat-list');
+      if (!chatListContainer) return; // Sicurezza: elemento non trovato?
+
+      const q = query(
+          collection(db, "chats"),
+          where("users", "array-contains", currentUser.uid),
+          orderBy("lastMessageTimestamp", "desc")
+      );
+
+      let isOddRow = false; // Per lo striping
+
+      onSnapshot(q, (snapshot) => {
+          let chatHtml = '';
+          if (snapshot.empty) {
+              chatListContainer.innerHTML = '<p class="text-center text-gray-500 mt-8">Nessuna chat attiva.</p>';
+              hasUnreadMessages = false;
+              updateChatTabIndicator();
+              return;
+          }
+
+          let foundNewMessageOutsideChat = false;
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "modified" && !change.doc.metadata.hasPendingWrites) {
+                const currentScreen = document.querySelector('.screen.active')?.id;
+                const chatScreenVisible = document.getElementById('chat-screen').style.display === 'flex';
+                // Se NON sono nella lista chat E NON sono dentro una chat specifica...
+                if (currentScreen !== 'chat-list-screen' && !chatScreenVisible) {
+                    // ...allora considero questa modifica come "non letta".
+                    foundNewMessageOutsideChat = true;
+                }
+            }
+          });
+
+          if (foundNewMessageOutsideChat) {
+              hasUnreadMessages = true;
+              updateChatTabIndicator();
+          }
+
+          isOddRow = false; // Resetta ad ogni refresh
+          snapshot.forEach((doc) => {
+              const chat = doc.data();
+              const isOwner = chat.ownerId === currentUser.uid;
+              const statusText = isOwner ? 'Offerta tua' : 'Tua prenotazione';
+              const chatDisplayName = chat.offerTitle || 'Chat senza titolo';
+              const rowBgClass = isOddRow ? 'bg-green-50' : 'bg-white';
+              isOddRow = !isOddRow;
+
+              chatHtml += `
+                  <div onclick="openChat('${doc.id}', '${chat.offerTitle.replace(/'/g, "\\'")}')"
+                       class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${rowBgClass}">
+                      <div class="flex-shrink-0 mr-4">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square text-gray-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                          <p class="text-sm font-semibold text-gray-800 truncate">${chatDisplayName}</p>
+                          <p class="text-xs text-gray-500 truncate mt-0.5">${chat.lastMessage}</p>
+                      </div>
+                      <div class="ml-4 flex flex-col items-end">
+                          <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${statusText}</span>
+                          <span class="text-xs text-gray-400 mt-1">${chat.lastMessageTimestamp?.toDate ? chat.lastMessageTimestamp.toDate().toLocaleDateString('it-IT') : 'N/D'}</span>
+                      </div>
+                  </div>
+              `;
+          });
+
+          chatListContainer.innerHTML = chatHtml;
+      }, (error) => { // Aggiunto gestore errori per onSnapshot
+          console.error("Errore listener chat list:", error);
+          chatListContainer.innerHTML = '<p class="text-center text-red-500 mt-8">Errore nel caricare le chat.</p>';
+      });
+  }
+
+
+  // Funzione per caricare i dati del profilo (include creazione se non esiste)
+  function loadProfileData(userId) {
+      const profileDataContainer = document.getElementById('profile-data');
+      if (!profileDataContainer) return; // Sicurezza
+      const userRef = doc(db, "users", userId);
+
+      onSnapshot(userRef, (docSnap) => {
+          if (!docSnap.exists()) {
+              console.log("Profilo non trovato, creazione...");
+              setDoc(userRef, {
+                  displayName: auth.currentUser.displayName, email: auth.currentUser.email,
+                  karmaPoints: 100, completedSwaps: 0
+              }).catch(e => console.error("Errore creazione profilo:", e));
+              // Verrà richiamato onSnapshot dopo la creazione
+              return;
+          }
+
+          const userData = docSnap.data();
+          const karma = userData.karmaPoints || 0;
+          const completedSwaps = userData.completedSwaps || 0;
+
+          // Logica Livello
+          const levelThresholds = [0, 150, 300, 500, 1000];
+          let currentLevel = 1, currentLevelKP = 0, nextLevelKP = 150;
+          for (let i = levelThresholds.length - 1; i >= 0; i--) {
+              if (karma >= levelThresholds[i]) {
+                  currentLevel = i + 1;
+                  currentLevelKP = levelThresholds[i];
+                  nextLevelKP = (i + 1 < levelThresholds.length) ? levelThresholds[i + 1] : levelThresholds[i];
+                  break;
+              }
+          }
+          const progressToNextLevel = nextLevelKP - currentLevelKP;
+          const userProgressInLevel = karma - currentLevelKP;
+          let progressPercentage = (progressToNextLevel > 0) ? Math.min(100, Math.floor((userProgressInLevel / progressToNextLevel) * 100)) : 100;
+          let progressText = `Prossimo livello: ${nextLevelKP} KP`;
+          if (progressPercentage >= 100 && currentLevel >= levelThresholds.length) {
+              progressText = "Livello Massimo!";
+              progressPercentage = 100; // Assicura che sia 100%
+          }
+
+          profileDataContainer.innerHTML = `
+              <div class="mb-6">
+                  <div class="flex justify-between items-center mb-1">
+                      <span class="text-base font-semibold text-green-600">Livello ${currentLevel}</span>
+                      <span class="text-sm text-gray-500">${progressText}</span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2.5">
+                      <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercentage}%"></div>
+                  </div>
+              </div>
+              <p class="text-3xl font-bold text-gray-900">${karma}</p>
+              <p class="text-sm text-gray-500 mb-4">Punti Karma (KP)</p>
+              <div class="flex justify-around w-full mt-4">
+                  <div class="text-center">
+                      <p class="text-xl font-semibold text-gray-700">${completedSwaps}</p>
+                      <p class="text-xs text-gray-500">Scambi Completati</p>
+                  </div>
+                  <div class="text-center">
+                      <p class="text-xl font-semibold text-yellow-600">${karma}</p>
+                      <p class="text-xs text-gray-500">Affidabilità</p>
+                  </div>
+              </div>
+          `;
+          document.getElementById('profile-name-header').textContent = userData.displayName || auth.currentUser.displayName;
+
+      }, (error) => { // Gestore errori
+          console.error("Errore listener profilo:", error);
+          profileDataContainer.innerHTML = '<p class="text-center text-red-500 mt-4">Errore nel caricare il profilo.</p>';
+      });
+  }
+
+
+  function loadOffers() {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      const itemListBene = document.getElementById('item-list-bene');
+      const itemListServizio = document.getElementById('item-list-servizio');
+      const emptyBene = document.getElementById('empty-bene');
+      const emptyServizio = document.getElementById('empty-servizio');
+      if (!itemListBene || !itemListServizio) return; // Sicurezza
+
+      const q = query(collection(db, "offerte"), orderBy("timestamp", "desc"));
 
       onSnapshot(q, (querySnapshot) => {
-          let beniHtml = '';
-          let serviziHtml = '';
+          let beniHtml = '', serviziHtml = '';
 
           querySnapshot.forEach((doc) => {
               const offer = doc.data();
               const docId = doc.id;
-              const cpValue = offer.cpValue || 10; // Questo è CP (Valore)
+              const cpValue = offer.cpValue || 10; // Valore CP
               const isOwner = offer.ownerId === currentUser.uid;
               const isReserved = offer.status === 'reserved';
               const isCompleted = offer.status === 'completed';
               const isReservedByMe = isReserved && offer.reservedBy === currentUser.uid;
 
-              let actionButton = '';
-              let ownerButtons = ''; 
-              let statusTag = '';
+              let actionButton = '', ownerButtons = '', statusTag = '';
 
               if (isCompleted) {
                   statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Completato</span>`;
                   if (isOwner) {
-                      const feedbackMsg = offer.feedback ? `(Feedback: ${offer.feedback}, ${offer.cp_awarded} KP)` : ''; // KP
+                      const feedbackMsg = offer.feedback ? `(Feedback: ${offer.feedback}, ${offer.cp_awarded} KP)` : '';
                       ownerButtons = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Scambio Completato ${feedbackMsg}</button>`;
                   }
               } else if (isReserved) {
                   const statusColor = isReservedByMe ? 'bg-blue-200 text-blue-800' : 'bg-yellow-200 text-yellow-800';
                   statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full ${statusColor}">${isReservedByMe ? 'Prenotato da te' : 'Riservato'}</span>`;
-
                   if (isReservedByMe) {
                       actionButton = `<button onclick="cancelReservation('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Annulla Prenotazione</button>`;
                   } else if (isOwner) {
-                      const reservedByText = offer.reservedBy ? `(Riservato)` : ''; 
-                      ownerButtons = `
-                        <p class="text-sm font-semibold text-yellow-600 mt-2">Riservato ${reservedByText}</p>
-                        <button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Completa Scambio</button> `;
+                      const reservedByText = ''; // Potremmo recuperare il nome utente qui in futuro
+                      ownerButtons = `<p class="text-sm font-semibold text-yellow-600 mt-2">Riservato ${reservedByText}</p><button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Completa Scambio</button>`;
                   } else {
                       actionButton = `<button disabled class="mt-2 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-100 cursor-not-allowed">Non Disponibile</button>`;
                   }
-              } else { // status === 'available'
+              } else { // available
                   statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Disponibile</span>`;
                   if (isOwner) {
                       ownerButtons = `<button onclick="deleteOffer('${docId}')" class="mt-2 w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Elimina Offerta</button>`;
@@ -684,12 +623,9 @@ function loadOffers() {
                       actionButton = `<button onclick="reserveAndChat('${docId}', '${offer.ownerId}', '${offer.title.replace(/'/g, "\\'")}')" class="mt-2 w-full ${offer.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Riserva e Chat</button>`;
                   }
               }
-              
-              const typeColor = offer.type === 'bene' ? 'bg-green-600' : 'bg-blue-600';
-              const iconSvg = offer.type === 'bene' 
-                  ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-box"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`
-                  : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wrench"><path d="M.4 17.5a2.17 2.17 0 0 1 3.2-3.2l2.7 2.7l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2l.9 .9l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2L12 12l9.1 9.1"/></svg>`;
 
+              const typeColor = offer.type === 'bene' ? 'bg-green-600' : 'bg-blue-600';
+              const iconSvg = offer.type === 'bene' ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-box"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>` : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-wrench"><path d="M.4 17.5a2.17 2.17 0 0 1 3.2-3.2l2.7 2.7l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2l.9 .9l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2L12 12l9.1 9.1"/></svg>`;
 
               const offerHtml = `
                 <div class="bg-white p-4 rounded-xl shadow-lg border border-gray-100 flex flex-col justify-between">
@@ -703,36 +639,50 @@ function loadOffers() {
                     <div>
                         <p class="text-sm text-gray-600">${offer.description}</p>
                         <p class="text-xs text-gray-400 mt-1">Offerto da: ${offer.ownerName}</p>
-                        <p class="text-sm font-bold text-yellow-600 mt-2">Valore: ${cpValue} CP</p> ${ownerButtons}
+                        <p class="text-sm font-bold text-yellow-600 mt-2">Valore: ${cpValue} CP</p>
+                        ${ownerButtons}
                     </div>
                     ${actionButton}
                 </div>
               `;
-
-              if (offer.type === 'bene') {
-                  beniHtml += offerHtml;
-              } else if (offer.type === 'servizio') {
-                  serviziHtml += offerHtml;
-              }
+              if (offer.type === 'bene') beniHtml += offerHtml; else serviziHtml += offerHtml;
           });
 
-          document.getElementById('item-list-bene').innerHTML = beniHtml;
-          document.getElementById('item-list-servizio').innerHTML = serviziHtml;
-          document.getElementById('empty-bene').style.display = beniHtml ? 'none' : 'block';
-          document.getElementById('empty-servizio').style.display = serviziHtml ? 'none' : 'block';
+          itemListBene.innerHTML = beniHtml;
+          itemListServizio.innerHTML = serviziHtml;
+          if (emptyBene) emptyBene.style.display = beniHtml ? 'none' : 'block';
+          if (emptyServizio) emptyServizio.style.display = serviziHtml ? 'none' : 'block';
+
+      }, (error) => { // Gestore errori
+          console.error("Errore listener offerte:", error);
+          if (itemListBene) itemListBene.innerHTML = '<p class="text-center text-red-500 mt-8">Errore nel caricare le offerte.</p>';
+          if (itemListServizio) itemListServizio.innerHTML = ''; // Nascondi errore duplicato
       });
   }
 
-  // --- 7. INIZIALIZZAZIONE (SECONDO LISTENER) ---
-  // Questo listener è quello che avvia il caricamento dati
+  // --- 7. INIZIALIZZAZIONE (Listener #2) ---
+  // Questo listener avvia il caricamento dei dati DOPO che l'utente è confermato
   onAuthStateChanged(auth, (user) => {
-      // (Il primo listener gestisce solo il loading screen e l'header)
       if (user) {
-          loadOffers(); 
-          loadChatList(); 
-          loadProfileData(user.uid); 
+          console.log("Utente confermato (listener 2), caricamento dati...");
+          // Assicurati che il DOM sia pronto (anche se con 'module' dovrebbe esserlo)
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                loadOffers();
+                loadChatList();
+                loadProfileData(user.uid);
+                switchScreen('home-screen'); // Vai alla home dopo il login
+                document.getElementById('nav-home')?.classList.add('active');
+            });
+          } else {
+                loadOffers();
+                loadChatList();
+                loadProfileData(user.uid);
+                switchScreen('home-screen'); // Vai alla home dopo il login
+                document.getElementById('nav-home')?.classList.add('active');
+          }
       }
-      // Il caso 'else' (logout) è gestito dal primo listener
+      // Il caso 'else' (logout) è gestito dal listener #1
   });
 </script>
 
@@ -741,54 +691,41 @@ function loadOffers() {
 <style>
   .screen:not(.active) { display: none; }
   .screen {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 56px - 64px); 
-    overflow-y: auto;
-    padding-bottom: 20px; 
+    display: flex; flex-direction: column;
+    height: calc(100vh - 56px - 64px); /* Altezza meno Header e Tab Bar */
+    overflow-y: auto; padding-bottom: 20px;
   }
   #home-screen { height: calc(100vh - 56px - 64px); }
   #chat-screen {
-    display: none; 
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background-color: white;
-    z-index: 50;
-    flex-direction: column;
+    display: none; position: fixed; top: 0; left: 0;
+    width: 100%; height: 100%; background-color: white;
+    z-index: 50; flex-direction: column;
   }
   #login-screen {
-      display: none; 
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background-color: #f7f7f7;
-      z-index: 100; 
-      justify-content: center;
-      align-items: center;
+      display: none; position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%; background-color: #f7f7f7;
+      z-index: 100; justify-content: center; align-items: center;
   }
   #loading-screen {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background-color: white;
-    z-index: 200;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-color: white; z-index: 200; display: flex;
+    justify-content: center; align-items: center; flex-direction: column;
   }
   #tab-bar {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      border-top: 1px solid #e5e7eb;
-      z-index: 10;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      border-top: 1px solid #e5e7eb; z-index: 10;
   }
-  #app-header {
-      position: sticky;
-      top: 0;
-      z-index: 10;
+  #app-header { position: sticky; top: 0; z-index: 10; }
+
+  /* Stile per posizionare il pallino rosso */
+  #tab-bar .tab-item > div {
+    position: relative; /* Necessario per posizionare l'absolute child */
   }
+  /* Stile base per il pallino (verrà mostrato/nascosto da JS) */
+  .unread-indicator {
+    display: none; /* Nascosto di default */
+  }
+
 </style>
 </head>
 
@@ -802,7 +739,8 @@ function loadOffers() {
     <div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg">
 
         <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-green-600">EcoMunity</h1> <button onclick="handleLogout()"
+            <h1 class="text-xl font-bold text-green-600">EcoMunity</h1>
+            <button onclick="handleLogout()"
                     class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-1 rounded-full shadow-md transition duration-150 ease-in-out">
                 Logout
             </button>
@@ -814,64 +752,45 @@ function loadOffers() {
                 <div class="p-4 border-b border-gray-200">
                     <h2 class="text-xl font-semibold text-gray-800">Annunci</h2>
                     <div class="flex mt-4 bg-gray-100 rounded-lg p-1 space-x-1 shadow-md">
-                        <button id="tab-btn-beni" 
-                                onclick="switchHomeTab('bene', this)" 
-                                class="flex-1 py-3 px-4 text-sm font-medium rounded-md 
-                                       bg-green-600 text-white shadow-lg shadow-green-600/50"> Beni Materiali </button>
-                        <button id="tab-btn-servizi" 
-                                onclick="switchHomeTab('servizio', this)" 
-                                class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md 
-                                       hover:bg-gray-200">
-                            Servizi/Aiuto
-                        </button>
+                        <button id="tab-btn-beni" onclick="switchHomeTab('bene', this)"
+                                class="flex-1 py-3 px-4 text-sm font-medium rounded-md bg-green-600 text-white shadow-lg shadow-green-600/50"> Beni Materiali </button>
+                        <button id="tab-btn-servizi" onclick="switchHomeTab('servizio', this)"
+                                class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200"> Servizi/Aiuto </button>
                     </div>
                 </div>
                 <div id="home-bene" class="home-tab-content p-4 grid grid-cols-1 gap-4 active">
-                    <p id="empty-bene" class="text-center text-gray-500 mt-8 hidden">Nessun bene materiale disponibile al momento.</p>
+                    <p id="empty-bene" class="text-center text-gray-500 mt-8 hidden">Nessun bene disponibile.</p>
                     <div id="item-list-bene" class="grid grid-cols-1 gap-4"></div>
                 </div>
                 <div id="home-servizio" class="home-tab-content p-4 grid grid-cols-1 gap-4 hidden">
-                    <p id="empty-servizio" class="text-center text-gray-500 mt-8 hidden">Nessun servizio o aiuto disponibile al momento.</p>
+                    <p id="empty-servizio" class="text-center text-gray-500 mt-8 hidden">Nessun servizio disponibile.</p>
                     <div id="item-list-servizio" class="grid grid-cols-1 gap-4"></div>
                 </div>
             </section>
 
             <section id="publish-screen" class="screen">
                 <div class="p-4 flex-1 overflow-y-auto">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Pubblica una Nuova Offerta</h2>
-                    
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Pubblica Offerta</h2>
                     <form id="publish-form" onsubmit="publishOffer(event)">
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Tipo di Offerta</label>
-                            <div class="flex bg-gray-100 rounded-lg p-1 space-x-1 shadow-md"> <button type="button" 
-                                        id="type-bene" 
-                                        onclick="toggleOfferType('bene')"
-                                        class="flex-1 py-3 px-4 text-sm font-medium rounded-md bg-green-600 text-white shadow-lg"> Bene Materiale </button>
-                                <button type="button" 
-                                        id="type-servizio" 
-                                        onclick="toggleOfferType('servizio')"
-                                        class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200">
-                                    Servizio / Aiuto
-                                </button>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                            <div class="flex bg-gray-100 rounded-lg p-1 space-x-1 shadow-md">
+                                <button type="button" id="type-bene" onclick="toggleOfferType('bene')" class="flex-1 py-3 px-4 text-sm font-medium rounded-md bg-green-600 text-white shadow-lg"> Bene </button>
+                                <button type="button" id="type-servizio" onclick="toggleOfferType('servizio')" class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200"> Servizio </button>
                             </div>
                         </div>
                         <div class="mb-4">
                             <label for="title" class="block text-sm font-medium text-gray-700">Titolo</label>
-                            <input type="text" id="title" required
-                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600 sm:text-sm" placeholder="Es. Bicicletta usata, Lezione di chitarra"> </div>
+                            <input type="text" id="title" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600" placeholder="Es. Bicicletta usata"> </div>
                         <div class="mb-4">
                             <label for="description" class="block text-sm font-medium text-gray-700">Descrizione</label>
-                            <textarea id="description" rows="3" required
-                                      class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600 sm:text-sm" placeholder="Descrivi brevemente cosa offri e perché."></textarea> </div>
+                            <textarea id="description" rows="3" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600" placeholder="Descrivi cosa offri."></textarea> </div>
                         <div class="mb-6">
                             <label for="cp-value" class="block text-sm font-medium text-gray-700">Valore Community Points (CP)</label>
-                            <input type="number" id="cp-value" required min="1" value="10"
-                                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
-                                   placeholder="Valore atteso dello scambio in Punti Community">
-                            <p class="mt-2 text-xs text-gray-500">Un valore giusto aiuta a bilanciare la comunità.</p>
+                            <input type="number" id="cp-value" required min="1" value="10" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-500 focus:border-yellow-500" placeholder="Valore in CP">
+                            <p class="mt-2 text-xs text-gray-500">Un valore giusto bilancia la comunità.</p>
                         </div>
-                        <button type="submit"
-                                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600"> Pubblica Offerta </button>
+                        <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600"> Pubblica </button>
                     </form>
                 </div>
             </section>
@@ -880,9 +799,10 @@ function loadOffers() {
                 <div class="p-4 border-b border-gray-200">
                     <h2 class="text-xl font-semibold text-gray-800">Le Tue Chat</h2>
                 </div>
-                <div id="chat-list" class="flex-1 overflow-y-auto"></div>
+                <div id="chat-list" class="flex-1 overflow-y-auto">
+                    </div>
             </section>
-            
+
             <section id="profile-screen" class="screen items-center">
                 <div class="w-full text-center p-4 bg-white border-b border-gray-200">
                     <h2 id="profile-name-header" class="text-2xl font-bold text-gray-800 mb-1">Nome Utente</h2>
@@ -892,36 +812,34 @@ function loadOffers() {
                     </div>
                 <div class="mt-8 w-full p-4">
                     <h3 class="text-lg font-semibold text-gray-700 mb-3">Opzioni</h3>
-                    <button onclick="handleLogout()"
-                            class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                        Logout
-                    </button>
+                    <button onclick="handleLogout()" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"> Logout </button>
                 </div>
             </section>
 
         </main>
-        
+
         <div id="chat-screen">
             <header class="bg-white p-4 border-b border-gray-200 flex items-center shadow-sm sticky top-0">
                 <button onclick="navigateFromChat('chat-list-screen', document.getElementById('nav-chat'))" class="mr-3 p-1 rounded-full hover:bg-gray-100">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
                 </button>
-                <h2 id="current-chat-title" class="text-lg font-semibold text-gray-800 truncate flex-1">Chat Titolo</h2>
+                <h2 id="current-chat-title" class="text-lg font-semibold text-gray-800 truncate flex-1">Chat</h2>
             </header>
             <div id="messages-container" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-3"></div>
             <form onsubmit="sendMessage(event)" class="p-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
                 <input type="hidden" id="current-chat-id">
                 <div class="flex">
-                    <input type="text" id="message-input" placeholder="Scrivi un messaggio..." required
-                           class="flex-1 px-4 py-2 border border-gray-300 rounded-l-full shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600"> <button type="submit"
-                            class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-r-full shadow-md flex items-center justify-center"> <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizonal"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
-                    </button> </div>
+                    <input type="text" id="message-input" placeholder="Scrivi..." required class="flex-1 px-4 py-2 border border-gray-300 rounded-l-full shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600">
+                    <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-r-full shadow-md flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send-horizonal"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
+                    </button>
+                </div>
             </form>
         </div>
 
         <nav id="tab-bar" class="bg-white flex justify-around shadow-lg">
             <button class="tab-item active" id="nav-home" onclick="navigate('home-screen', this)">
-                <div class="flex flex-col items-center p-2">
+                <div class="flex flex-col items-center p-2"> {/* Aggiunto relative qui implicitamente dal JS */}
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-home"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                     <span class="text-xs mt-1">Home</span>
                 </div>
@@ -933,7 +851,8 @@ function loadOffers() {
                 </div>
             </button>
             <button class="tab-item" id="nav-chat" onclick="navigate('chat-list-screen', this)">
-                <div class="flex flex-col items-center p-2">
+                 {/* Il pallino rosso verrà aggiunto qui dal JS */}
+                 <div class="flex flex-col items-center p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     <span class="text-xs mt-1">Chat</span>
                 </div>
@@ -945,15 +864,16 @@ function loadOffers() {
                 </div>
             </button>
         </nav>
-        
+
         <div id="login-screen">
             <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-xs w-full">
-                <h2 class="text-3xl font-bold text-green-600 mb-2">EcoMunity</h2> <p class="text-gray-600 mb-8">Scambio Etico e Comunitario</p> <button onclick="handleAuth()"
-                        class="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <h2 class="text-3xl font-bold text-green-600 mb-2">EcoMunity</h2>
+                <p class="text-gray-600 mb-8">Scambio Etico e Comunitario</p>
+                <button onclick="handleAuth()" class="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                     <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12.24 10.24v3.54h6.08c-.2 1.25-.8 2.22-1.74 2.87-1.12.8-2.67 1.25-4.34 1.25-3.32 0-6.02-2.7-6.02-6.02s2.7-6.02 6.02-6.02c1.76 0 3.3.62 4.54 1.8l2.67-2.67c-1.8-1.7-4.1-2.76-6.42-2.76-4.97 0-9 4.03-9 9s4.03 9 9 9c4.87 0 8.78-3.4 8.78-8.78 0-.9-.08-1.7-.24-2.48h-8.54z" fill-rule="evenodd" clip-rule="evenodd"/></svg>
                     Accedi con Google
                 </button>
-                <p class="text-xs text-gray-400 mt-4">La tua privacy è importante per noi.</p>
+                <p class="text-xs text-gray-400 mt-4">La tua privacy è importante.</p>
             </div>
         </div>
 

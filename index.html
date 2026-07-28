@@ -1,16 +1,282 @@
-  window.setInTrattativa = async function(docId) {
-      if (!confirm("Vuoi mettere questo annuncio in trattativa?")) return;
-      const currentUser = auth.currentUser;
-      if (!currentUser) return alert("Devi essere autenticato.");
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eCommunity App</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .hidden { display: none; }
+        .btn { padding: 10px 15px; margin: 5px 0; border: none; border-radius: 4px; cursor: pointer; background-color: #007bff; color: white; }
+        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn-danger { background-color: #dc3545; }
+        .btn-warning { background-color: #ffc107; color: black; }
+        .card { border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 5px; background: #fff; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; color: white; }
+        .badge-disponibile { background-color: #28a745; }
+        .badge-in_trattativa { background-color: #ffc107; color: black; }
+        .badge-scambiato { background-color: #6c757d; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
 
-      const offerRef = doc(db, "offerte", docId);
-      try {
-          await updateDoc(offerRef, { 
-              status: 'in_trattativa'
-          });
-          alert("Annuncio aggiornato in trattativa!");
-      } catch (e) {
-          console.error("Errore aggiornamento stato: ", e);
-          alert("Impossibile aggiornare lo stato: verifica i permessi o la connessione.");
-      }
-  }
+<div class="container">
+    <!-- BARRA UTENTE E LOGIN -->
+    <div id="auth-section">
+        <div id="user-logged-out">
+            <p>Effettua l'accesso per accedere all'app.</p>
+            <button class="btn" onclick="loginGoogle()">Accedi con Google</button>
+        </div>
+        <div id="user-logged-in" class="hidden">
+            <p>Benvenuto, <strong id="user-name">---</strong>!</p>
+            <button class="btn btn-danger" onclick="logoutGoogle()">Logout</button>
+        </div>
+    </div>
+
+    <hr>
+
+    <!-- SCHERMATA APP (VISIBILE SOLO SE LOGGATI) -->
+    <div id="main-app" class="hidden">
+        <!-- NAVEGAZIONE -->
+        <div style="margin-bottom: 20px;">
+            <button class="btn" id="nav-home" onclick="navigate('home-screen', this)">Bacheca Offerte</button>
+            <button class="btn" id="nav-publish" onclick="navigate('publish-screen', this)">Pubblica Annuncio</button>
+        </div>
+
+        <!-- SEZIONE 1: HOME (ELENCO OFFERTE) -->
+        <div id="home-screen">
+            <h2>Bacheca Offerte</h2>
+            <div id="offers-list">Caricamento in corso...</div>
+        </div>
+
+        <!-- SEZIONE 2: PUBBLICAZIONE -->
+        <div id="publish-screen" class="hidden">
+            <h2>Pubblica un nuovo annuncio</h2>
+            <form id="publish-form" onsubmit="publishOffer(event)">
+                <div class="form-group">
+                    <label for="title">Titolo</label>
+                    <input type="text" id="title" required placeholder="Es. Perforatore per cartongesso">
+                </div>
+                <div class="form-group">
+                    <label for="description">Descrizione</label>
+                    <textarea id="description" rows="3" required placeholder="Descrivi il bene o servizio..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="offer-type">Tipo</label>
+                    <select id="offer-type">
+                        <option value="bene">Bene</option>
+                        <option value="servizio">Servizio</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cp-value">Valore KP</label>
+                    <input type="number" id="cp-value" min="1" value="10" required>
+                </div>
+                <button type="submit" class="btn" id="btn-publish-submit">Pubblica Annuncio</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- SDK FIREBASE (VERSIONE MODULARE 10.x) -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+        getAuth, 
+        GoogleAuthProvider, 
+        signInWithPopup, 
+        signOut, 
+        onAuthStateChanged 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { 
+        getFirestore, 
+        collection, 
+        addDoc, 
+        doc, 
+        updateDoc, 
+        onSnapshot, 
+        query, 
+        orderBy 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // --- CONFIGURAZIONE FIREBASE ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyYOUR_API_KEY_HERE", // La tua API Key
+        authDomain: "ecomunity-app.firebaseapp.com",
+        projectId: "ecomunity-app",
+        storageBucket: "ecomunity-app.appspot.com",
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "YOUR_APP_ID"
+    };
+
+    // Inizializzazione Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Variabile per monitorare lo stato dell'utente
+    let currentUser = null;
+
+    // --- GESTIONE AUTENTICAZIONE IN TEMPO REALE ---
+    onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        const loggedOutDiv = document.getElementById('user-logged-out');
+        const loggedInDiv = document.getElementById('user-logged-in');
+        const mainAppDiv = document.getElementById('main-app');
+
+        if (user) {
+            console.log("Utente Autenticato:", user.uid, user.displayName);
+            document.getElementById('user-name').innerText = user.displayName || user.email;
+            loggedOutDiv.classList.add('hidden');
+            loggedInDiv.classList.remove('hidden');
+            mainAppDiv.classList.remove('hidden');
+            
+            // Carica gli annunci una volta verificato il login
+            listenToOffers();
+        } else {
+            console.warn("Nessun utente autenticato.");
+            loggedOutDiv.classList.remove('hidden');
+            loggedInDiv.classList.add('hidden');
+            mainAppDiv.classList.add('hidden');
+        }
+    });
+
+    // --- LOGIN CON GOOGLE ---
+    window.loginGoogle = async function() {
+        const provider = new GoogleAuthProvider();
+        try {
+            await signInWithPopup(auth, provider);
+        } catch (e) {
+            console.error("Errore durante il Login:", e);
+            alert("Errore Login: " + e.message);
+        }
+    };
+
+    // --- LOGOUT ---
+    window.logoutGoogle = async function() {
+        try {
+            await signOut(auth);
+            alert("Disconnessione effettuata.");
+        } catch (e) {
+            console.error("Errore durante il Logout:", e);
+        }
+    };
+
+    // --- PUBBLICAZIONE ANNUNCIO ---
+    window.publishOffer = async function(event) {
+        event.preventDefault();
+
+        if (!currentUser) {
+            alert("Errore: sessione non valida. Effettua nuovamente il login.");
+            return;
+        }
+
+        const title = document.getElementById('title').value;
+        const description = document.getElementById('description').value;
+        const type = document.getElementById('offer-type').value;
+        const cpValue = parseInt(document.getElementById('cp-value').value, 10);
+
+        const btnSubmit = document.getElementById('btn-publish-submit');
+        btnSubmit.disabled = true;
+
+        try {
+            await addDoc(collection(db, "offerte"), {
+                title: title,
+                description: description,
+                type: type,
+                cpValue: cpValue,
+                ownerId: currentUser.uid,
+                ownerName: currentUser.displayName || "Utente",
+                timestamp: new Date(),
+                status: 'disponibile'
+            });
+
+            alert("Annuncio pubblicato con successo!");
+            document.getElementById('publish-form').reset();
+            window.navigate('home-screen', document.getElementById('nav-home'));
+        } catch (e) {
+            console.error("Errore durante la pubblicazione:", e);
+            alert("Errore Pubblicazione: " + e.message);
+        } finally {
+            btnSubmit.disabled = false;
+        }
+    };
+
+    // --- CAMBIO STATO IN TRATTATIVA ---
+    window.setInTrattativa = async function(docId) {
+        if (!currentUser) {
+            alert("Devi essere autenticato per eseguire questa operazione.");
+            return;
+        }
+
+        if (!confirm("Vuoi impostare questo annuncio in stato 'In Trattativa'?")) return;
+
+        const offerRef = doc(db, "offerte", docId);
+        try {
+            await updateDoc(offerRef, { 
+                status: 'in_trattativa'
+            });
+            alert("Stato aggiornato con successo!");
+        } catch (e) {
+            console.error("Errore aggiornamento stato:", e);
+            alert("Impossibile aggiornare lo stato: " + e.message);
+        }
+    };
+
+    // --- CARICAMENTO IN TEMPO REALE DEGLI ANNUNCI ---
+    function listenToOffers() {
+        const offersList = document.getElementById('offers-list');
+        const q = query(collection(db, "offerte"), orderBy("timestamp", "desc"));
+
+        onSnapshot(q, (snapshot) => {
+            offersList.innerHTML = "";
+            if (snapshot.empty) {
+                offersList.innerHTML = "<p>Nessun annuncio presente al momento.</p>";
+                return;
+            }
+
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                const id = doc.id;
+                
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h3>${escapeHtml(data.title)}</h3>
+                    <p>${escapeHtml(data.description)}</p>
+                    <p><strong>Tipo:</strong> ${data.type} | <strong>Valore:</strong> ${data.cpValue} KP</p>
+                    <p><strong>Pubblicato da:</strong> ${escapeHtml(data.ownerName || 'Anonimo')}</p>
+                    <p><strong>Stato:</strong> <span class="badge badge-${data.status}">${data.status}</span></p>
+                    
+                    ${data.status === 'disponibile' ? `
+                        <button class="btn btn-warning" onclick="setInTrattativa('${id}')">Segna In Trattativa</button>
+                    ` : ''}
+                `;
+                offersList.appendChild(card);
+            });
+        }, (error) => {
+            console.error("Errore lettura offerte:", error);
+            offersList.innerHTML = "<p>Errore di lettura dal database. Controlla le regole Firestore.</p>";
+        });
+    }
+
+    // --- NAVIGAZIONE INTERNA ---
+    window.navigate = function(screenId, btnElement) {
+        document.getElementById('home-screen').classList.add('hidden');
+        document.getElementById('publish-screen').classList.add('hidden');
+        
+        document.getElementById(screenId).classList.remove('hidden');
+    };
+
+    // Funzione utility di sanificazione testuale
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+</script>
+</body>
+</html>

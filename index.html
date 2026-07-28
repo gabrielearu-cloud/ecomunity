@@ -1,4 +1,4 @@
-<html lang="it">
+<meta name='viewport' content='width=device-width, initial-scale=1'/><html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -263,7 +263,12 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
               const messageClass = isMe
                   ? 'self-end bg-[#dcf8c6] text-gray-900 rounded-bl-xl rounded-tl-xl rounded-tr-xl'
                   : 'self-start bg-white text-gray-800 rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100';
-              const timeString = msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+              
+              // Gestione sicura del timestamp in attesa del server
+              let timeString = 'Invio...';
+              if (msg.timestamp && typeof msg.timestamp.toDate === 'function') {
+                  timeString = msg.timestamp.toDate().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+              }
 
               messagesHtml += `
                   <div class="max-w-[75%] p-3 shadow-sm ${messageClass}">

@@ -279,15 +279,26 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   // --- LOGICA ANNUNCI E TRATTATIVE ---
   window.publishOffer = async function(event) {
       event.preventDefault();
-      const title = document.getElementById('title').value;
-      const description = document.getElementById('description').value;
+      
+      const user = auth.currentUser;
+      if (!user) {
+          alert("Devi autenticarti per pubblicare un annuncio.");
+          return;
+      }
+
+      const title = document.getElementById('title').value.trim();
+      const description = document.getElementById('description').value.trim();
       const cpValue = parseInt(document.getElementById('cp-value').value, 10);
+
+      if (!title || !description) {
+          alert("Compila tutti i campi richiesti.");
+          return;
+      }
+
       if (isNaN(cpValue) || cpValue <= 0) {
           alert("Inserisci un valore KP valido.");
           return;
       }
-      const user = auth.currentUser;
-      if (!user) return alert("Devi autenticarti.");
 
       try {
           await addDoc(collection(db, "offerte"), {
@@ -296,7 +307,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
               type: currentOfferType,
               cpValue: cpValue,
               ownerId: user.uid,
-              ownerName: user.displayName,
+              ownerName: user.displayName || user.email || "Utente EcoMunity",
               timestamp: new Date(),
               status: 'disponibile'
           });
@@ -305,7 +316,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           window.navigate('home-screen', document.getElementById('nav-home'));
       } catch (e) {
           console.error("Errore pubblicazione: ", e);
-          alert("Errore durante la pubblicazione.");
+          alert("Errore durante la pubblicazione: " + e.message);
       }
   }
 

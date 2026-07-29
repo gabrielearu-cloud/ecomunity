@@ -301,7 +301,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       }
 
       try {
-          await addDoc(collection(db, "offers"), {
+          await addDoc(collection(db, "offerte"), {
               title: title,
               description: description,
               type: currentOfferType,
@@ -324,7 +324,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       const currentUser = auth.currentUser;
       if (!currentUser || currentUser.uid === offerOwnerId) return alert("Non puoi chattare per il tuo annuncio.");
       
-      const offerRef = doc(db, "offers", offerId);
+      const offerRef = doc(db, "offerte", offerId);
       const offerSnap = await getDoc(offerRef);
       if (!offerSnap.exists()) return alert("Annuncio non trovato.");
       if (offerSnap.data().status === 'in_trattativa') return alert("L'annuncio è attualmente in trattativa.");
@@ -361,7 +361,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       const currentUser = auth.currentUser;
       if (!currentUser) return alert("Devi essere autenticato.");
 
-      const offerRef = doc(db, "offers", docId);
+      const offerRef = doc(db, "offerte", docId);
       try {
           const chatQ = query(
               collection(db, "chats"), 
@@ -389,7 +389,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   window.setDisponibile = async function(docId) {
       if (!confirm("Rendere l'annuncio nuovamente disponibile a tutti?")) return;
-      const offerRef = doc(db, "offers", docId);
+      const offerRef = doc(db, "offerte", docId);
       try {
           await updateDoc(offerRef, { status: 'disponibile', reservedBy: null });
       } catch (e) {
@@ -400,7 +400,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   window.deleteOffer = async function(docId) {
       if (confirm("Sei sicuro di voler eliminare questo annuncio?")) {
           try {
-              await deleteDoc(doc(db, "offers", docId));
+              await deleteDoc(doc(db, "offerte", docId));
               alert("Annuncio eliminato.");
           } catch (e) {
               console.error("Errore eliminazione: ", e);
@@ -420,7 +420,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   window.requestFeedback = async function(docId, cpValue) {
       try {
-          const offerRef = doc(db, "offers", docId);
+          const offerRef = doc(db, "offerte", docId);
           const offerSnap = await getDoc(offerRef);
           if (!offerSnap.exists()) return alert("Annuncio non trovato.");
 
@@ -444,7 +444,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
       if (!user || !docId) return alert("Errore nei dati.");
 
-      const offerRef = doc(db, "offers", docId);
+      const offerRef = doc(db, "offerte", docId);
       const offerSnap = await getDoc(offerRef);
 
       if (!offerSnap.exists() || offerSnap.data().ownerId !== user.uid) {
@@ -676,7 +676,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       if (!itemListBene || !itemListServizio) return; 
 
       const q = query(
-          collection(db, "offers"),
+          collection(db, "offerte"),
           where("status", "!=", "concluso"), 
           orderBy("timestamp", "desc")
       );
@@ -779,9 +779,10 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   .screen:not(.active) { display: none; }
   .screen {
     display: flex; flex-direction: column;
-    min-height: calc(100vh - 64px);
-    padding-bottom: 80px;
+    height: calc(100vh - 56px - 64px);
+    overflow-y: auto; padding-bottom: 20px;
   }
+  #home-screen { height: calc(100vh - 56px - 64px); }
   #chat-screen {
     display: none; position: fixed; top: 0; left: 0;
     width: 100%; height: 100%; background-color: white;
@@ -799,14 +800,9 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   }
   #tab-bar {
       position: fixed; bottom: 0; left: 0; right: 0;
-      max-width: 28rem; margin: 0 auto;
-      border-top: 1px solid #e5e7eb; z-index: 30;
+      border-top: 1px solid #e5e7eb; z-index: 10;
   }
-  #app-header { 
-    position: fixed; top: 0; left: 0; right: 0; 
-    max-width: 28rem; margin: 0 auto; 
-    z-index: 30; height: 57px; 
-  }
+  #app-header { position: sticky; top: 0; z-index: 10; }
   #tab-bar .tab-item > div { position: relative; }
   .unread-indicator { display: none; }
 
@@ -827,22 +823,20 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         <p class="mt-4 text-gray-700">Caricamento EcoMunity...</p>
     </div>
 
-    <div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg relative">
+    <div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg">
 
-        <!-- BANNER ECOMUNITY FISSO IN ALTO -->
-        <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center shadow-sm">
+        <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
             <h1 class="text-xl font-bold text-green-600">EcoMunity</h1>
             <button onclick="handleLogout()" class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-1 rounded-full shadow-md">
                 Logout
             </button>
         </header>
 
-        <!-- PADDING-TOP PER EVITARE SOVRAPPOSIZIONI CON I BANNER FISSI -->
-        <main class="h-full overflow-y-auto pt-[105px]">
+        <main class="h-full overflow-y-auto pb-16">
 
             <section id="home-screen" class="screen active">
-                <!-- BANNER SALDO KARMA FISSO SOTTO L'HEADER ECOMUNITY -->
-                <div class="fixed top-[57px] left-0 right-0 max-w-md mx-auto z-20 bg-gray-800 text-white px-4 py-2 shadow-md flex justify-between items-center">
+                <!-- WIDGET PUNTI KARMA FISSO, COMPATTO E A TINTA UNITA (GRIGIO SCURO/ARDESIA) -->
+                <div class="sticky top-0 z-20 bg-gray-800 text-white px-4 py-2 shadow-md flex justify-between items-center">
                     <div>
                         <span class="text-xs text-gray-400 font-medium mr-1.5">Saldo Karma:</span>
                         <span id="home-karma-widget" class="text-base font-bold text-emerald-400">-- KP</span>

@@ -596,7 +596,8 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   function loadProfileData(userId) {
       const profileDataContainer = document.getElementById('profile-data');
-      if (!profileDataContainer) return;
+      const homeKarmaWidget = document.getElementById('home-karma-widget');
+      if (!profileDataContainer && !homeKarmaWidget) return;
       const userRef = doc(db, "users", userId);
 
       onSnapshot(userRef, (docSnap) => {
@@ -613,6 +614,11 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           const userData = docSnap.data();
           const karma = userData.karmaPoints || 0;
           const completedSwaps = userData.completedSwaps || 0;
+
+          // Aggiorna widget in Home
+          if (homeKarmaWidget) {
+              homeKarmaWidget.textContent = `${karma} KP`;
+          }
 
           const levelThresholds = [0, 150, 300, 500, 1000];
           let currentLevel = 1, currentLevelKP = 0, nextLevelKP = 150;
@@ -631,27 +637,29 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
           let newKpBadgeHtml = hasNewProfileUpdate ? '<span class="new-kp-badge ml-2 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full animate-pulse">NOVITÀ</span>' : '';
           
-          profileDataContainer.innerHTML = `
-              <div class="mb-6">
-                  <div class="flex justify-between items-center mb-1">
-                      <span class="text-base font-semibold text-green-600">Livello ${currentLevel}</span>
-                      <span class="text-sm text-gray-500">${progressText}</span>
+          if (profileDataContainer) {
+              profileDataContainer.innerHTML = `
+                  <div class="mb-6">
+                      <div class="flex justify-between items-center mb-1">
+                          <span class="text-base font-semibold text-green-600">Livello ${currentLevel}</span>
+                          <span class="text-sm text-gray-500">${progressText}</span>
+                      </div>
+                      <div class="w-full bg-gray-200 rounded-full h-2.5">
+                          <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercentage}%"></div>
+                      </div>
                   </div>
-                  <div class="w-full bg-gray-200 rounded-full h-2.5">
-                      <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercentage}%"></div>
+                  <p class="text-3xl font-bold text-gray-900 flex items-center justify-center">
+                      ${karma} ${newKpBadgeHtml}
+                  </p>
+                  <p class="text-sm text-gray-500 mb-4">Punti Karma (KP)</p>
+                  <div class="flex justify-around w-full mt-4">
+                      <div class="text-center">
+                          <p class="text-xl font-semibold text-gray-700">${completedSwaps}</p>
+                          <p class="text-xs text-gray-500">Scambi Completati</p>
+                      </div>
                   </div>
-              </div>
-              <p class="text-3xl font-bold text-gray-900 flex items-center justify-center">
-                  ${karma} ${newKpBadgeHtml}
-              </p>
-              <p class="text-sm text-gray-500 mb-4">Punti Karma (KP)</p>
-              <div class="flex justify-around w-full mt-4">
-                  <div class="text-center">
-                      <p class="text-xl font-semibold text-gray-700">${completedSwaps}</p>
-                      <p class="text-xs text-gray-500">Scambi Completati</p>
-                  </div>
-              </div>
-          `;
+              `;
+          }
           document.getElementById('profile-name-header').textContent = userData.displayName || auth.currentUser.displayName;
       });
   }
@@ -823,6 +831,17 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         <main class="h-full overflow-y-auto pb-16">
 
             <section id="home-screen" class="screen active">
+                <!-- WIDGET PUNTI KARMA IN ALTO SULLA HOME -->
+                <div class="bg-gradient-to-r from-green-600 to-emerald-700 text-white p-4 mx-4 mt-4 rounded-xl shadow-md flex justify-between items-center">
+                    <div>
+                        <p class="text-xs uppercase tracking-wider text-green-100 font-medium">I tuoi Punti Karma</p>
+                        <p id="home-karma-widget" class="text-2xl font-bold mt-0.5">-- KP</p>
+                    </div>
+                    <button onclick="navigate('profile-screen', document.getElementById('nav-profile'))" class="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+                        Dettagli &rarr;
+                    </button>
+                </div>
+
                 <div class="p-4 border-b border-gray-200">
                     <h2 class="text-xl font-semibold text-gray-800">Annunci</h2>
                     <div class="flex mt-4 bg-gray-100 rounded-lg p-1 space-x-1 shadow-md">

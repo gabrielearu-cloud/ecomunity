@@ -357,7 +357,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   }
 
   window.setInTrattativa = async function(docId) {
-      if (!confirm("Vuoi mettere questo annuncio in trattativa? Nessun altro utente potrà avviarne una nuova.")) return;
+      if (!confirm("Vuoi mettere questo annuncio in trattativa?")) return;
       const currentUser = auth.currentUser;
       if (!currentUser) return alert("Devi essere autenticato.");
 
@@ -365,13 +365,16 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       try {
           const chatQ = query(
               collection(db, "chats"), 
-              where("offerId", "==", docId),
-              where("users", "array-contains", currentUser.uid)
+              where("offerId", "==", docId)
           );
           const chatSnap = await getDocs(chatQ);
           let presumedBuyer = null;
+          
           if (!chatSnap.empty) {
-              presumedBuyer = chatSnap.docs[0].data().buyerId;
+              const chatData = chatSnap.docs[0].data();
+              if (chatData.users) {
+                  presumedBuyer = chatData.users.find(uid => uid !== currentUser.uid) || null;
+              }
           }
 
           await updateDoc(offerRef, { 
@@ -380,7 +383,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           });
       } catch (e) {
           console.error("Errore aggiornamento stato: ", e);
-          alert("Impossibile aggiornare lo stato: verifica di essere il proprietario dell'annuncio.");
+          alert("Impossibile aggiornare lo stato: " + e.message);
       }
   }
 
@@ -615,7 +618,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           const karma = userData.karmaPoints || 0;
           const completedSwaps = userData.completedSwaps || 0;
 
-          // Aggiorna widget saldo in Home
           if (homeKarmaWidget) {
               homeKarmaWidget.textContent = `${karma} KP`;
           }

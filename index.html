@@ -833,13 +833,13 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         <main class="h-full overflow-y-auto pb-16">
 
             <section id="home-screen" class="screen active">
-                <!-- WIDGET PUNTI KARMA IN ALTO SULLA HOME -->
-                <div class="bg-gradient-to-r from-green-600 to-emerald-700 text-white p-4 mx-4 mt-4 rounded-xl shadow-md flex justify-between items-center">
+                <!-- WIDGET PUNTI KARMA FISSO, COMPATTO E A TINTA UNITA -->
+                <div class="sticky top-0 z-20 bg-slate-800 text-white px-4 py-2.5 shadow-sm flex justify-between items-center">
                     <div>
-                        <p class="text-xs uppercase tracking-wider text-green-100 font-medium">Il tuo Saldo Karma</p>
-                        <p id="home-karma-widget" class="text-2xl font-bold mt-0.5">-- KP</p>
+                        <span class="text-xs text-slate-300 font-medium mr-2">Saldo Karma:</span>
+                        <span id="home-karma-widget" class="text-lg font-bold text-emerald-400">-- KP</span>
                     </div>
-                    <button onclick="navigate('profile-screen', document.getElementById('nav-profile'))" class="bg-white/25 hover:bg-white/35 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+                    <button onclick="navigate('profile-screen', document.getElementById('nav-profile'))" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded transition">
                         Profilo &rarr;
                     </button>
                 </div>
@@ -977,7 +977,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                     <span class="font-medium">Eccellente</span>
                     <span class="ml-auto text-xs font-bold">+15 KP</span>
                 </button>
-                <button onclick="submitFeedback('corretto')" class="w-full flex items-center justify-start p-3 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-800">
+                <button onclick="submitFeedback('corretto')" class="w-full flex items-center justify-start p-3 rounded-lg bg-blue-100 hover:bg-green-200 text-blue-800">
                     <span class="font-medium">Corretto</span>
                     <span class="ml-auto text-xs font-bold">+10 KP</span>
                 </button>

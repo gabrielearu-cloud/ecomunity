@@ -276,6 +276,33 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       window.navigate(screenId, element);
   }
 
+  // --- FUNZIONE ELIMINAZIONE CHAT ---
+  window.deleteChat = async function(event, chatId) {
+      event.stopPropagation(); // Evita che si apra la chat cliccando sul pulsante elimina
+      if (!confirm("Sei sicuro di voler eliminare questa chat?")) return;
+
+      try {
+          // Opzionale: se desideri eliminare anche i messaggi interni alla sub-collection prima di cancellare il documento principale
+          const messagesRef = collection(db, "chats", chatId, "messages");
+          const messagesSnapshot = await getDocs(messagesRef);
+          const deletePromises = messagesSnapshot.docs.map(msgDoc => deleteDoc(doc(db, "chats", chatId, "messages", msgDoc.id)));
+          await Promise.all(deletePromises);
+
+          // Elimina il documento della chat principale
+          await deleteDoc(doc(db, "chats", chatId));
+
+          // Aggiorna array locali per notifiche e UI
+          unreadChatIds = unreadChatIds.filter(id => id !== chatId);
+          hasUnreadMessages = unreadChatIds.length > 0;
+          updateChatTabIndicator();
+
+          alert("Chat eliminata con successo.");
+      } catch (e) {
+          console.error("Errore durante l'eliminazione della chat: ", e);
+          alert("Impossibile eliminare la chat.");
+      }
+  }
+
   // --- LOGICA ANNUNCI E TRATTATIVE ---
   window.publishOffer = async function(event) {
       event.preventDefault();
@@ -550,6 +577,9 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                   <div class="ml-4 flex flex-col items-end">
                       <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${statusText}</span>
                       <span class="text-xs text-gray-400 mt-1">${chat.lastMessageTimestamp?.toDate ? chat.lastMessageTimestamp.toDate().toLocaleDateString('it-IT') : ''}</span>
+                      <button onclick="deleteChat(event, '${chatId}')" title="Elimina chat" class="mt-2 text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                      </button>
                   </div>
               </div>
           `;

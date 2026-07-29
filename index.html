@@ -33,7 +33,7 @@
         // 1. IMPORTAZIONE SDK FIREBASE
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         // 2. CONFIGURAZIONE FIREBASE (INSERISCI I TUOI DATI QUI)
         const firebaseConfig = {
@@ -66,7 +66,7 @@
             
             // Listener Offerte
             unsubscribeOffers = onSnapshot(collection(db, "offers"), (snapshot) => {
-                console.log("Dati OFFERTE letti/aggiornati correttamente!");
+                console.log("Dati OFFRETE letti/aggiornati correttamente!");
             }, (error) => {
                 console.error("Errore listener offerte:", error);
             });
@@ -114,7 +114,8 @@
         // 6. GESTIONE LOGOUT
         btnLogout.addEventListener('click', async () => {
             try {
-                // FONDAMENTALE: Ferma i listener PRIMA di eseguire il signOut
+                // FONDAMENTALE: Ferma i listener PRIMA di eseguire il signOut 
+                // per evitare l'errore "Missing or insufficient permissions"
                 stopListeners();
                 
                 await signOut(auth);
@@ -138,11 +139,11 @@
             const offerText = document.getElementById('offerText').value;
             const user = auth.currentUser;
 
-            // CONTROLLO FONDAMENTALE: Verifica presenza utente
+            // CONTROLLO FONDAMENTALE: Verifica presenza utente prima di scrivere sul DB
             if (!user) {
                 console.error("Devi effettuare l'accesso per pubblicare un'offerta.");
                 alert("Devi effettuare l'accesso per pubblicare un'offerta.");
-                return;
+                return; // Interrompe l'esecuzione della funzione
             }
 
             if (!offerText.trim()) return;
@@ -151,7 +152,7 @@
                 await addDoc(collection(db, "offers"), {
                     text: offerText,
                     userId: user.uid,
-                    timestamp: serverTimestamp() // Usiamo l'orario del server Firebase per sicurezza
+                    timestamp: new Date()
                 });
                 console.log("Offerta pubblicata con successo!");
                 document.getElementById('offerText').value = ''; // Svuota input

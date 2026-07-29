@@ -615,7 +615,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           const karma = userData.karmaPoints || 0;
           const completedSwaps = userData.completedSwaps || 0;
 
-          // Aggiorna widget in Home
+          // Aggiorna widget saldo in Home
           if (homeKarmaWidget) {
               homeKarmaWidget.textContent = `${karma} KP`;
           }
@@ -725,13 +725,15 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                         <div class="p-3 rounded-full ${typeColor} text-white mr-3 shadow-sm">${iconSvg}</div>
                         <div class="flex-1">
                             <h3 class="text-lg font-semibold text-gray-800">${offer.title}</h3>
-                            <div class="mt-1">${statusTag}</div>
+                            <div class="mt-1 flex items-center justify-between">
+                                ${statusTag}
+                                <span class="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">💰 Costo: ${cpValue} KP</span>
+                            </div>
                         </div>
                     </div>
                     <div>
                         <p class="text-sm text-gray-600">${offer.description}</p>
                         <p class="text-xs text-gray-400 mt-2">Offerto da: <span class="font-medium text-gray-500">${offer.ownerName}</span></p>
-                        <p class="text-sm font-bold text-yellow-600 mt-2 flex items-center">Valore: ${cpValue} KP</p>
                         ${ownerButtons}
                     </div>
                     ${actionButton}
@@ -834,11 +836,11 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                 <!-- WIDGET PUNTI KARMA IN ALTO SULLA HOME -->
                 <div class="bg-gradient-to-r from-green-600 to-emerald-700 text-white p-4 mx-4 mt-4 rounded-xl shadow-md flex justify-between items-center">
                     <div>
-                        <p class="text-xs uppercase tracking-wider text-green-100 font-medium">I tuoi Punti Karma</p>
+                        <p class="text-xs uppercase tracking-wider text-green-100 font-medium">Il tuo Saldo Karma</p>
                         <p id="home-karma-widget" class="text-2xl font-bold mt-0.5">-- KP</p>
                     </div>
-                    <button onclick="navigate('profile-screen', document.getElementById('nav-profile'))" class="bg-white/20 hover:bg-white/30 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
-                        Dettagli &rarr;
+                    <button onclick="navigate('profile-screen', document.getElementById('nav-profile'))" class="bg-white/25 hover:bg-white/35 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+                        Profilo &rarr;
                     </button>
                 </div>
 

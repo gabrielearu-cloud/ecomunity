@@ -3,121 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Firebase - Offerte e Chat Sicure</title>
+    <title>App Firebase - Offerte e Chat</title>
     <style>
-        /* Stili di base per un'interfaccia pulita */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7f6;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        h1 { color: #2c3e50; }
-        .container {
-            width: 100%;
-            max-width: 800px;
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .hidden { display: none !important; }
-        .flex-between {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-        button {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.3s;
-        }
-        button:hover { background-color: #2980b9; }
-        #btnLogout { background-color: #e74c3c; }
-        #btnLogout:hover { background-color: #c0392b; }
-        
-        .section-title { margin-top: 20px; color: #34495e; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
-        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
-        input[type="text"] {
-            flex-grow: 1;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .data-box {
-            background: #f9f9f9;
-            border: 1px solid #e0e0e0;
-            padding: 10px;
-            height: 150px;
-            overflow-y: auto;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-        .item { padding: 5px 0; border-bottom: 1px dashed #ccc; }
-        .item:last-child { border-bottom: none; }
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .hidden { display: none; }
+        .section { border: 1px solid #ccc; padding: 15px; margin-top: 15px; border-radius: 5px; }
+        button { cursor: pointer; padding: 8px 12px; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <!-- Header con gestione Login/Logout -->
-        <div class="flex-between">
-            <h2>Pannello Utente</h2>
-            <div>
-                <span id="userStatus" style="margin-right: 15px; font-weight: bold; color: #7f8c8d;">Non connesso</span>
-                <button id="btnLogin">Accedi (Anonimo)</button>
-                <button id="btnLogout" class="hidden">Esci</button>
-            </div>
-        </div>
+    <h2>Gestione Firebase: Chat e Offerte</h2>
 
-        <!-- Sezione principale visibile solo agli utenti loggati -->
-        <div id="app-content" class="hidden">
-            
-            <!-- Sezione Offerte -->
-            <h3 class="section-title">Offerte</h3>
-            <div class="input-group">
-                <input type="text" id="offerInput" placeholder="Scrivi una nuova offerta...">
-                <button id="btnPublishOffer">Pubblica Offerta</button>
-            </div>
-            <div id="offersList" class="data-box">
-                <!-- Le offerte appariranno qui -->
-                <em>In attesa di offerte...</em>
-            </div>
-
-            <!-- Sezione Chat -->
-            <h3 class="section-title">Chat Globale</h3>
-            <div class="input-group">
-                <input type="text" id="chatInput" placeholder="Scrivi un messaggio...">
-                <button id="btnSendChat">Invia Messaggio</button>
-            </div>
-            <div id="chatList" class="data-box">
-                <!-- I messaggi appariranno qui -->
-                <em>In attesa di messaggi...</em>
-            </div>
-
-        </div>
+    <!-- Sezione UI -->
+    <div class="section">
+        <button id="btnLogin">Accedi (Simula Login)</button>
+        <button id="btnLogout" class="hidden">Esci (Logout)</button>
     </div>
 
-    <!-- Modulo Firebase Completo e Definitivo -->
+    <div id="app-section" class="section hidden">
+        <h3>Pubblica un'offerta</h3>
+        <input type="text" id="offerText" placeholder="Scrivi la tua offerta...">
+        <button id="btnPublish">Pubblica Offerta</button>
+        <p><small><i>Apri la console (F12) per vedere il corretto funzionamento dei Listener e degli aggiornamenti in tempo reale.</i></small></p>
+    </div>
+
+    <!-- Modulo Firebase -->
     <script type="module">
         // 1. IMPORTAZIONE SDK FIREBASE
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // 2. CONFIGURAZIONE FIREBASE (SOSTITUISCI CON I TUOI DATI)
+        // 2. CONFIGURAZIONE FIREBASE (INSERISCI I TUOI DATI QUI)
         const firebaseConfig = {
             apiKey: "INSERISCI_LA_TUA_API_KEY",
             authDomain: "INSERISCI_IL_TUO_AUTH_DOMAIN",
@@ -127,156 +45,121 @@
             appId: "INSERISCI_IL_TUO_APP_ID"
         };
 
+        // Inizializzazione servizi
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // 3. VARIABILI PER LA GESTIONE SICURA DEI LISTENER
-        let unsubscribeOffers = null;
+        // 3. VARIABILI GLOBALI PER I LISTENER
         let unsubscribeChat = null;
+        let unsubscribeOffers = null;
 
         // Elementi DOM
         const btnLogin = document.getElementById('btnLogin');
         const btnLogout = document.getElementById('btnLogout');
-        const userStatus = document.getElementById('userStatus');
-        const appContent = document.getElementById('app-content');
-        
-        const btnPublishOffer = document.getElementById('btnPublishOffer');
-        const offerInput = document.getElementById('offerInput');
-        const offersList = document.getElementById('offersList');
-        
-        const btnSendChat = document.getElementById('btnSendChat');
-        const chatInput = document.getElementById('chatInput');
-        const chatList = document.getElementById('chatList');
+        const btnPublish = document.getElementById('btnPublish');
+        const appSection = document.getElementById('app-section');
 
-        // 4. FUNZIONI PER AVVIARE E FERMARE I LISTENER
+        // 4. FUNZIONI DI GESTIONE LISTENER
         function startListeners() {
-            // Listener Offerte (Ordinate per data)
-            const qOffers = query(collection(db, "offers"), orderBy("timestamp", "desc"));
-            unsubscribeOffers = onSnapshot(qOffers, (snapshot) => {
-                offersList.innerHTML = '';
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    offersList.innerHTML += `<div class="item"><strong>User:</strong> ${data.text}</div>`;
-                });
+            console.log("Avvio dei listener per chat e offerte...");
+            
+            // Listener Offerte
+            unsubscribeOffers = onSnapshot(collection(db, "offers"), (snapshot) => {
+                console.log("Dati OFFRETE letti/aggiornati correttamente!");
             }, (error) => {
-                console.error("Errore lettura offerte:", error);
+                console.error("Errore listener offerte:", error);
             });
 
-            // Listener Chat (Ordinate per data)
-            const qChat = query(collection(db, "chats"), orderBy("timestamp", "asc"));
-            unsubscribeChat = onSnapshot(qChat, (snapshot) => {
-                chatList.innerHTML = '';
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    chatList.innerHTML += `<div class="item"><strong>User:</strong> ${data.message}</div>`;
-                });
-                chatList.scrollTop = chatList.scrollHeight; // Auto-scroll verso il basso
+            // Listener Chat
+            unsubscribeChat = onSnapshot(collection(db, "chats"), (snapshot) => {
+                console.log("Dati CHAT letti/aggiornati correttamente!");
             }, (error) => {
-                console.error("Errore lettura chat:", error);
+                console.error("Errore listener chat:", error);
             });
         }
 
         function stopListeners() {
-            // FONDAMENTALE: Previene l'errore "Missing or insufficient permissions"
+            // Esegue l'unsubscribe e svuota le variabili
             if (unsubscribeOffers) {
                 unsubscribeOffers();
                 unsubscribeOffers = null;
+                console.log("Listener offerte fermato.");
             }
             if (unsubscribeChat) {
                 unsubscribeChat();
                 unsubscribeChat = null;
+                console.log("Listener chat fermato.");
             }
         }
 
         // 5. OSSERVATORE STATO AUTENTICAZIONE
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                // UI Utente Loggato
+                // Utente Loggato
                 btnLogin.classList.add('hidden');
                 btnLogout.classList.remove('hidden');
-                appContent.classList.remove('hidden');
-                userStatus.textContent = `Connesso: ${user.uid.substring(0, 6)}...`;
-                userStatus.style.color = "#27ae60";
+                appSection.classList.remove('hidden');
                 
-                startListeners(); // Avvia i listener in sicurezza
+                // Avvia i listener SOLO quando siamo sicuri che l'utente è loggato
+                startListeners();
             } else {
-                // UI Utente Disconnesso
+                // Utente Disconnesso
                 btnLogin.classList.remove('hidden');
                 btnLogout.classList.add('hidden');
-                appContent.classList.add('hidden');
-                userStatus.textContent = "Non connesso";
-                userStatus.style.color = "#7f8c8d";
+                appSection.classList.add('hidden');
             }
         });
 
-        // 6. GESTIONE LOGIN E LOGOUT
-        btnLogin.addEventListener('click', async () => {
-            try {
-                await signInAnonymously(auth);
-            } catch (error) {
-                console.error("Errore di login:", error);
-                alert("Errore di connessione. Controlla la console.");
-            }
-        });
-
+        // 6. GESTIONE LOGOUT
         btnLogout.addEventListener('click', async () => {
             try {
-                stopListeners(); // FERMA I LISTENER PRIMA DEL LOGOUT
+                // FONDAMENTALE: Ferma i listener PRIMA di eseguire il signOut 
+                // per evitare l'errore "Missing or insufficient permissions"
+                stopListeners();
+                
                 await signOut(auth);
+                console.log("Logout effettuato con successo.");
             } catch (error) {
                 console.error("Errore durante il logout:", error);
             }
         });
 
-        // 7. GESTIONE PUBBLICAZIONE (CON CONTROLLI DI SICUREZZA)
-        btnPublishOffer.addEventListener('click', async () => {
-            const text = offerInput.value.trim();
+        // Simula il login (accesso anonimo per facilità di test)
+        btnLogin.addEventListener('click', async () => {
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Errore di login:", error);
+            }
+        });
+
+        // 7. GESTIONE PUBBLICAZIONE OFFERTE
+        btnPublish.addEventListener('click', async () => {
+            const offerText = document.getElementById('offerText').value;
             const user = auth.currentUser;
 
+            // CONTROLLO FONDAMENTALE: Verifica presenza utente prima di scrivere sul DB
             if (!user) {
-                alert("Errore di sicurezza: Devi essere autenticato per pubblicare.");
-                return;
+                console.error("Devi effettuare l'accesso per pubblicare un'offerta.");
+                alert("Devi effettuare l'accesso per pubblicare un'offerta.");
+                return; // Interrompe l'esecuzione della funzione
             }
-            if (!text) return;
+
+            if (!offerText.trim()) return;
 
             try {
-                // L'UID viene inviato per rispettare le regole di sicurezza Firestore
                 await addDoc(collection(db, "offers"), {
-                    text: text,
+                    text: offerText,
                     userId: user.uid,
-                    timestamp: serverTimestamp()
+                    timestamp: new Date()
                 });
-                offerInput.value = '';
+                console.log("Offerta pubblicata con successo!");
+                document.getElementById('offerText').value = ''; // Svuota input
             } catch (error) {
-                console.error("Errore pubblicazione offerta:", error);
-                alert("Impossibile pubblicare l'offerta. Controlla i permessi.");
+                console.error("Errore durante la pubblicazione dell'offerta:", error);
             }
         });
-
-        btnSendChat.addEventListener('click', async () => {
-            const message = chatInput.value.trim();
-            const user = auth.currentUser;
-
-            if (!user) {
-                alert("Errore di sicurezza: Devi essere autenticato per inviare messaggi.");
-                return;
-            }
-            if (!message) return;
-
-            try {
-                await addDoc(collection(db, "chats"), {
-                    message: message,
-                    userId: user.uid,
-                    timestamp: serverTimestamp()
-                });
-                chatInput.value = '';
-            } catch (error) {
-                console.error("Errore invio messaggio:", error);
-                alert("Impossibile inviare il messaggio. Controlla i permessi.");
-            }
-        });
-
     </script>
 </body>
 </html>

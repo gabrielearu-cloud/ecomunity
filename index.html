@@ -4,13 +4,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EcoMunity - Scambio Etico e Comunitario</title>
 <script type="module">
-  // --- 1. IMPORTAZIONI COMPLETE FIREBASE ---
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-  import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy, getDocs }
-from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+  // --- 1. IMPORTAZIONI COMPLETE FIREBASE (Versione corretta 10.12.2) ---
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-  // Configurazione Firebase
+  // Configurazione Firebase (Mantieni i tuoi dati)
   const firebaseConfig = {
     apiKey: "AIzaSyCTwU75eJLGpuz5jw_gkhHdgYrHUkN__AY",
     authDomain: "ecomunity-app.firebaseapp.com",
@@ -35,7 +34,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   let hasNewProfileUpdate = false;
 
   // --- FUNZIONI DI GESTIONE UI ---
-
   function switchScreen(screenId) {
     document.querySelectorAll('.screen').forEach(screen => {
       screen.classList.remove('active');
@@ -180,6 +178,12 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         if (profileNameHeader) {
             profileNameHeader.textContent = user.displayName || "Utente EcoMunity";
         }
+        
+        loadOffers();
+        loadChatList();
+        loadProfileData(user.uid);
+        switchScreen('home-screen');
+        document.getElementById('nav-home')?.classList.add('active');
     } else {
         document.getElementById('login-screen').style.display = 'flex';
         document.getElementById('app-header').style.display = 'none';
@@ -220,7 +224,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       try {
           await addDoc(collection(db, "chats", chatId, "messages"), {
               senderId: currentUser.uid,
-              senderName: currentUser.displayName,
+              senderName: currentUser.displayName || 'Utente',
               text: messageText,
               timestamp: new Date()
           });
@@ -278,7 +282,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   // --- FUNZIONE ELIMINAZIONE CHAT ---
   window.deleteChat = async function(event, chatId) {
-      if (event) event.stopPropagation(); // Evita l'apertura della chat al click sul pulsante elimina
+      if (event) event.stopPropagation(); 
       if (!confirm("Sei sicuro di voler eliminare questa chat?")) return;
 
       try {
@@ -588,7 +592,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       const currentUser = auth.currentUser;
       if (!currentUser) return;
       
-      // Query semplificata per evitare conflitti di indici composti Firestore
       const q = query(
           collection(db, "chats"),
           where("users", "array-contains", currentUser.uid)
@@ -605,7 +608,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           }
           let newMessagesAdded = false; 
           snapshot.docChanges().forEach((change) => {
-            if (change.type === "modified" && !change.doc.metadata.hasPendingWrites) {
+            if (change.type === "modified") {
                 const chatScreenVisible = document.getElementById('chat-screen').style.display === 'flex';
                 const changedChatId = change.doc.id;
                 let isViewingThisChat = chatScreenVisible && currentChatId === changedChatId;
@@ -704,7 +707,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       const emptyServizio = document.getElementById('empty-servizio');
       if (!itemListBene || !itemListServizio) return; 
 
-      // Query ordinata per data (il filtro sugli annunci conclusi viene applicato nel ciclo)
       const q = query(
           collection(db, "offerte"),
           orderBy("timestamp", "desc")
@@ -714,7 +716,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           let beniHtml = '', serviziHtml = '';
           querySnapshot.forEach((doc) => {
               const offer = doc.data();
-              if (offer.status === 'concluso') return; // ignora gli annunci già conclusi
+              if (offer.status === 'concluso') return; 
 
               const docId = doc.id;
               const cpValue = offer.cpValue || 10;
@@ -782,27 +784,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           console.error("Errore listener offerte:", error);
       });
   }
-
-  // --- INIZIALIZZAZIONE ---
-  onAuthStateChanged(auth, (user) => {
-      if (user) {
-          if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                loadOffers();
-                loadChatList();
-                loadProfileData(user.uid);
-                switchScreen('home-screen');
-                document.getElementById('nav-home')?.classList.add('active');
-            });
-          } else {
-                loadOffers();
-                loadChatList();
-                loadProfileData(user.uid);
-                switchScreen('home-screen');
-                document.getElementById('nav-home')?.classList.add('active');
-          }
-      }
-  });
 </script>
 
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
@@ -848,7 +829,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 </head>
 
 <body class="bg-gray-50 font-sans">
-
     <div id="loading-screen">
         <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
         <p class="mt-4 text-gray-700">Caricamento EcoMunity...</p>
@@ -864,7 +844,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         </header>
 
         <main class="h-full overflow-y-auto pb-16">
-
             <section id="home-screen" class="screen active">
                 <div class="sticky top-0 z-20 bg-gray-800 text-white px-4 py-2 shadow-md flex justify-between items-center">
                     <div>
@@ -938,7 +917,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                     <button onclick="handleLogout()" class="w-full flex justify-center py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700"> Logout </button>
                 </div>
             </section>
-
         </main>
 
         <div id="chat-screen">
@@ -996,7 +974,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                 </button>
             </div>
         </div>
-
     </div>
     
     <div id="feedback-modal" data-doc-id="" data-cp-value="">
@@ -1024,6 +1001,5 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
             </button>
         </div>
     </div>
-
 </body>
 </html>

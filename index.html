@@ -278,20 +278,17 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
 
   // --- FUNZIONE ELIMINAZIONE CHAT ---
   window.deleteChat = async function(event, chatId) {
-      event.stopPropagation(); // Evita che si apra la chat cliccando sul pulsante elimina
+      if (event) event.stopPropagation(); // Evita l'apertura della chat al click sul pulsante elimina
       if (!confirm("Sei sicuro di voler eliminare questa chat?")) return;
 
       try {
-          // Opzionale: se desideri eliminare anche i messaggi interni alla sub-collection prima di cancellare il documento principale
           const messagesRef = collection(db, "chats", chatId, "messages");
           const messagesSnapshot = await getDocs(messagesRef);
           const deletePromises = messagesSnapshot.docs.map(msgDoc => deleteDoc(doc(db, "chats", chatId, "messages", msgDoc.id)));
           await Promise.all(deletePromises);
 
-          // Elimina il documento della chat principale
           await deleteDoc(doc(db, "chats", chatId));
 
-          // Aggiorna array locali per notifiche e UI
           unreadChatIds = unreadChatIds.filter(id => id !== chatId);
           hasUnreadMessages = unreadChatIds.length > 0;
           updateChatTabIndicator();
@@ -564,7 +561,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
               : '<span class="block h-2.5 w-2.5 mr-3 flex-shrink-0"></span>'; 
 
           chatHtml += `
-              <div onclick="openChat('${chatId}', '${chat.offerTitle.replace(/'/g, "\\'")}')"
+              <div onclick="openChat('${chatId}', '${chat.offerTitle ? chat.offerTitle.replace(/'/g, "\\'") : 'Chat'}')"
                    class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${rowBgClass}">
                   ${unreadIndicatorHtml}
                   <div class="flex-shrink-0 mr-3">
@@ -572,7 +569,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
                   </div>
                   <div class="flex-1 min-w-0">
                       <p class="text-sm ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'} truncate">${chatDisplayName}</p>
-                      <p class="text-xs ${isUnread ? 'text-gray-700' : 'text-gray-500'} truncate mt-0.5">${chat.lastMessage}</p>
+                      <p class="text-xs ${isUnread ? 'text-gray-700' : 'text-gray-500'} truncate mt-0.5">${chat.lastMessage || ''}</p>
                   </div>
                   <div class="ml-4 flex flex-col items-end">
                       <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${statusText}</span>
@@ -590,11 +587,13 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
   function loadChatList() {
       const currentUser = auth.currentUser;
       if (!currentUser) return;
+      
+      // Query semplificata per evitare conflitti di indici composti Firestore
       const q = query(
           collection(db, "chats"),
-          where("users", "array-contains", currentUser.uid),
-          orderBy("lastMessageTimestamp", "desc")
+          where("users", "array-contains", currentUser.uid)
       );
+      
       onSnapshot(q, (snapshot) => {
           allChatsData = snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
           if (snapshot.empty) {
@@ -636,7 +635,7 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       onSnapshot(userRef, (docSnap) => {
           if (!docSnap.exists()) {
               setDoc(userRef, {
-                  displayName: auth.currentUser.displayName, 
+                  displayName: auth.currentUser.displayName || "Utente EcoMunity", 
                   email: auth.currentUser.email,
                   karmaPoints: 100, 
                   completedSwaps: 0
@@ -705,9 +704,9 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
       const emptyServizio = document.getElementById('empty-servizio');
       if (!itemListBene || !itemListServizio) return; 
 
+      // Query ordinata per data (il filtro sugli annunci conclusi viene applicato nel ciclo)
       const q = query(
           collection(db, "offerte"),
-          where("status", "!=", "concluso"), 
           orderBy("timestamp", "desc")
       );
       
@@ -715,6 +714,8 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
           let beniHtml = '', serviziHtml = '';
           querySnapshot.forEach((doc) => {
               const offer = doc.data();
+              if (offer.status === 'concluso') return; // ignora gli annunci già conclusi
+
               const docId = doc.id;
               const cpValue = offer.cpValue || 10;
               const isOwner = offer.ownerId === currentUser.uid;
@@ -865,7 +866,6 @@ from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         <main class="h-full overflow-y-auto pb-16">
 
             <section id="home-screen" class="screen active">
-                <!-- WIDGET PUNTI KARMA FISSO, COMPATTO E A TINTA UNITA (GRIGIO SCURO/ARDESIA) -->
                 <div class="sticky top-0 z-20 bg-gray-800 text-white px-4 py-2 shadow-md flex justify-between items-center">
                     <div>
                         <span class="text-xs text-gray-400 font-medium mr-1.5">Saldo Karma:</span>

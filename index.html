@@ -75,11 +75,11 @@
 
           <div class="mb-4">
             <label for="title" class="block text-sm font-medium text-gray-700">Titolo</label>
-            <input type="text" id="title" required maxlength="100" class="field" placeholder="Es. Bicicletta da città 28 pollici">
+            <input type="text" id="title" required maxlength="100" oninput="onOfferTextChange()" class="field" placeholder="Es. Bicicletta da città 28 pollici">
           </div>
           <div class="mb-4">
             <label for="description" class="block text-sm font-medium text-gray-700">Descrizione</label>
-            <textarea id="description" rows="3" required maxlength="1000" class="field" placeholder="Descrivi cosa offri, eventuali difetti, dove si ritira."></textarea>
+            <textarea id="description" rows="3" required maxlength="1000" oninput="onOfferTextChange()" class="field" placeholder="Descrivi cosa offri, eventuali difetti, dove si ritira."></textarea>
           </div>
 
           <!-- FOTO -->
@@ -109,7 +109,8 @@
           <div id="fields-bene">
             <div class="mb-4">
               <label for="bene-sottocategoria" class="block text-sm font-medium text-gray-700">Cosa stai regalando</label>
-              <select id="bene-sottocategoria" onchange="updateValuePreview()" class="field"></select>
+              <select id="bene-sottocategoria" onchange="onSubChange()" class="field"></select>
+              <p id="cat-suggest" class="text-xs text-gray-500 mt-1"></p>
             </div>
             <div class="grid grid-cols-2 gap-3 mb-4">
               <div>

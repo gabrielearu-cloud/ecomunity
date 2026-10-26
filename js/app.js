@@ -14,7 +14,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, googleProvider } from './firebase.js';
 import { PAGE_SIZE, FOTO_MAX_CHARS, THUMB_MAX_CHARS } from './config.js';
-import { valutaBene, valutaServizio, esitoPubblicazione } from './catalog.js';
+import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie } from './catalog.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, safeImg, tsToDate, compressImage } from './utils.js';
@@ -126,21 +126,14 @@ function subscribeCatalog() {
 
 function populateSelects() {
   const c = state.catalog;
-  const keepSub = val('bene-sottocategoria'), keepCond = val('bene-condizione') || 'buono', keepLiv = val('serv-livello');
+  const keepCond = val('bene-condizione') || 'buono', keepLiv = val('serv-livello');
 
-  // sottocategorie raggruppate per "gruppo"
-  const groups = {};
-  Object.entries(c.sottocategorie).forEach(([k, s]) => { (groups[s.gruppo] ||= []).push([k, s]); });
-  $('bene-sottocategoria').innerHTML = '<option value="">— Scegli cosa stai regalando —</option>' +
-    Object.entries(groups).map(([g, items]) =>
-      `<optgroup label="${esc(g)}">${items.map(([k, s]) =>
-        `<option value="${esc(k)}">${esc(s.label)} (${s.min}–${s.max} € da nuovo)</option>`).join('')}</optgroup>`).join('');
+  renderSottocategorie();
   $('bene-condizione').innerHTML = Object.entries(c.condizioni)
     .map(([k, v]) => `<option value="${esc(k)}">${esc(v.label)}</option>`).join('');
   $('serv-livello').innerHTML = Object.entries(c.servizi)
     .map(([k, v]) => `<option value="${esc(k)}">${esc(v.label)} — ${v.kpOra} KP/ora</option>`).join('');
 
-  if (keepSub && c.sottocategorie[keepSub]) $('bene-sottocategoria').value = keepSub;
   if (c.condizioni[keepCond]) $('bene-condizione').value = keepCond;
   if (keepLiv && c.servizi[keepLiv]) $('serv-livello').value = keepLiv;
 
@@ -163,6 +156,65 @@ function populateSelects() {
 }
 
 // ---------- 5. FORM PUBBLICAZIONE ----------
+
+// Menu "Cosa stai regalando": mostra solo le sottocategorie suggerite da titolo e descrizione
+let showAllCats = false;     // l'utente ha chiesto di vedere tutte le categorie
+let userPickedSub = false;   // l'utente ha scelto a mano: non cambiare piu' la selezione da solo
+
+function renderSottocategorie() {
+  const c = state.catalog;
+  const select = $('bene-sottocategoria');
+  const current = select.value;
+  const sugg = suggerisciSottocategorie(c, val('title'), val('description'));
+  const filtra = sugg.lista.length > 0 && !showAllCats;
+  const chiavi = filtra ? sugg.lista : Object.keys(c.sottocategorie);
+
+  const groups = {};
+  chiavi.forEach((k) => { const s = c.sottocategorie[k]; if (s) (groups[s.gruppo] ||= []).push([k, s]); });
+  select.innerHTML = '<option value="">— Scegli cosa stai regalando —</option>' +
+    Object.entries(groups).map(([g, items]) =>
+      `<optgroup label="${esc(g)}">${items.map(([k, s]) =>
+        `<option value="${esc(k)}">${esc(s.label)} (${s.min}–${s.max} € da nuovo)</option>`).join('')}</optgroup>`).join('') +
+    (filtra ? '<option value="__all__">▸ Non è nessuna di queste: mostra tutte le categorie</option>' : '');
+
+  if (userPickedSub && chiavi.includes(current)) {
+    select.value = current;                       // scelta manuale: la rispetto
+  } else {
+    userPickedSub = false;
+    select.value = (sugg.migliore && chiavi.includes(sugg.migliore)) ? sugg.migliore : '';
+  }
+
+  const hint = $('cat-suggest');
+  if (filtra) {
+    hint.innerHTML = `🔎 ${sugg.lista.length === 1 ? 'Categoria riconosciuta' : 'Categorie suggerite'} dal titolo.
+      <button type="button" class="underline" onclick="showAllCategories(true)">Mostra tutte</button>`;
+  } else if (showAllCats && sugg.lista.length) {
+    hint.innerHTML = `<button type="button" class="underline" onclick="showAllCategories(false)">Mostra solo le categorie suggerite</button>`;
+  } else {
+    hint.textContent = val('title') ? 'Nessuna categoria riconosciuta dal titolo: scegli dall\'elenco.' : 'Scrivi il titolo: ti proporrò le categorie adatte.';
+  }
+}
+
+window.showAllCategories = function (all) {
+  showAllCats = !!all;
+  renderSottocategorie();
+  updateValuePreview();
+};
+
+window.onSubChange = function () {
+  if (val('bene-sottocategoria') === '__all__') {
+    showAllCats = true;
+    renderSottocategorie();
+  } else {
+    userPickedSub = !!val('bene-sottocategoria');
+  }
+  updateValuePreview();
+};
+
+window.onOfferTextChange = function () {
+  if (currentOfferType === 'bene') renderSottocategorie();
+  updateValuePreview();
+};
 window.toggleOfferType = function (type) {
   currentOfferType = type;
   const on = type === 'bene' ? $('type-bene') : $('type-servizio');
@@ -256,6 +308,9 @@ function resetPublishForm() {
   $('publish-form').reset();
   pendingFotos = [null, null, null];
   [0, 1, 2].forEach((i) => $('slot-remove-' + i).classList.add('hidden'));
+  showAllCats = false;
+  userPickedSub = false;
+  renderSottocategorie();
   $('serv-ore').value = '1';
   if (state.catalog.condizioni.buono) $('bene-condizione').value = 'buono';
   updateFotoLabels();

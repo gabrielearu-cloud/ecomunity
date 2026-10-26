@@ -90,6 +90,109 @@ export const DEFAULT_CATALOG = {
   }
 };
 
+// ---------------------------------------------------------------------
+// PAROLE CHIAVE per riconoscere la sottocategoria da titolo e descrizione.
+// Basta la radice: "bici" riconosce anche "bicicletta", "pentola" anche "pentole".
+// Le frasi di piu' parole ("da corsa") valgono di piu' perche' piu' precise.
+// ---------------------------------------------------------------------
+const PAROLE = {
+  abb_capo:        ['maglia', 'maglietta', 't-shirt', 'felpa', 'maglione', 'pantalone', 'jeans', 'camicia', 'gonna', 'vestito', 'abito', 'pigiama', 'tuta', 'leggings', 'shorts', 'polo', 'cardigan'],
+  abb_giacca:      ['giacca', 'giubbotto', 'giubbino', 'cappotto', 'piumino', 'parka', 'impermeabile', 'k-way', 'blazer', 'montone'],
+  abb_scarpe:      ['scarpa', 'sneakers', 'stivale', 'stivaletto', 'sandalo', 'ciabatta', 'mocassino', 'anfibio', 'scarponcino', 'decollete'],
+  abb_borsa:       ['borsa', 'borsetta', 'zaino', 'valigia', 'trolley', 'portafoglio', 'marsupio', 'pochette', 'borsone'],
+  abb_bimbo:       ['vestiti bambino', 'vestiti bambina', 'abbigliamento bambino', 'abbigliamento neonato', 'body neonato', 'tutina'],
+
+  lib_libro:       ['libro', 'romanzo', 'manuale', 'fumetto', 'enciclopedia', 'dizionario', 'saggio', 'atlante', 'libro scolastico'],
+  lib_gioco:       ['gioco', 'giocattolo', 'puzzle', 'lego', 'peluche', 'bambola', 'gioco da tavolo', 'monopoli', 'carte da gioco', 'playmobil'],
+  lib_videogioco:  ['videogioco', 'gioco playstation', 'gioco xbox', 'gioco switch', 'gioco ps4', 'gioco ps5'],
+  lib_media:       ['cd', 'dvd', 'vinile', 'blu-ray', 'bluray', 'audiocassetta', 'dischi'],
+
+  el_smartphone:   ['smartphone', 'cellulare', 'telefono', 'iphone', 'galaxy', 'xiaomi', 'huawei', 'redmi', 'pixel', 'motorola'],
+  el_tablet:       ['tablet', 'ipad', 'kindle', 'e-reader', 'ebook'],
+  el_pc:           ['computer', 'pc', 'portatile', 'notebook', 'laptop', 'macbook', 'imac', 'desktop', 'pc fisso'],
+  el_tv:           ['tv', 'televisore', 'televisione', 'monitor', 'schermo', 'smart tv'],
+  el_console:      ['console', 'playstation', 'ps4', 'ps5', 'xbox', 'nintendo', 'switch', 'wii'],
+  el_audio:        ['cuffie', 'auricolari', 'airpods', 'cassa', 'altoparlante', 'stereo', 'soundbar', 'amplificatore', 'giradischi', 'radio'],
+  el_piccolo:      ['caricatore', 'cavo', 'mouse', 'tastiera', 'chiavetta', 'usb', 'powerbank', 'adattatore', 'webcam', 'hard disk', 'stampante'],
+
+  casa_el_piccolo: ['frullatore', 'tostapane', 'ferro da stiro', 'phon', 'asciugacapelli', 'macchina caffe', 'macchinetta caffe', 'bollitore', 'microonde', 'aspirapolvere', 'robot da cucina', 'friggitrice', 'piastra', 'ventilatore', 'stufetta', 'impastatrice'],
+  casa_el_grande:  ['lavatrice', 'frigorifero', 'frigo', 'lavastoviglie', 'asciugatrice', 'forno', 'congelatore', 'condizionatore', 'piano cottura'],
+  casa_mob_piccolo:['sedia', 'comodino', 'mensola', 'sgabello', 'scaffale', 'specchio', 'appendiabiti', 'scarpiera', 'pouf', 'libreria piccola'],
+  casa_mob_grande: ['armadio', 'divano', 'tavolo', 'letto', 'materasso', 'cassettiera', 'credenza', 'poltrona', 'scrivania', 'libreria', 'cucina componibile'],
+  casa_cucina:     ['pentola', 'padella', 'piatto', 'bicchiere', 'posate', 'stoviglie', 'tazza', 'teglia', 'caffettiera', 'moka'],
+  casa_tessili:    ['tenda', 'lenzuola', 'coperta', 'piumone', 'tappeto', 'asciugamano', 'tovaglia', 'cuscino', 'plaid', 'copriletto'],
+  casa_decor:      ['lampada', 'lampadario', 'abat-jour', 'quadro', 'cornice', 'soprammobile', 'candela', 'orologio da parete', 'piantana'],
+
+  bimbo_passeggino:['passeggino', 'carrozzina', 'seggiolino auto', 'ovetto', 'trio'],
+  bimbo_lettino:   ['lettino', 'culla', 'seggiolone', 'fasciatoio', 'sdraietta', 'box bambino'],
+  bimbo_accessori: ['biberon', 'ciuccio', 'sterilizzatore', 'tiralatte', 'baby monitor', 'vasino', 'marsupio neonato', 'fascia porta bebe'],
+
+  bici_bambino:    ['bici bambino', 'bici bambina', 'bici bimbo', 'bicicletta bambino', 'bicicletta bambina', 'senza pedali', 'balance bike', 'rotelle', 'triciclo'],
+  bici_citta:      ['bici', 'bicicletta', 'da citta', 'city bike', 'olandesina', 'olandese', 'pieghevole', 'graziella', 'da passeggio'],
+  bici_mtb:        ['bici', 'bicicletta', 'mountain', 'mtb', 'mountain bike', 'biammortizzata'],
+  bici_corsa:      ['bici', 'bicicletta', 'corsa', 'da corsa', 'gravel', 'carbonio', 'bici da strada'],
+  bici_ebike:      ['bici', 'bicicletta', 'e-bike', 'ebike', 'elettrica', 'pedalata assistita', 'bici elettrica'],
+  mob_monopattino: ['monopattino', 'hoverboard', 'segway', 'scooter elettrico'],
+  bici_accessori:  ['casco', 'luci bici', 'lucchetto', 'pompa', 'campanello', 'borraccia', 'portapacchi', 'cestino bici', 'copertone', "camera d'aria", 'seggiolino bici'],
+
+  sport_fitness:   ['pesi', 'manubri', 'bilanciere', 'tapis roulant', 'cyclette', 'panca', 'kettlebell', 'tappetino', 'ellittica', 'spinning', 'step'],
+  sport_outdoor:   ['tenda campeggio', 'campeggio', 'sacco a pelo', 'materassino', 'fornellino', 'bastoncini', 'trekking', 'canna da pesca', 'amaca', 'zaino trekking'],
+  sport_invernali: ['sci', 'snowboard', 'scarponi', 'tuta da sci', 'ciaspole', 'slittino', 'pattini da ghiaccio'],
+  sport_altro:     ['pallone', 'racchetta', 'tennis', 'padel', 'calcio', 'basket', 'pallavolo', 'pattini', 'roller', 'skateboard', 'golf', 'canoa', 'kayak', 'surf'],
+
+  fai_manuali:     ['martello', 'cacciavite', 'pinza', 'chiave inglese', 'sega', 'cassetta attrezzi', 'livella', 'metro', 'attrezzi'],
+  fai_elettrici:   ['trapano', 'avvitatore', 'smerigliatrice', 'flessibile', 'seghetto', 'levigatrice', 'saldatrice', 'compressore', 'pistola colla', 'tassellatore'],
+  giard_attrezzi:  ['tosaerba', 'rasaerba', 'decespugliatore', 'tagliasiepi', 'rastrello', 'pala', 'zappa', 'cesoie', 'tubo giardino', 'annaffiatoio', 'idropulitrice', 'soffiatore', 'motosega'],
+  giard_piante:    ['pianta', 'vaso', 'fiore', 'talea', 'semi', 'fioriera', 'bonsai', 'orchidea']
+};
+Object.entries(PAROLE).forEach(([k, p]) => { if (DEFAULT_CATALOG.sottocategorie[k]) DEFAULT_CATALOG.sottocategorie[k].parole = p; });
+
+// Testo minuscolo, senza accenti e punteggiatura
+const normalizza = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9\s'-]/g, ' ');
+// Radice: "pentole" e "pentola" -> "pentol"
+const radice = (w) => (w.length >= 5 ? w.replace(/[aeiou]$/, '') : w);
+const tokens = (s) => normalizza(s).split(/[\s'-]+/).filter(Boolean).map(radice);
+
+function contieneParola(tok, parola) {
+  const p = radice(parola);
+  return tok.some((t) => (p.length >= 4 ? t.startsWith(p) : t === p));
+}
+
+/**
+ * Suggerisce le sottocategorie in base a titolo e descrizione.
+ * Restituisce { lista: [chiavi ordinate per pertinenza], migliore: chiave|null }
+ * "migliore" e' valorizzato solo se c'e' un'unica sottocategoria in testa.
+ */
+export function suggerisciSottocategorie(catalog, titolo, descrizione = '') {
+  const tTit = tokens(titolo), tDesc = tokens(descrizione);
+  if (!tTit.length && !tDesc.length) return { lista: [], migliore: null };
+  const subs = Object.entries(catalog?.sottocategorie || {}).map(([k, sub]) =>
+    [k, Array.isArray(sub.parole) ? sub.parole : (DEFAULT_CATALOG.sottocategorie[k]?.parole || [])]);
+  // Una parola presente in molte sottocategorie (es. "bici") conta meno di una specifica (es. "casco")
+  const diffusione = {};
+  subs.forEach(([, parole]) => new Set(parole.map(normalizza)).forEach((p) => { diffusione[p] = (diffusione[p] || 0) + 1; }));
+
+  const punteggi = [];
+  subs.forEach(([k, parole]) => {
+    let score = 0;
+    parole.forEach((frase) => {
+      const pezzi = tokens(frase);
+      if (!pezzi.length) return;
+      const peso = pezzi.length / (diffusione[normalizza(frase)] || 1); // frasi lunghe e specifiche valgono di piu'
+      if (pezzi.every((p) => contieneParola(tTit, p))) score += peso * 2;
+      else if (pezzi.every((p) => contieneParola(tDesc, p) || contieneParola(tTit, p))) score += peso;
+    });
+    if (score > 0) punteggi.push([k, score]);
+  });
+  if (!punteggi.length) return { lista: [], migliore: null };
+  punteggi.sort((a, b) => b[1] - a[1]);
+  const max = punteggi[0][1];
+  const lista = punteggi.filter(([, s]) => s === max || s > max / 2).map(([k]) => k);
+  const primi = punteggi.filter(([, s]) => s === max);
+  return { lista, migliore: primi.length === 1 ? primi[0][0] : null };
+}
+
 const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
@@ -191,6 +294,7 @@ export function validaCatalogo(c) {
     if (!/^[a-z0-9_]{1,40}$/.test(k)) errs.push(`chiave "${k}" non valida (solo minuscole, numeri, _)`);
     if (!v || typeof v.label !== 'string' || typeof v.gruppo !== 'string') errs.push(`sottocategorie.${k}: label e gruppo obbligatori`);
     if (!v || typeof v.min !== 'number' || typeof v.max !== 'number' || v.min <= 0 || v.max < v.min) errs.push(`sottocategorie.${k}: min/max non validi`);
+    if (v && v.parole !== undefined && (!Array.isArray(v.parole) || v.parole.some((p) => typeof p !== 'string'))) errs.push(`sottocategorie.${k}.parole deve essere un elenco di parole tra virgolette`);
   });
 
   const servs = c.servizi && typeof c.servizi === 'object' ? Object.entries(c.servizi) : [];

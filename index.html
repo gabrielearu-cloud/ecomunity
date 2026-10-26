@@ -1,1005 +1,346 @@
+<!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EcoMunity - Scambio Etico e Comunitario</title>
-<script type="module">
-  // --- 1. IMPORTAZIONI COMPLETE FIREBASE (Versione corretta 10.12.2) ---
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, updateDoc, getDoc, setDoc, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-  // Configurazione Firebase (Mantieni i tuoi dati)
-  const firebaseConfig = {
-    apiKey: "AIzaSyCTwU75eJLGpuz5jw_gkhHdgYrHUkN__AY",
-    authDomain: "ecomunity-app.firebaseapp.com",
-    projectId: "ecomunity-app",
-    storageBucket: "ecomunity-app.firebasestorage.app",
-    messagingSenderId: "788175207861",
-    appId: "1:788175207861:web:e3f159da01c096e0d3edfc"
-  };
-
-  // Inizializza Firebase
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const googleProvider = new GoogleAuthProvider();
-
-  let currentOfferType = 'bene';
-  
-  // LOGICA NOTIFICHE
-  let hasUnreadMessages = false; 
-  let unreadChatIds = []; 
-  let allChatsData = [];
-  let hasNewProfileUpdate = false;
-
-  // --- FUNZIONI DI GESTIONE UI ---
-  function switchScreen(screenId) {
-    document.querySelectorAll('.screen').forEach(screen => {
-      screen.classList.remove('active');
-    });
-    const screenToShow = document.getElementById(screenId);
-    if (screenToShow) {
-        screenToShow.classList.add('active');
-        document.getElementById('login-screen').style.display = 'none';
-    }
-  }
-
-  window.navigate = function(screenId, element) {
-    switchScreen(screenId);
-    document.querySelectorAll('.tab-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    element.classList.add('active');
-
-    if (screenId === 'chat-list-screen') {
-        renderChatList();
-    } else if (screenId === 'profile-screen') {
-        hasNewProfileUpdate = false;
-        updateProfileTabIndicator();
-        
-        const existingBadge = document.querySelector('#profile-data .new-kp-badge');
-        if (existingBadge) {
-            existingBadge.remove();
-        }
-    }
-  }
-
-  function updateChatTabIndicator() {
-      const chatTab = document.getElementById('nav-chat');
-      if (!chatTab) return; 
-      let indicator = chatTab.querySelector('.unread-indicator');
-      const iconContainer = chatTab.querySelector('div'); 
-
-      if (hasUnreadMessages) {
-          if (!indicator) {
-              indicator = document.createElement('span');
-              indicator.className = 'unread-indicator absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white';
-              if (iconContainer && !iconContainer.classList.contains('relative')) {
-                  iconContainer.classList.add('relative');
-              }
-              iconContainer?.appendChild(indicator);
-          }
-          if (indicator) indicator.style.display = 'block';
-      } else {
-          if (indicator) {
-              indicator.style.display = 'none';
-          }
-      }
-  }
-
-  function updateProfileTabIndicator() {
-      const profileTab = document.getElementById('nav-profile');
-      if (!profileTab) return; 
-      let indicator = profileTab.querySelector('.unread-indicator');
-      const iconContainer = profileTab.querySelector('div'); 
-
-      if (hasNewProfileUpdate) {
-          if (!indicator) {
-              indicator = document.createElement('span');
-              indicator.className = 'unread-indicator absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white';
-              if (iconContainer && !iconContainer.classList.contains('relative')) {
-                  iconContainer.classList.add('relative');
-              }
-              iconContainer?.appendChild(indicator);
-          }
-          if (indicator) indicator.style.display = 'block';
-      } else {
-          if (indicator) {
-              indicator.style.display = 'none';
-          }
-      }
-  }
-
-  window.toggleOfferType = function(type) {
-    currentOfferType = type;
-    const btnBene = document.getElementById('type-bene');
-    const btnServizio = document.getElementById('type-servizio');
-    btnBene.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg');
-    btnServizio.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg');
-    btnBene.classList.add('text-gray-700', 'hover:bg-gray-200');
-    btnServizio.classList.add('text-gray-700', 'hover:bg-gray-200');
-
-    if (type === 'bene') {
-        btnBene.classList.remove('text-gray-700', 'hover:bg-gray-200');
-        btnBene.classList.add('bg-green-600', 'text-white', 'shadow-lg');
-    } else {
-        btnServizio.classList.remove('text-gray-700', 'hover:bg-gray-200');
-        btnServizio.classList.add('bg-blue-600', 'text-white', 'shadow-lg');
-    }
-  }
-
-  window.switchHomeTab = function(type, element) {
-    document.querySelectorAll('.home-tab-content').forEach(content => {
-      content.classList.add('hidden');
-      content.classList.remove('active');
-    });
-    const btnBeni = document.getElementById('tab-btn-beni');
-    const btnServizi = document.getElementById('tab-btn-servizi');
-    btnBeni.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50');
-    btnServizi.classList.remove('bg-green-600', 'bg-blue-600', 'text-white', 'shadow-lg', 'shadow-green-600/50', 'shadow-blue-600/50');
-    btnBeni.classList.add('text-gray-700', 'hover:bg-gray-200');
-    btnServizi.classList.add('text-gray-700', 'hover:bg-gray-200');
-    document.getElementById('home-' + type).classList.remove('hidden');
-    document.getElementById('home-' + type).classList.add('active');
-    element.classList.remove('text-gray-700', 'hover:bg-gray-200');
-
-    if (type === 'bene') {
-        element.classList.add('bg-green-600', 'text-white', 'shadow-lg', 'shadow-green-600/50');
-    } else {
-        element.classList.add('bg-blue-600', 'text-white', 'shadow-lg', 'shadow-blue-600/50');
-    }
-  }
-
-  // --- AUTENTICAZIONE ---
-  window.handleAuth = async function() {
-    try {
-        await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-        console.error("Errore di Autenticazione:", error.code, error.message);
-        if (error.code !== 'auth/popup-closed-by-user') {
-            alert("Errore di accesso: " + error.message);
-        }
-    }
-  };
-
-  window.handleLogout = async function() {
-      await signOut(auth);
-  }
-
-  onAuthStateChanged(auth, (user) => {
-    document.getElementById('loading-screen').style.display = 'none';
-    document.getElementById('app-container').classList.remove('hidden');
-
-    if (user) {
-        document.getElementById('app-header').style.display = 'flex';
-        document.getElementById('tab-bar').style.display = 'flex';
-        const profileNameHeader = document.getElementById('profile-name-header');
-        if (profileNameHeader) {
-            profileNameHeader.textContent = user.displayName || "Utente EcoMunity";
-        }
-        
-        loadOffers();
-        loadChatList();
-        loadProfileData(user.uid);
-        switchScreen('home-screen');
-        document.getElementById('nav-home')?.classList.add('active');
-    } else {
-        document.getElementById('login-screen').style.display = 'flex';
-        document.getElementById('app-header').style.display = 'none';
-        document.getElementById('tab-bar').style.display = 'none';
-    }
-  });
-
-  // --- GESTIONE CHAT ---
-  let currentChatId = null;
-
-  window.openChat = function(chatId, offerTitle) {
-      currentChatId = chatId;
-      document.getElementById('current-chat-id').value = chatId;
-      document.getElementById('current-chat-title').textContent = offerTitle;
-
-      document.getElementById('chat-screen').style.display = 'flex';
-      document.getElementById('app-header').style.display = 'none';
-      document.getElementById('tab-bar').style.display = 'none';
-
-      const index = unreadChatIds.indexOf(chatId);
-      if (index > -1) {
-          unreadChatIds.splice(index, 1);
-      }
-      hasUnreadMessages = unreadChatIds.length > 0;
-      updateChatTabIndicator(); 
-
-      loadChatMessages(chatId);
-  }
-
-  window.sendMessage = async function(event) {
-      event.preventDefault();
-      const messageInput = document.getElementById('message-input');
-      const messageText = messageInput.value.trim();
-      const chatId = document.getElementById('current-chat-id').value;
-      const currentUser = auth.currentUser;
-      if (!messageText || !chatId || !currentUser) return;
-
-      try {
-          await addDoc(collection(db, "chats", chatId, "messages"), {
-              senderId: currentUser.uid,
-              senderName: currentUser.displayName || 'Utente',
-              text: messageText,
-              timestamp: new Date()
-          });
-          const chatRef = doc(db, "chats", chatId);
-          await updateDoc(chatRef, {
-              lastMessage: messageText.substring(0, 50) + (messageText.length > 50 ? '...' : ''),
-              lastMessageTimestamp: new Date()
-          });
-          messageInput.value = '';
-      } catch (e) {
-          console.error("Errore nell'invio del messaggio: ", e);
-          alert("Impossibile inviare il messaggio.");
-      }
-  }
-
-  function loadChatMessages(chatId) {
-      if (!chatId) return;
-      const currentUser = auth.currentUser;
-      const messagesContainer = document.getElementById('messages-container');
-      const q = query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"));
-
-      onSnapshot(q, (querySnapshot) => {
-          let messagesHtml = '';
-          querySnapshot.forEach((doc) => {
-              const msg = doc.data();
-              const isMe = msg.senderId === currentUser.uid;
-              const messageClass = isMe
-                  ? 'self-end bg-[#dcf8c6] text-gray-900 rounded-bl-xl rounded-tl-xl rounded-tr-xl'
-                  : 'self-start bg-white text-gray-800 rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100';
-              
-              let timeString = 'Invio...';
-              if (msg.timestamp && typeof msg.timestamp.toDate === 'function') {
-                  timeString = msg.timestamp.toDate().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-              }
-
-              messagesHtml += `
-                  <div class="max-w-[75%] p-3 shadow-sm ${messageClass}">
-                      <p class="text-sm">${msg.text}</p>
-                      <span class="text-xs text-right block ${isMe ? 'text-gray-600' : 'text-gray-500'} mt-1">${timeString}</span>
-                  </div>
-              `;
-          });
-          messagesContainer.innerHTML = messagesHtml;
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      });
-  }
-
-  window.navigateFromChat = function(screenId, element) {
-      document.getElementById('chat-screen').style.display = 'none';
-      document.getElementById('app-header').style.display = 'flex';
-      document.getElementById('tab-bar').style.display = 'flex';
-      currentChatId = null; 
-      window.navigate(screenId, element);
-  }
-
-  // --- FUNZIONE ELIMINAZIONE CHAT ---
-  window.deleteChat = async function(event, chatId) {
-      if (event) event.stopPropagation(); 
-      if (!confirm("Sei sicuro di voler eliminare questa chat?")) return;
-
-      try {
-          const messagesRef = collection(db, "chats", chatId, "messages");
-          const messagesSnapshot = await getDocs(messagesRef);
-          const deletePromises = messagesSnapshot.docs.map(msgDoc => deleteDoc(doc(db, "chats", chatId, "messages", msgDoc.id)));
-          await Promise.all(deletePromises);
-
-          await deleteDoc(doc(db, "chats", chatId));
-
-          unreadChatIds = unreadChatIds.filter(id => id !== chatId);
-          hasUnreadMessages = unreadChatIds.length > 0;
-          updateChatTabIndicator();
-
-          alert("Chat eliminata con successo.");
-      } catch (e) {
-          console.error("Errore durante l'eliminazione della chat: ", e);
-          alert("Impossibile eliminare la chat.");
-      }
-  }
-
-  // --- LOGICA ANNUNCI E TRATTATIVE ---
-  window.publishOffer = async function(event) {
-      event.preventDefault();
-      
-      const user = auth.currentUser;
-      if (!user) {
-          alert("Devi autenticarti per pubblicare un annuncio.");
-          return;
-      }
-
-      const title = document.getElementById('title').value.trim();
-      const description = document.getElementById('description').value.trim();
-      const cpValue = parseInt(document.getElementById('cp-value').value, 10);
-
-      if (!title || !description) {
-          alert("Compila tutti i campi richiesti.");
-          return;
-      }
-
-      if (isNaN(cpValue) || cpValue <= 0) {
-          alert("Inserisci un valore KP valido.");
-          return;
-      }
-
-      try {
-          await addDoc(collection(db, "offerte"), {
-              title: title,
-              description: description,
-              type: currentOfferType,
-              cpValue: cpValue,
-              ownerId: user.uid,
-              ownerName: user.displayName || user.email || "Utente EcoMunity",
-              timestamp: new Date(),
-              status: 'disponibile'
-          });
-          alert("Annuncio pubblicato con successo!");
-          document.getElementById('publish-form').reset();
-          window.navigate('home-screen', document.getElementById('nav-home'));
-      } catch (e) {
-          console.error("Errore pubblicazione: ", e);
-          alert("Errore durante la pubblicazione: " + e.message);
-      }
-  }
-
-  window.startChat = async function(offerId, offerOwnerId, offerTitle) {
-      const currentUser = auth.currentUser;
-      if (!currentUser || currentUser.uid === offerOwnerId) return alert("Non puoi chattare per il tuo annuncio.");
-      
-      const offerRef = doc(db, "offerte", offerId);
-      const offerSnap = await getDoc(offerRef);
-      if (!offerSnap.exists()) return alert("Annuncio non trovato.");
-      if (offerSnap.data().status === 'in_trattativa') return alert("L'annuncio è attualmente in trattativa.");
-
-      const chatQuery = query(collection(db, "chats"), where("offerId", "==", offerId), where("users", "array-contains", currentUser.uid));
-      const chatSnapshot = await getDocs(chatQuery);
-      let chatId;
-
-      if (!chatSnapshot.empty) {
-          chatId = chatSnapshot.docs[0].id;
-      } else {
-          try {
-              const chatDocRef = await addDoc(collection(db, "chats"), {
-                  offerId: offerId,
-                  offerTitle: offerTitle,
-                  ownerId: offerOwnerId,
-                  buyerId: currentUser.uid,
-                  users: [offerOwnerId, currentUser.uid],
-                  createdAt: new Date(),
-                  lastMessage: 'Chat avviata.',
-                  lastMessageTimestamp: new Date()
-              });
-              chatId = chatDocRef.id;
-          } catch (e) {
-              console.error("Errore creazione chat:", e);
-              return alert("Impossibile avviare la chat.");
-          }
-      }
-      window.openChat(chatId, offerTitle);
-  }
-
-  window.setInTrattativa = async function(docId) {
-      if (!confirm("Vuoi mettere questo annuncio in trattativa?")) return;
-      const currentUser = auth.currentUser;
-      if (!currentUser) return alert("Devi essere autenticato.");
-
-      const offerRef = doc(db, "offerte", docId);
-      try {
-          const chatQ = query(
-              collection(db, "chats"), 
-              where("offerId", "==", docId)
-          );
-          const chatSnap = await getDocs(chatQ);
-          let presumedBuyer = null;
-          
-          if (!chatSnap.empty) {
-              const chatData = chatSnap.docs[0].data();
-              if (chatData.users) {
-                  presumedBuyer = chatData.users.find(uid => uid !== currentUser.uid) || null;
-              }
-          }
-
-          await updateDoc(offerRef, { 
-              status: 'in_trattativa', 
-              reservedBy: presumedBuyer 
-          });
-      } catch (e) {
-          console.error("Errore aggiornamento stato: ", e);
-          alert("Impossibile aggiornare lo stato: " + e.message);
-      }
-  }
-
-  window.setDisponibile = async function(docId) {
-      if (!confirm("Rendere l'annuncio nuovamente disponibile a tutti?")) return;
-      const offerRef = doc(db, "offerte", docId);
-      try {
-          await updateDoc(offerRef, { status: 'disponibile', reservedBy: null });
-      } catch (e) {
-          console.error("Errore ripristino stato: ", e);
-      }
-  }
-
-  window.deleteOffer = async function(docId) {
-      if (confirm("Sei sicuro di voler eliminare questo annuncio?")) {
-          try {
-              await deleteDoc(doc(db, "offerte", docId));
-              alert("Annuncio eliminato.");
-          } catch (e) {
-              console.error("Errore eliminazione: ", e);
-              alert("Errore durante l'eliminazione.");
-          }
-      }
-  }
-
-  // --- FEEDBACK E CONCLUSIONE TRATTATIVA ---
-  window.closeFeedbackModal = function() {
-      const modal = document.getElementById('feedback-modal');
-      modal.style.display = 'none';
-      modal.dataset.docId = '';
-      modal.dataset.cpValue = '';
-      document.getElementById('feedback-offer-title').textContent = '';
-  }
-
-  window.requestFeedback = async function(docId, cpValue) {
-      try {
-          const offerRef = doc(db, "offerte", docId);
-          const offerSnap = await getDoc(offerRef);
-          if (!offerSnap.exists()) return alert("Annuncio non trovato.");
-
-          const offerTitle = offerSnap.data().title;
-          const modal = document.getElementById('feedback-modal');
-          
-          modal.dataset.docId = docId;
-          modal.dataset.cpValue = cpValue;
-          document.getElementById('feedback-offer-title').textContent = `Come valuti lo scambio per: "${offerTitle}"?`;
-          
-          modal.style.display = 'flex';
-      } catch (e) {
-          console.error("Errore apertura modal feedback:", e);
-      }
-  }
-
-  window.submitFeedback = async function(feedbackType) {
-      const modal = document.getElementById('feedback-modal');
-      const docId = modal.dataset.docId;
-      const user = auth.currentUser;
-
-      if (!user || !docId) return alert("Errore nei dati.");
-
-      const offerRef = doc(db, "offerte", docId);
-      const offerSnap = await getDoc(offerRef);
-
-      if (!offerSnap.exists() || offerSnap.data().ownerId !== user.uid) {
-          window.closeFeedbackModal();
-          return alert("Operazione non consentita.");
-      }
-      
-      const reservedById = offerSnap.data().reservedBy;
-
-      let finalKP = 0;
-      switch (feedbackType) {
-          case 'eccellente': finalKP = 15; break;
-          case 'corretto': finalKP = 10; break;
-          case 'insoddisfacente': finalKP = -10; break;
-          default: return alert("Selezione non valida.");
-      }
-
-      try {
-          await updateDoc(offerRef, { 
-              status: 'concluso', 
-              feedback: feedbackType, 
-              cp_awarded: finalKP,
-              completionDate: new Date() 
-          });
-
-          if (reservedById) {
-              const buyerRef = doc(db, "users", reservedById);
-              const buyerSnap = await getDoc(buyerRef);
-              let buyerKarma = 100, buyerSwaps = 0;
-              if (buyerSnap.exists()) {
-                  buyerKarma = buyerSnap.data().karmaPoints || 100;
-                  buyerSwaps = buyerSnap.data().completedSwaps || 0;
-              }
-              await setDoc(buyerRef, { 
-                  karmaPoints: buyerKarma + finalKP,
-                  completedSwaps: buyerSwaps + 1 
-              }, { merge: true });
-          }
-
-          const sellerRef = doc(db, "users", user.uid);
-          const sellerSnap = await getDoc(sellerRef);
-          let sellerSwaps = 0, sellerKarma = 100;
-          if(sellerSnap.exists()) {
-              sellerSwaps = sellerSnap.data().completedSwaps || 0;
-              sellerKarma = sellerSnap.data().karmaPoints || 100;
-          }
-          await setDoc(sellerRef, {
-              completedSwaps: sellerSwaps + 1,
-              karmaPoints: sellerKarma
-          }, { merge: true });
-
-          hasNewProfileUpdate = true;
-          updateProfileTabIndicator();
-          alert("Scambio concluso con successo! Lo storico e il punteggio Karma sono stati aggiornati.");
-
-      } catch (e) {
-          console.error("Errore completamento scambio:", e);
-          alert("Errore nel completamento dello scambio.");
-      } finally {
-          window.closeFeedbackModal();
-      }
-  }
-
-  // --- CARICAMENTO DATI ---
-  function renderChatList() {
-      const chatListContainer = document.getElementById('chat-list');
-      if (!chatListContainer) return;
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
-
-      if (allChatsData.length === 0) {
-          chatListContainer.innerHTML = '<p class="text-center text-gray-500 mt-8">Nessuna chat attiva.</p>';
-          return;
-      }
-      let chatHtml = '';
-      let isOddRow = false;
-      allChatsData.sort((a, b) => (b.data.lastMessageTimestamp?.toMillis() || 0) - (a.data.lastMessageTimestamp?.toMillis() || 0));
-
-      allChatsData.forEach((chatDoc) => {
-          const chat = chatDoc.data;
-          const chatId = chatDoc.id;
-          const isUnread = unreadChatIds.includes(chatId); 
-          const isOwner = chat.ownerId === currentUser.uid;
-          const statusText = isOwner ? 'Tuo Annuncio' : 'Tua Richiesta';
-          const chatDisplayName = chat.offerTitle || 'Chat';
-          const rowBgClass = isOddRow ? 'bg-green-50' : 'bg-white';
-          isOddRow = !isOddRow;
-          const unreadIndicatorHtml = isUnread
-              ? '<span class="block h-2.5 w-2.5 rounded-full bg-blue-500 mr-3 flex-shrink-0"></span>'
-              : '<span class="block h-2.5 w-2.5 mr-3 flex-shrink-0"></span>'; 
-
-          chatHtml += `
-              <div onclick="openChat('${chatId}', '${chat.offerTitle ? chat.offerTitle.replace(/'/g, "\\'") : 'Chat'}')"
-                   class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${rowBgClass}">
-                  ${unreadIndicatorHtml}
-                  <div class="flex-shrink-0 mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                      <p class="text-sm ${isUnread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'} truncate">${chatDisplayName}</p>
-                      <p class="text-xs ${isUnread ? 'text-gray-700' : 'text-gray-500'} truncate mt-0.5">${chat.lastMessage || ''}</p>
-                  </div>
-                  <div class="ml-4 flex flex-col items-end">
-                      <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${statusText}</span>
-                      <span class="text-xs text-gray-400 mt-1">${chat.lastMessageTimestamp?.toDate ? chat.lastMessageTimestamp.toDate().toLocaleDateString('it-IT') : ''}</span>
-                      <button onclick="deleteChat(event, '${chatId}')" title="Elimina chat" class="mt-2 text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                      </button>
-                  </div>
-              </div>
-          `;
-      });
-      chatListContainer.innerHTML = chatHtml;
-  }
-
-  function loadChatList() {
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
-      
-      const q = query(
-          collection(db, "chats"),
-          where("users", "array-contains", currentUser.uid)
-      );
-      
-      onSnapshot(q, (snapshot) => {
-          allChatsData = snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
-          if (snapshot.empty) {
-              hasUnreadMessages = false;
-              unreadChatIds = []; 
-              updateChatTabIndicator();
-              renderChatList(); 
-              return;
-          }
-          let newMessagesAdded = false; 
-          snapshot.docChanges().forEach((change) => {
-            if (change.type === "modified") {
-                const chatScreenVisible = document.getElementById('chat-screen').style.display === 'flex';
-                const changedChatId = change.doc.id;
-                let isViewingThisChat = chatScreenVisible && currentChatId === changedChatId;
-                
-                if (!isViewingThisChat && !unreadChatIds.includes(changedChatId)) {
-                    unreadChatIds.push(changedChatId);
-                    newMessagesAdded = true;
-                }
-            }
-          });
-          if (newMessagesAdded) {
-              hasUnreadMessages = true;
-              updateChatTabIndicator(); 
-          }
-          renderChatList();
-      }, (error) => { 
-          console.error("Errore listener chat list:", error);
-      });
-  }
-
-  function loadProfileData(userId) {
-      const profileDataContainer = document.getElementById('profile-data');
-      const homeKarmaWidget = document.getElementById('home-karma-widget');
-      if (!profileDataContainer && !homeKarmaWidget) return;
-      const userRef = doc(db, "users", userId);
-
-      onSnapshot(userRef, (docSnap) => {
-          if (!docSnap.exists()) {
-              setDoc(userRef, {
-                  displayName: auth.currentUser.displayName || "Utente EcoMunity", 
-                  email: auth.currentUser.email,
-                  karmaPoints: 100, 
-                  completedSwaps: 0
-              }).catch(e => console.error("Errore creazione profilo:", e));
-              return;
-          }
-
-          const userData = docSnap.data();
-          const karma = userData.karmaPoints || 0;
-          const completedSwaps = userData.completedSwaps || 0;
-
-          if (homeKarmaWidget) {
-              homeKarmaWidget.textContent = `${karma} KP`;
-          }
-
-          const levelThresholds = [0, 150, 300, 500, 1000];
-          let currentLevel = 1, currentLevelKP = 0, nextLevelKP = 150;
-          for (let i = levelThresholds.length - 1; i >= 0; i--) {
-              if (karma >= levelThresholds[i]) {
-                  currentLevel = i + 1;
-                  currentLevelKP = levelThresholds[i];
-                  nextLevelKP = (i + 1 < levelThresholds.length) ? levelThresholds[i + 1] : levelThresholds[i];
-                  break;
-              }
-          }
-          const progressToNextLevel = nextLevelKP - currentLevelKP;
-          const userProgressInLevel = karma - currentLevelKP;
-          let progressPercentage = (progressToNextLevel > 0) ? Math.min(100, Math.floor((userProgressInLevel / progressToNextLevel) * 100)) : 100;
-          let progressText = `Prossimo livello: ${nextLevelKP} KP`;
-
-          let newKpBadgeHtml = hasNewProfileUpdate ? '<span class="new-kp-badge ml-2 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full animate-pulse">NOVITÀ</span>' : '';
-          
-          if (profileDataContainer) {
-              profileDataContainer.innerHTML = `
-                  <div class="mb-6">
-                      <div class="flex justify-between items-center mb-1">
-                          <span class="text-base font-semibold text-green-600">Livello ${currentLevel}</span>
-                          <span class="text-sm text-gray-500">${progressText}</span>
-                      </div>
-                      <div class="w-full bg-gray-200 rounded-full h-2.5">
-                          <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercentage}%"></div>
-                      </div>
-                  </div>
-                  <p class="text-3xl font-bold text-gray-900 flex items-center justify-center">
-                      ${karma} ${newKpBadgeHtml}
-                  </p>
-                  <p class="text-sm text-gray-500 mb-4">Punti Karma (KP)</p>
-                  <div class="flex justify-around w-full mt-4">
-                      <div class="text-center">
-                          <p class="text-xl font-semibold text-gray-700">${completedSwaps}</p>
-                          <p class="text-xs text-gray-500">Scambi Completati</p>
-                      </div>
-                  </div>
-              `;
-          }
-          document.getElementById('profile-name-header').textContent = userData.displayName || auth.currentUser.displayName;
-      });
-  }
-
-  function loadOffers() {
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
-      const itemListBene = document.getElementById('item-list-bene');
-      const itemListServizio = document.getElementById('item-list-servizio');
-      const emptyBene = document.getElementById('empty-bene');
-      const emptyServizio = document.getElementById('empty-servizio');
-      if (!itemListBene || !itemListServizio) return; 
-
-      const q = query(
-          collection(db, "offerte"),
-          orderBy("timestamp", "desc")
-      );
-      
-      onSnapshot(q, (querySnapshot) => {
-          let beniHtml = '', serviziHtml = '';
-          querySnapshot.forEach((doc) => {
-              const offer = doc.data();
-              if (offer.status === 'concluso') return; 
-
-              const docId = doc.id;
-              const cpValue = offer.cpValue || 10;
-              const isOwner = offer.ownerId === currentUser.uid;
-              const isTrattativa = offer.status === 'in_trattativa';
-              
-              const cardOpacityClass = isTrattativa ? 'opacity-60 bg-gray-50 grayscale-[20%]' : 'opacity-100 bg-white';
-              
-              let actionButton = '', ownerButtons = '', statusTag = '';
-
-              if (isTrattativa) {
-                  statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-200 text-yellow-800 border border-yellow-300">In Trattativa</span>`;
-                  if (isOwner) {
-                      ownerButtons = `
-                        <button onclick="requestFeedback('${docId}', ${cpValue})" class="mt-3 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">✓ Concludi Scambio</button>
-                        <button onclick="setDisponibile('${docId}')" class="mt-2 w-full bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 px-4 py-2 text-sm font-medium rounded-lg">Rendi di nuovo disponibile</button>
-                      `;
-                  } else {
-                      actionButton = `<button disabled class="mt-3 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-200 cursor-not-allowed">In Trattativa</button>`;
-                  }
-              } else { 
-                  statusTag = `<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200">Disponibile</span>`;
-                  if (isOwner) {
-                      ownerButtons = `
-                        <button onclick="setInTrattativa('${docId}')" class="mt-3 w-full bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Metti in Trattativa</button>
-                        <button onclick="deleteOffer('${docId}')" class="mt-2 w-full bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-4 py-2 text-sm font-medium rounded-lg">Elimina Annuncio</button>
-                      `;
-                  } else {
-                      actionButton = `<button onclick="startChat('${docId}', '${offer.ownerId}', '${offer.title.replace(/'/g, "\\'")}')" class="mt-3 w-full ${offer.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Avvia Chat</button>`;
-                  }
-              }
-
-              const typeColor = offer.type === 'bene' ? 'bg-green-600' : 'bg-blue-600';
-              const iconSvg = offer.type === 'bene' 
-                ? `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>` 
-                : `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M.4 17.5a2.17 2.17 0 0 1 3.2-3.2l2.7 2.7l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2l.9 .9l.9-.9l-2.7-2.7a2.17 2.17 0 0 1 3.2-3.2L12 12l9.1 9.1"/></svg>`;
-
-              const offerHtml = `
-                <div class="p-4 rounded-xl shadow-lg border border-gray-100 flex flex-col justify-between transition-all duration-300 ${cardOpacityClass}">
-                    <div class="flex items-start mb-3">
-                        <div class="p-3 rounded-full ${typeColor} text-white mr-3 shadow-sm">${iconSvg}</div>
-                        <div class="flex-1">
-                            <h3 class="text-lg font-semibold text-gray-800">${offer.title}</h3>
-                            <div class="mt-1 flex items-center justify-between">
-                                ${statusTag}
-                                <span class="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">💰 Costo: ${cpValue} KP</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <p class="text-sm text-gray-600">${offer.description}</p>
-                        <p class="text-xs text-gray-400 mt-2">Offerto da: <span class="font-medium text-gray-500">${offer.ownerName}</span></p>
-                        ${ownerButtons}
-                    </div>
-                    ${actionButton}
-                </div>
-              `;
-              if (offer.type === 'bene') beniHtml += offerHtml; else serviziHtml += offerHtml;
-          });
-          itemListBene.innerHTML = beniHtml;
-          itemListServizio.innerHTML = serviziHtml;
-          if (emptyBene) emptyBene.style.display = beniHtml ? 'none' : 'block';
-          if (emptyServizio) emptyServizio.style.display = serviziHtml ? 'none' : 'block';
-      }, (error) => { 
-          console.error("Errore listener offerte:", error);
-      });
-  }
-</script>
-
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoMunity - Scambio Etico e Comunitario</title>
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-<style>
-  .screen:not(.active) { display: none; }
-  .screen {
-    display: flex; flex-direction: column;
-    height: calc(100vh - 56px - 64px);
-    overflow-y: auto; padding-bottom: 20px;
-  }
-  #home-screen { height: calc(100vh - 56px - 64px); }
-  #chat-screen {
-    display: none; position: fixed; top: 0; left: 0;
-    width: 100%; height: 100%; background-color: white;
-    z-index: 50; flex-direction: column;
-  }
-  #login-screen {
-      display: none; position: fixed; top: 0; left: 0;
-      width: 100%; height: 100%; background-color: #f7f7f7;
-      z-index: 100; justify-content: center; align-items: center;
-  }
-  #loading-screen {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background-color: white; z-index: 200; display: flex;
-    justify-content: center; align-items: center; flex-direction: column;
-  }
-  #tab-bar {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      border-top: 1px solid #e5e7eb; z-index: 10;
-  }
-  #app-header { position: sticky; top: 0; z-index: 10; }
-  #tab-bar .tab-item > div { position: relative; }
-  .unread-indicator { display: none; }
-
-  #feedback-modal {
-    display: none;
-    position: fixed; top: 0; left: 0;
-    width: 100%; height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    z-index: 150; justify-content: center; align-items: center; padding: 1rem;
-  }
-</style>
+<link href="css/style.css" rel="stylesheet">
 </head>
 
 <body class="bg-gray-50 font-sans">
-    <div id="loading-screen">
-        <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
-        <p class="mt-4 text-gray-700">Caricamento EcoMunity...</p>
-    </div>
+<div id="loading-screen">
+  <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
+  <p class="mt-4 text-gray-700">Caricamento EcoMunity...</p>
+</div>
 
-    <div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg">
+<div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg">
 
-        <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-green-600">EcoMunity</h1>
-            <button onclick="handleLogout()" class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-1 rounded-full shadow-md">
-                Logout
-            </button>
-        </header>
+  <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
+    <h1 class="text-xl font-bold text-green-600">EcoMunity</h1>
+    <button onclick="handleLogout()" class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-1 rounded-full shadow-md">Logout</button>
+  </header>
 
-        <main class="h-full overflow-y-auto pb-16">
-            <section id="home-screen" class="screen active">
-                <div class="sticky top-0 z-20 bg-gray-800 text-white px-4 py-2 shadow-md flex justify-between items-center">
-                    <div>
-                        <span class="text-xs text-gray-400 font-medium mr-1.5">Saldo Karma:</span>
-                        <span id="home-karma-widget" class="text-base font-bold text-emerald-400">-- KP</span>
-                    </div>
-                    <button onclick="navigate('profile-screen', document.getElementById('nav-profile'))" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold px-2.5 py-1 rounded transition">
-                        Profilo &rarr;
-                    </button>
-                </div>
+  <main class="h-full overflow-y-auto pb-16">
 
-                <div class="p-4 border-b border-gray-200">
-                    <h2 class="text-xl font-semibold text-gray-800">Annunci</h2>
-                    <div class="flex mt-4 bg-gray-100 rounded-lg p-1 space-x-1 shadow-md">
-                        <button id="tab-btn-beni" onclick="switchHomeTab('bene', this)" class="flex-1 py-3 px-4 text-sm font-medium rounded-md bg-green-600 text-white shadow-lg"> Beni Materiali </button>
-                        <button id="tab-btn-servizi" onclick="switchHomeTab('servizio', this)" class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200"> Servizi/Aiuto </button>
-                    </div>
-                </div>
-                <div id="home-bene" class="home-tab-content p-4 grid grid-cols-1 gap-4 active">
-                    <p id="empty-bene" class="text-center text-gray-500 mt-8 hidden">Nessun bene disponibile.</p>
-                    <div id="item-list-bene" class="grid grid-cols-1 gap-4"></div>
-                </div>
-                <div id="home-servizio" class="home-tab-content p-4 grid grid-cols-1 gap-4 hidden">
-                    <p id="empty-servizio" class="text-center text-gray-500 mt-8 hidden">Nessun servizio disponibile.</p>
-                    <div id="item-list-servizio" class="grid grid-cols-1 gap-4"></div>
-                </div>
-            </section>
-
-            <section id="publish-screen" class="screen">
-                <div class="p-4 flex-1 overflow-y-auto">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Pubblica Annuncio</h2>
-                    <form id="publish-form" onsubmit="publishOffer(event)">
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
-                            <div class="flex bg-gray-100 rounded-lg p-1 space-x-1 shadow-md">
-                                <button type="button" id="type-bene" onclick="toggleOfferType('bene')" class="flex-1 py-3 px-4 text-sm font-medium rounded-md bg-green-600 text-white shadow-lg"> Bene </button>
-                                <button type="button" id="type-servizio" onclick="toggleOfferType('servizio')" class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200"> Servizio </button>
-                            </div>
-                        </div>
-                        <div class="mb-4">
-                            <label for="title" class="block text-sm font-medium text-gray-700">Titolo</label>
-                            <input type="text" id="title" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600" placeholder="Es. Bicicletta usata"> 
-                        </div>
-                        <div class="mb-4">
-                            <label for="description" class="block text-sm font-medium text-gray-700">Descrizione</label>
-                            <textarea id="description" rows="3" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600" placeholder="Descrivi cosa offri."></textarea> 
-                        </div>
-                        <div class="mb-6">
-                            <label for="cp-value" class="block text-sm font-medium text-gray-700">Valore Karma Points (KP)</label>
-                            <input type="number" id="cp-value" required min="1" value="10" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-500 focus:border-yellow-500">
-                        </div>
-                        <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700"> Pubblica </button>
-                    </form>
-                </div>
-            </section>
-
-            <section id="chat-list-screen" class="screen">
-                <div class="p-4 border-b border-gray-200">
-                    <h2 class="text-xl font-semibold text-gray-800">Le Tue Chat</h2>
-                </div>
-                <div id="chat-list" class="flex-1 overflow-y-auto"></div>
-            </section>
-
-            <section id="profile-screen" class="screen items-center">
-                <div class="w-full text-center p-4 bg-white border-b border-gray-200">
-                    <h2 id="profile-name-header" class="text-2xl font-bold text-gray-800 mb-1">Nome Utente</h2>
-                    <p class="text-sm text-gray-500">Membro EcoMunity</p>
-                </div>
-                <div id="profile-data" class="w-full text-center p-6 mt-4 bg-white rounded-lg shadow-md border border-gray-100"></div>
-                <div class="mt-8 w-full p-4">
-                    <button onclick="handleLogout()" class="w-full flex justify-center py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700"> Logout </button>
-                </div>
-            </section>
-        </main>
-
-        <div id="chat-screen">
-            <header class="bg-white p-4 border-b border-gray-200 flex items-center shadow-sm sticky top-0">
-                <button onclick="navigateFromChat('chat-list-screen', document.getElementById('nav-chat'))" class="mr-3 p-1 rounded-full hover:bg-gray-100">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-                </button>
-                <h2 id="current-chat-title" class="text-lg font-semibold text-gray-800 truncate flex-1">Chat</h2>
-            </header>
-            <div id="messages-container" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-3"></div>
-            <form onsubmit="sendMessage(event)" class="p-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
-                <input type="hidden" id="current-chat-id">
-                <div class="flex">
-                    <input type="text" id="message-input" placeholder="Scrivi..." required class="flex-1 px-4 py-2 border border-gray-300 rounded-l-full shadow-sm focus:outline-none focus:ring-green-600 focus:border-green-600">
-                    <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-r-full shadow-md flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
-                    </button>
-                </div>
-            </form>
+    <!-- ===================== HOME ===================== -->
+    <section id="home-screen" class="screen active">
+      <div class="sticky top-0 z-20 bg-gray-800 text-white px-4 py-2 shadow-md flex justify-between items-center">
+        <div>
+          <span class="text-xs text-gray-400 font-medium mr-1.5">Saldo Karma:</span>
+          <span id="home-karma-widget" class="text-base font-bold text-emerald-400">-- KP</span>
         </div>
+        <button onclick="navigate('profile-screen', document.getElementById('nav-profile'))" class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold px-2.5 py-1 rounded">Profilo &rarr;</button>
+      </div>
 
-        <nav id="tab-bar" class="bg-white flex justify-around shadow-lg">
-            <button class="tab-item active" id="nav-home" onclick="navigate('home-screen', this)">
-                <div class="flex flex-col items-center p-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                    <span class="text-xs mt-1">Home</span>
-                </div>
-            </button>
-            <button class="tab-item" id="nav-publish" onclick="navigate('publish-screen', this)">
-                <div class="flex flex-col items-center p-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
-                    <span class="text-xs mt-1">Pubblica</span>
-                </div>
-            </button>
-            <button class="tab-item" id="nav-chat" onclick="navigate('chat-list-screen', this)">
-                 <div class="flex flex-col items-center p-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <span class="text-xs mt-1">Chat</span>
-                </div>
-            </button>
-            <button class="tab-item" id="nav-profile" onclick="navigate('profile-screen', this)">
-                <div class="flex flex-col items-center p-2"> 
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    <span class="text-xs mt-1">Profilo</span>
-                </div>
-            </button>
-        </nav>
+      <div class="p-4 border-b border-gray-200">
+        <h2 class="text-xl font-semibold text-gray-800">Annunci</h2>
+        <div class="flex mt-4 bg-gray-100 rounded-lg p-1 space-x-1 shadow-md">
+          <button id="tab-btn-beni" onclick="switchHomeTab('bene', this)" class="flex-1 py-3 px-4 text-sm font-medium rounded-md bg-green-600 text-white shadow-lg">Beni Materiali</button>
+          <button id="tab-btn-servizi" onclick="switchHomeTab('servizio', this)" class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200">Servizi/Aiuto</button>
+        </div>
+        <label class="flex items-center mt-3 text-sm text-gray-600 cursor-pointer">
+          <input type="checkbox" class="mr-2" onchange="toggleAffordable(this.checked)">
+          Mostra solo ciò che posso permettermi con i miei KP
+        </label>
+      </div>
+      <div id="home-bene" class="home-tab-content p-4">
+        <p id="empty-bene" class="text-center text-gray-500 mt-8 hidden">Nessun bene disponibile.</p>
+        <div id="item-list-bene" class="grid grid-cols-1 gap-4"></div>
+      </div>
+      <div id="home-servizio" class="home-tab-content p-4 hidden">
+        <p id="empty-servizio" class="text-center text-gray-500 mt-8 hidden">Nessun servizio disponibile.</p>
+        <div id="item-list-servizio" class="grid grid-cols-1 gap-4"></div>
+      </div>
+      <div class="px-4 pb-6">
+        <button id="load-more" onclick="loadMoreOffers()" class="hidden w-full py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100">Carica altri annunci</button>
+      </div>
+    </section>
 
-        <div id="login-screen">
-            <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-xs w-full">
-                <h2 class="text-3xl font-bold text-green-600 mb-2">EcoMunity</h2>
-                <p class="text-gray-600 mb-8">Scambio Etico e Comunitario</p>
-                <button onclick="handleAuth()" class="w-full flex items-center justify-center py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-                    Accedi con Google
-                </button>
+    <!-- ===================== PUBBLICA ===================== -->
+    <section id="publish-screen" class="screen">
+      <div class="p-4 flex-1 overflow-y-auto">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">Pubblica Annuncio</h2>
+        <p id="publish-warning" class="hidden mb-4 p-3 text-sm rounded bg-red-50 border border-red-200 text-red-700">
+          Il catalogo dei valori non è ancora attivo: la pubblicazione sarà possibile appena l'amministratore lo attiva.
+        </p>
+        <form id="publish-form" onsubmit="publishOffer(event)">
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+            <div class="flex bg-gray-100 rounded-lg p-1 space-x-1 shadow-md">
+              <button type="button" id="type-bene" onclick="toggleOfferType('bene')" class="flex-1 py-3 px-4 text-sm font-medium rounded-md bg-green-600 text-white shadow-lg">Bene</button>
+              <button type="button" id="type-servizio" onclick="toggleOfferType('servizio')" class="flex-1 py-3 px-4 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200">Servizio</button>
             </div>
-        </div>
-    </div>
-    
-    <div id="feedback-modal" data-doc-id="" data-cp-value="">
-        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
-            <h3 class="text-lg font-semibold text-gray-800 mb-2">Concludi Scambio</h3>
-            <p id="feedback-offer-title" class="text-sm text-gray-600 mb-6">Come valuti questo scambio?</p>
-            
-            <div class="space-y-3">
-                <button onclick="submitFeedback('eccellente')" class="w-full flex items-center justify-start p-3 rounded-lg bg-green-100 hover:bg-green-200 text-green-800">
-                    <span class="font-medium">Eccellente</span>
-                    <span class="ml-auto text-xs font-bold">+15 KP</span>
-                </button>
-                <button onclick="submitFeedback('corretto')" class="w-full flex items-center justify-start p-3 rounded-lg bg-blue-100 hover:bg-green-200 text-blue-800">
-                    <span class="font-medium">Corretto</span>
-                    <span class="ml-auto text-xs font-bold">+10 KP</span>
-                </button>
-                <button onclick="submitFeedback('insoddisfacente')" class="w-full flex items-center justify-start p-3 rounded-lg bg-red-100 hover:bg-red-200 text-red-800">
-                    <span class="font-medium">Insoddisfacente</span>
-                    <span class="ml-auto text-xs font-bold">-10 KP</span>
-                </button>
-            </div>
+          </div>
 
-            <button onclick="closeFeedbackModal()" class="w-full text-center py-2 mt-6 text-sm text-gray-500 hover:text-gray-800">
-                Annulla
-            </button>
+          <div class="mb-4">
+            <label for="title" class="block text-sm font-medium text-gray-700">Titolo</label>
+            <input type="text" id="title" required maxlength="100" class="field" placeholder="Es. Bicicletta da città 28 pollici">
+          </div>
+          <div class="mb-4">
+            <label for="description" class="block text-sm font-medium text-gray-700">Descrizione</label>
+            <textarea id="description" rows="3" required maxlength="1000" class="field" placeholder="Descrivi cosa offri, eventuali difetti, dove si ritira."></textarea>
+          </div>
+
+          <!-- FOTO -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700">Foto</label>
+            <p id="img-hint" class="text-xs text-gray-500 mb-2"></p>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="img-slot">
+                <input type="file" accept="image/*" id="file-0" class="hidden" onchange="handleImagePick(0, this)">
+                <label for="file-0" id="slot-label-0"></label>
+                <button type="button" class="img-remove hidden" id="slot-remove-0" onclick="removeImage(0)">✕</button>
+              </div>
+              <div class="img-slot">
+                <input type="file" accept="image/*" id="file-1" class="hidden" onchange="handleImagePick(1, this)">
+                <label for="file-1" id="slot-label-1"></label>
+                <button type="button" class="img-remove hidden" id="slot-remove-1" onclick="removeImage(1)">✕</button>
+              </div>
+              <div class="img-slot">
+                <input type="file" accept="image/*" id="file-2" class="hidden" onchange="handleImagePick(2, this)">
+                <label for="file-2" id="slot-label-2"></label>
+                <button type="button" class="img-remove hidden" id="slot-remove-2" onclick="removeImage(2)">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- VALUTAZIONE BENE -->
+          <div id="fields-bene">
+            <div class="mb-4">
+              <label for="bene-sottocategoria" class="block text-sm font-medium text-gray-700">Cosa stai regalando</label>
+              <select id="bene-sottocategoria" onchange="updateValuePreview()" class="field"></select>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label for="bene-marca" class="block text-sm font-medium text-gray-700">Marca</label>
+                <input type="text" id="bene-marca" maxlength="60" oninput="updateValuePreview()" class="field" placeholder="Es. Bianchi">
+              </div>
+              <div>
+                <label for="bene-modello" class="block text-sm font-medium text-gray-700">Modello</label>
+                <input type="text" id="bene-modello" maxlength="60" oninput="updateValuePreview()" class="field" placeholder="Es. Spillo">
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-1">
+              <div>
+                <label for="bene-prezzo" class="block text-sm font-medium text-gray-700">Prezzo da nuovo (€)</label>
+                <input type="number" id="bene-prezzo" min="1" step="0.01" inputmode="decimal" oninput="updateValuePreview()" class="field" placeholder="Es. 350">
+              </div>
+              <div>
+                <label for="bene-anno" class="block text-sm font-medium text-gray-700">Anno di acquisto</label>
+                <input type="number" id="bene-anno" min="1950" step="1" inputmode="numeric" oninput="updateValuePreview()" class="field" placeholder="Es. 2022">
+              </div>
+            </div>
+            <p id="bene-prezzo-hint" class="text-xs text-gray-500 mb-4"></p>
+            <div class="mb-4">
+              <label for="bene-condizione" class="block text-sm font-medium text-gray-700">Condizione</label>
+              <select id="bene-condizione" onchange="updateValuePreview()" class="field"></select>
+            </div>
+          </div>
+
+          <!-- VALUTAZIONE SERVIZIO -->
+          <div id="fields-servizio" class="hidden">
+            <div class="mb-4">
+              <label for="serv-livello" class="block text-sm font-medium text-gray-700">Tipo di prestazione</label>
+              <select id="serv-livello" onchange="updateValuePreview()" class="field"></select>
+            </div>
+            <div class="mb-4">
+              <label for="serv-ore" class="block text-sm font-medium text-gray-700">Durata (ore)</label>
+              <input type="number" id="serv-ore" min="0.5" step="0.5" value="1" inputmode="decimal" oninput="updateValuePreview()" class="field">
+            </div>
+          </div>
+
+          <div id="kp-preview" class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800"></div>
+
+          <details class="mb-6 text-sm text-gray-600">
+            <summary class="cursor-pointer font-medium text-gray-700">Come vengono calcolati i KP?</summary>
+            <div id="valuation-help" class="mt-2 space-y-1"></div>
+          </details>
+
+          <button type="submit" id="publish-btn" class="w-full flex justify-center py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700">Pubblica</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ===================== LISTA CHAT ===================== -->
+    <section id="chat-list-screen" class="screen">
+      <div class="p-4 border-b border-gray-200">
+        <h2 class="text-xl font-semibold text-gray-800">Le Tue Chat</h2>
+      </div>
+      <div id="chat-list" class="flex-1 overflow-y-auto"></div>
+    </section>
+
+    <!-- ===================== PROFILO ===================== -->
+    <section id="profile-screen" class="screen items-center">
+      <div class="w-full text-center p-4 bg-white border-b border-gray-200">
+        <h2 id="profile-name-header" class="text-2xl font-bold text-gray-800 mb-1">Nome Utente</h2>
+        <p class="text-sm text-gray-500">Membro EcoMunity</p>
+      </div>
+      <div id="profile-data" class="w-full text-center p-6 mt-4 bg-white rounded-lg shadow-md border border-gray-100"></div>
+      <div class="w-full p-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">I miei annunci</h3>
+        <div id="my-offers" class="space-y-2"></div>
+      </div>
+      <div class="w-full p-4 space-y-3">
+        <button id="admin-btn" onclick="openAdmin()" class="hidden w-full py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-gray-800 hover:bg-gray-900">🛠 Pannello Admin</button>
+        <button onclick="handleLogout()" class="w-full py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700">Logout</button>
+      </div>
+    </section>
+
+    <!-- ===================== ADMIN ===================== -->
+    <section id="admin-screen" class="screen">
+      <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+        <h2 class="text-xl font-semibold text-gray-800">Pannello Admin</h2>
+        <button onclick="navigate('profile-screen', document.getElementById('nav-profile'))" class="text-sm text-gray-600 hover:text-gray-900">← Profilo</button>
+      </div>
+      <div class="p-4 space-y-6">
+        <div>
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="text-sm font-semibold text-gray-700">Statistiche</h3>
+            <button onclick="refreshAdmin()" class="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300">↻ Aggiorna tutto</button>
+          </div>
+          <div id="admin-stats" class="grid grid-cols-2 gap-2 text-sm"></div>
         </div>
+
+        <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-2">Annunci da verificare</h3>
+          <div id="admin-review" class="space-y-2"></div>
+        </div>
+
+        <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-2">Annunci segnalati</h3>
+          <div id="admin-reported" class="space-y-2"></div>
+        </div>
+
+        <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-1">Catalogo valori</h3>
+          <p id="catalog-status" class="text-xs text-gray-500 mb-2"></p>
+          <textarea id="catalog-editor" rows="14" class="field" spellcheck="false"></textarea>
+          <div class="flex gap-2 mt-2">
+            <button onclick="saveCatalog()" class="px-3 py-2 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700">💾 Salva catalogo</button>
+            <button onclick="resetCatalogEditor()" class="px-3 py-2 text-xs font-medium rounded bg-gray-200 hover:bg-gray-300">Valori predefiniti</button>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-2">Log</h3>
+          <div class="flex gap-2 flex-wrap mb-2">
+            <select id="admin-filter" onchange="renderAdminLogs()" class="px-2 py-2 text-xs border border-gray-300 rounded bg-white">
+              <option value="">Tutti gli eventi</option>
+              <option value="problems">Solo errori/avvisi</option>
+              <option value="offer_created">Annunci creati</option>
+              <option value="offer_deleted">Annunci eliminati</option>
+              <option value="offer_reported">Segnalazioni</option>
+              <option value="offer_rejected">Annunci rifiutati</option>
+              <option value="exchange_completed">Scambi conclusi</option>
+              <option value="kp_blocked">KP insufficienti</option>
+              <option value="login">Accessi</option>
+            </select>
+            <button onclick="downloadLogs('txt')" class="px-3 py-2 text-xs font-medium rounded bg-green-600 text-white">⬇ .txt</button>
+            <button onclick="downloadLogs('csv')" class="px-3 py-2 text-xs font-medium rounded bg-blue-600 text-white">⬇ .csv</button>
+            <button onclick="purgeOldLogs()" class="px-3 py-2 text-xs font-medium rounded bg-gray-200 hover:bg-gray-300">🧹 Pulisci vecchi</button>
+          </div>
+          <div id="admin-logs" class="text-xs space-y-1"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== CHAT ===================== -->
+  <div id="chat-screen">
+    <header class="bg-white p-4 border-b border-gray-200 flex items-center shadow-sm sticky top-0">
+      <button onclick="navigateFromChat('chat-list-screen', document.getElementById('nav-chat'))" class="mr-3 p-1 rounded-full hover:bg-gray-100" aria-label="Indietro">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      </button>
+      <h2 id="current-chat-title" class="text-lg font-semibold text-gray-800 truncate flex-1">Chat</h2>
+    </header>
+    <div id="messages-container" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-3"></div>
+    <form onsubmit="sendMessage(event)" class="p-4 bg-gray-50 border-t border-gray-200 sticky bottom-0">
+      <input type="hidden" id="current-chat-id">
+      <div class="flex">
+        <input type="text" id="message-input" placeholder="Scrivi..." required maxlength="1000" class="flex-1 px-4 py-2 border border-gray-300 rounded-l-full shadow-sm focus:outline-none">
+        <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-r-full shadow-md" aria-label="Invia">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 3 3 9-3 9 19-9Z"/><path d="M6 12h16"/></svg>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ===================== TAB BAR ===================== -->
+  <nav id="tab-bar" class="bg-white flex justify-around shadow-lg">
+    <button class="tab-item active" id="nav-home" onclick="navigate('home-screen', this)">
+      <div class="flex flex-col items-center p-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="text-xs mt-1">Home</span>
+      </div>
+    </button>
+    <button class="tab-item" id="nav-publish" onclick="navigate('publish-screen', this)">
+      <div class="flex flex-col items-center p-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+        <span class="text-xs mt-1">Pubblica</span>
+      </div>
+    </button>
+    <button class="tab-item" id="nav-chat" onclick="navigate('chat-list-screen', this)">
+      <div class="flex flex-col items-center p-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="text-xs mt-1">Chat</span>
+      </div>
+    </button>
+    <button class="tab-item" id="nav-profile" onclick="navigate('profile-screen', this)">
+      <div class="flex flex-col items-center p-2">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="text-xs mt-1">Profilo</span>
+      </div>
+    </button>
+  </nav>
+
+  <!-- ===================== LOGIN ===================== -->
+  <div id="login-screen">
+    <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-xs w-full">
+      <h2 class="text-3xl font-bold text-green-600 mb-2">EcoMunity</h2>
+      <p class="text-gray-600 mb-8">Scambio Etico e Comunitario</p>
+      <button onclick="handleAuth()" class="w-full py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Accedi con Google</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL: SCELTA ACQUIRENTE -->
+<div id="buyer-modal" class="modal-overlay">
+  <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+    <h3 class="text-lg font-semibold text-gray-800 mb-1">Chi riceve questo annuncio?</h3>
+    <p id="buyer-offer-info" class="text-sm text-gray-600 mb-4"></p>
+    <div id="buyer-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+    <button onclick="closeBuyerModal()" class="w-full text-center py-2 mt-4 text-sm text-gray-500 hover:text-gray-800">Annulla</button>
+  </div>
+</div>
+
+<!-- MODAL: CONCLUSIONE SCAMBIO -->
+<div id="feedback-modal" class="modal-overlay" data-doc-id="">
+  <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+    <h3 class="text-lg font-semibold text-gray-800 mb-2">Concludi Scambio</h3>
+    <p id="feedback-offer-title" class="text-sm text-gray-600 mb-2"></p>
+    <p id="feedback-kp-info" class="text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-4"></p>
+    <p class="text-xs text-gray-500 mb-2">Com'è andato lo scambio?</p>
+    <div class="space-y-3">
+      <button onclick="submitFeedback('eccellente')" class="w-full p-3 rounded-lg bg-green-100 hover:bg-green-200 text-green-800 font-medium text-left">Eccellente</button>
+      <button onclick="submitFeedback('corretto')" class="w-full p-3 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium text-left">Corretto</button>
+      <button onclick="submitFeedback('insoddisfacente')" class="w-full p-3 rounded-lg bg-red-100 hover:bg-red-200 text-red-800 font-medium text-left">Insoddisfacente</button>
+    </div>
+    <button onclick="closeFeedbackModal()" class="w-full text-center py-2 mt-6 text-sm text-gray-500 hover:text-gray-800">Annulla</button>
+  </div>
+</div>
+
+<!-- LIGHTBOX FOTO -->
+<div id="lightbox" class="modal-overlay" onclick="closeLightbox()">
+  <img id="lightbox-img" alt="Foto annuncio" onclick="event.stopPropagation()">
+  <div class="flex items-center gap-6 mt-4 text-white" onclick="event.stopPropagation()">
+    <button onclick="stepLightbox(-1)" class="px-4 py-2 text-2xl" aria-label="Precedente">‹</button>
+    <span id="lightbox-counter" class="text-sm"></span>
+    <button onclick="stepLightbox(1)" class="px-4 py-2 text-2xl" aria-label="Successiva">›</button>
+  </div>
+  <p class="text-gray-400 text-xs mt-2">Tocca fuori dall'immagine per chiudere</p>
+</div>
+
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -257,6 +257,24 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neu
 .zone-later { margin: .5rem 1rem 1rem; padding: .55rem; border: 0; background: none; color: #6b7280; font-size: .85rem; cursor: pointer; font-family: inherit; }
 
 /* "hidden" deve vincere sempre, anche sugli elementi a cui questo file assegna un display */
+/* ===== Fotocamera integrata ===== */
+.camera-modal { position: fixed; inset: 0; z-index: 80; background: #000; display: flex; align-items: center; justify-content: center; }
+.camera-modal video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.camera-top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px; }
+.camera-bottom { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: center;
+  padding: 20px 16px max(28px, env(safe-area-inset-bottom)); }
+.camera-round { width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; font-size: 1.2rem;
+  border: 1px solid rgba(255,255,255,.35); }
+.camera-count { color: #fff; font-size: .85rem; background: rgba(0,0,0,.45); padding: .3rem .7rem; border-radius: 999px; }
+.camera-shutter { width: 74px; height: 74px; border-radius: 50%; background: #fff; border: 5px solid #16a34a;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.6); transition: transform .1s; }
+.camera-shutter:active { transform: scale(.92); }
+.camera-shutter:disabled { opacity: .4; }
+.camera-msg { position: absolute; left: 16px; right: 16px; top: 40%; color: #fff; text-align: center; font-size: .95rem; line-height: 1.4; }
+.camera-flash { animation: camflash .25s; }
+@keyframes camflash { 0% { filter: brightness(2.5); } 100% { filter: none; } }
+
 .hidden { display: none !important; }
 
 /* ===== Annuncio in trattativa: leggibile, con barra gialla ===== */

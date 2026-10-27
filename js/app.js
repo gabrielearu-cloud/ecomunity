@@ -450,6 +450,7 @@ onAuthStateChanged(auth, (user) => {
   } else {
     homeOffers = []; myOffers = []; allChatsData = []; unreadChatIds = [];
     state.karma = null; state.completedSwaps = 0; state.isAdmin = false; lastKnownKarma = null;
+    $('profile-role').textContent = 'Membro Ecommuni';
     myOfferStatus = new Map();
     toReceive = []; toReceiveStatus = new Map();
     state.zona = null; zonePromptShown = false;
@@ -1057,7 +1058,7 @@ window.setInTrattativa = async function (docId) {
       return `<button ${ok ? '' : 'disabled'} data-uid="${esc(b.uid)}" data-name="${esc(b.name)}" onclick="confirmReserve('${docId}', this.dataset.uid, this.dataset.name)"
                 class="w-full text-left p-3 rounded-lg border ${ok ? 'border-green-300 bg-green-50 hover:bg-green-100' : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'}">
                 <span class="font-medium">${esc(b.name)}</span>
-                <span class="block text-xs">${b.admin ? 'Amministratore · nessun limite di KP' : `${b.karma} KP ${ok ? '' : `(ne servono ${cost})`}`}</span>
+                <span class="block text-xs">${b.karma} KP ${ok ? '' : `(ne servono ${cost})`}</span>
               </button>`;
     }).join('');
     $('buyer-modal').style.display = 'flex';
@@ -1485,7 +1486,7 @@ function loadProfileData(uid) {
       </div>
       <p class="text-3xl font-bold text-gray-900 flex items-center justify-center">${karma} ${badge}</p>
       <p class="text-sm text-gray-500 mb-1">Punti Karma (KP)</p>
-      <p id="kp-hint" class="text-xs text-gray-500 mb-4">${state.isAdmin ? '🛡️ Amministratore: puoi richiedere e pubblicare senza limiti di KP.' : `Puoi richiedere beni e servizi fino a ${karma} KP. Regala per guadagnarne altri.`}</p>
+      <p id="kp-hint" class="text-xs text-gray-500 mb-4">${state.isAdmin ? 'Puoi richiedere e pubblicare senza limiti di KP.' : `Puoi richiedere beni e servizi fino a ${karma} KP. Regala per guadagnarne altri.`}</p>
       <p class="text-xl font-semibold text-gray-700">${state.completedSwaps}</p>
       <p class="text-xs text-gray-500">Scambi completati</p>`;
     $('profile-name-header').textContent = data.displayName || auth.currentUser?.displayName || 'Utente Ecommuni';
@@ -1704,8 +1705,9 @@ document.addEventListener('admin-changed', () => {
   renderOffers();
   updateFotoLabels();
   updateValuePreview();
-  const h = $('kp-hint');
-  if (h && state.isAdmin) h.textContent = '🛡️ Amministratore: puoi richiedere e pubblicare senza limiti di KP.';
+  // Il ruolo si vede solo qui, sotto il nome nel Profilo
+  $('profile-role').textContent = state.isAdmin ? '🛡️ Amministratore Ecommuni' : 'Membro Ecommuni';
+  if (state.isAdmin && $('kp-hint')) $('kp-hint').textContent = 'Puoi richiedere e pubblicare senza limiti di KP.';
 });
 
 // ---------- FOTOCAMERA INTEGRATA ----------

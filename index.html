@@ -118,9 +118,10 @@
           <!-- VALUTAZIONE BENE -->
           <div id="fields-bene">
             <div class="mb-4">
-              <label for="bene-sottocategoria" class="block text-sm font-medium text-gray-700">Cosa stai regalando</label>
-              <select id="bene-sottocategoria" onchange="onSubChange()" class="field"></select>
-              <p id="cat-suggest" class="text-xs text-gray-500 mt-1"></p>
+              <span class="block text-sm font-medium text-gray-700">Categoria</span>
+              <input type="hidden" id="bene-sottocategoria" value="">
+              <button type="button" id="cat-button" class="cat-field cat-field-empty" onclick="openCatSheet()" aria-haspopup="dialog"></button>
+              <div id="cat-suggest" class="mt-2"></div>
             </div>
             <div class="grid grid-cols-2 gap-3 mb-4">
               <div>
@@ -381,6 +382,20 @@
     </label>
     <button id="consent-btn" disabled onclick="acceptTerms()" class="w-full py-3 rounded-md text-sm font-medium text-white bg-green-600 disabled:opacity-50">Continua</button>
     <button onclick="declineTerms()" class="w-full text-center py-2 mt-3 text-sm text-gray-500 hover:text-gray-800">Non accetto, esci</button>
+  </div>
+</div>
+
+<!-- PANNELLO CATEGORIE -->
+<div id="cat-sheet" class="modal-overlay sheet-overlay" onclick="closeCatSheet()">
+  <div class="sheet" role="dialog" aria-labelledby="cat-sheet-title" onclick="event.stopPropagation()">
+    <div class="sheet-head">
+      <h3 id="cat-sheet-title">Cosa stai regalando?</h3>
+      <button type="button" class="sheet-close" onclick="closeCatSheet()" aria-label="Chiudi">✕</button>
+    </div>
+    <div class="sheet-search">
+      <input type="search" id="cat-search" placeholder="Cerca: bici, pentola, pennarello…" oninput="renderCatSheet()" autocomplete="off">
+    </div>
+    <div id="cat-list" class="sheet-list"></div>
   </div>
 </div>
 

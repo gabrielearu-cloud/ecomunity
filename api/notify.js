@@ -75,6 +75,11 @@ async function buildNotification(db, uid, body) {
     case 'concluded':
       if (o.reservedBy !== uid || o.status !== 'concluso') return null;
       return { ...base, to: o.ownerId, title: `✅ +${o.cpValue} KP`, body: `Scambio concluso: ${t} è stato ricevuto. Grazie!` };
+    case 'help': {
+      if (o.ownerId !== uid || o.status !== 'consegnato' || o.aiutoRichiesto !== true) return null;
+      const admins = (await db.collection('admins').get()).docs.map((d) => d.id).filter((id) => id !== uid);
+      return { ...base, toList: admins, title: '🆘 Scambio da sbloccare', body: `${clip(o.ownerName, 40)} chiede aiuto per ${t}: Pannello Admin → Da controllare.` };
+    }
     case 'reviewed': {
       const isAdmin = (await db.doc(`admins/${uid}`).get()).exists;
       if (!isAdmin || !['disponibile', 'rifiutato'].includes(o.status)) return null;
@@ -109,7 +114,8 @@ export default async function handler(req, res) {
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const n = await buildNotification(db, uid, body);
-    if (!n || !n.to || (n.to === uid && !n.self)) return res.status(200).json({ sent: 0, reason: 'not-applicable' });
+    const destinatari = n ? (n.toList || [n.to]).filter((d) => d && (d !== uid || n.self)) : [];
+    if (!destinatari.length) return res.status(200).json({ sent: 0, reason: 'not-applicable' });
 
     // Anti-spam: una notifica al minuto per chiave; per gli annunci una sola per stato
     const stateRef = db.doc(`notifyState/${n.key}`);
@@ -120,8 +126,11 @@ export default async function handler(req, res) {
       if (Date.now() - (prev.at?.toMillis?.() || 0) < intervallo) return res.status(200).json({ sent: 0, reason: 'throttled' });
     }
 
-    const tokSnap = await db.doc(`pushTokens/${n.to}`).get();
-    const tokens = tokSnap.exists ? (tokSnap.data().tokens || []) : [];
+    const tokens = [], refDi = new Map();   // token -> documento da cui viene
+    for (const d of destinatari.slice(0, 20)) {
+      const snap = await db.doc(`pushTokens/${d}`).get();
+      (snap.exists ? (snap.data().tokens || []) : []).forEach((t) => { tokens.push(t); refDi.set(t, snap.ref); });
+    }
     if (!tokens.length) return res.status(200).json({ sent: 0, reason: 'no-tokens' });
 
     const result = await messaging.sendEachForMulticast({
@@ -136,7 +145,7 @@ export default async function handler(req, res) {
       const code = r.error?.code || '';
       if (code.includes('registration-token-not-registered') || code.includes('invalid-registration-token') || code.includes('invalid-argument')) dead.push(tokens[i]);
     });
-    if (dead.length) await tokSnap.ref.update({ tokens: FieldValue.arrayRemove(...dead) });
+    for (const t of dead) await refDi.get(t).update({ tokens: FieldValue.arrayRemove(t) });
 
     await stateRef.set({ at: FieldValue.serverTimestamp(), status: n.status || null });
     const errors = result.responses.map((r) => r.error?.code).filter(Boolean);

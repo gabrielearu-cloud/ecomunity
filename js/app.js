@@ -19,6 +19,7 @@ import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, safeImg, tsToDate, compressImage } from './utils.js';
 import { checkAdmin } from './admin.js';
+import { notify, initPushUi, removePushTokens } from './push.js';
 
 // ---------- 2. STATO LOCALE ----------
 let currentOfferType = 'bene';
@@ -38,7 +39,10 @@ let allChatsData = [];
 let hasNewProfileUpdate = false;
 let emailRemovalTried = false;
 
-let unsub = { offers: null, myOffers: null, chats: null, profile: null, messages: null, catalog: null };
+let toReceive = [];           // [{id, data}] annunci riservati a me (in trattativa o consegnati)
+let toReceiveStatus = new Map();
+
+let unsub = { offers: null, myOffers: null, toReceive: null, chats: null, profile: null, messages: null, catalog: null };
 
 // Il profilo nuovo va creato solo dopo aver letto il catalogo (serve kpIniziali)
 let catalogReady, resolveCatalogReady;
@@ -48,6 +52,7 @@ resetCatalogReady();
 const STATUS_LABEL = {
   disponibile:   { text: 'Disponibile',    cls: 'bg-green-100 text-green-700 border-green-200' },
   in_trattativa: { text: 'In Trattativa',  cls: 'bg-yellow-200 text-yellow-800 border-yellow-300' },
+  consegnato:    { text: 'Da confermare',  cls: 'bg-blue-100 text-blue-700 border-blue-200' },
   in_verifica:   { text: 'In verifica',    cls: 'bg-purple-100 text-purple-700 border-purple-200' },
   rifiutato:     { text: 'Rifiutato',      cls: 'bg-red-100 text-red-700 border-red-200' },
   concluso:      { text: 'Concluso',       cls: 'bg-gray-200 text-gray-700 border-gray-300' }
@@ -351,6 +356,8 @@ onAuthStateChanged(auth, (user) => {
     subscribeCatalog();
     loadOffers();
     loadMyOffers(user.uid);
+    loadToReceive(user.uid);
+    initPushUi();
     loadChatList();
     loadProfileData(user.uid);
     checkAdmin(user.uid);
@@ -367,6 +374,7 @@ onAuthStateChanged(auth, (user) => {
     homeOffers = []; myOffers = []; allChatsData = []; unreadChatIds = [];
     state.karma = null; state.completedSwaps = 0; state.isAdmin = false; lastKnownKarma = null;
     myOfferStatus = new Map();
+    toReceive = []; toReceiveStatus = new Map();
     $('consent-modal').style.display = 'none';
     consentMode = null;
     deletingAccount = false;
@@ -413,6 +421,7 @@ window.sendMessage = async function (event) {
       lastMessageSenderId: me.uid
     });
     input.value = '';
+    notify('message', { chatId });
   } catch (e) {
     reportError('sendMessage', e, { chatId });
     alert('Impossibile inviare il messaggio: ' + friendlyError(e));
@@ -740,6 +749,7 @@ window.confirmReserve = async function (docId, buyerId, buyerName) {
       reservedByName: String(buyerName || 'Utente').slice(0, 80)
     });
     logEvent('offer_reserved', { offerId: docId, buyerId });
+    notify('reserved', { offerId: docId });
     window.closeBuyerModal();
   } catch (e) {
     reportError('confirmReserve', e, { offerId: docId, buyerId });
@@ -763,18 +773,40 @@ window.closeFeedbackModal = function () {
   $('feedback-modal').dataset.docId = '';
 };
 
-window.requestFeedback = async function (docId) {
+// --- Passo 1: chi regala segna "consegnato" (nessun KP si muove ancora) ---
+window.markDelivered = async function (docId) {
+  const o = state.offers.get(docId);
+  if (!confirm(`Confermi di aver consegnato "${o?.title || 'l\'annuncio'}" a ${o?.reservedByName || 'chi lo riceve'}?\n\n` +
+               'I KP ti verranno accreditati quando l\'altra persona confermerà di averlo ricevuto.')) return;
   try {
-    const snap = await getDoc(doc(db, 'offerte', docId));
-    if (!snap.exists()) return alert('Annuncio non trovato.');
-    const o = snap.data();
-    if (!o.reservedBy) return alert('Nessun acquirente associato: rendi di nuovo disponibile e assegnalo.');
-    $('feedback-modal').dataset.docId = docId;
-    $('feedback-offer-title').textContent = `"${o.title}" → ${o.reservedByName || 'acquirente'}`;
-    $('feedback-kp-info').textContent = `Tu ricevi +${o.cpValue} KP. L'acquirente paga −${o.cpValue} KP.`;
-    $('feedback-modal').style.display = 'flex';
+    await updateDoc(doc(db, 'offerte', docId), { status: 'consegnato', deliveredAt: serverTimestamp() });
+    logEvent('offer_delivered', { offerId: docId, buyerId: o?.reservedBy || null });
+    notify('delivered', { offerId: docId });
   } catch (e) {
-    reportError('requestFeedback', e, { offerId: docId });
+    reportError('markDelivered', e, { offerId: docId });
+    alert('Operazione non riuscita: ' + friendlyError(e));
+  }
+};
+
+// --- Passo 2: chi riceve conferma e valuta: solo ora i KP si spostano ---
+window.confirmReceived = function (docId) {
+  const o = toReceive.find((x) => x.id === docId)?.data;
+  if (!o) return;
+  $('feedback-modal').dataset.docId = docId;
+  $('feedback-offer-title').textContent = `"${o.title}" da ${o.ownerName || 'chi lo regala'}`;
+  $('feedback-kp-info').textContent = `Confermando, paghi −${o.cpValue} KP e ${o.ownerName || 'chi regala'} li riceve.`;
+  $('feedback-modal').style.display = 'flex';
+};
+
+window.notReceived = async function (docId) {
+  if (!confirm('Segnali di NON aver ricevuto il bene o il servizio?\nLo scambio torna "in trattativa" e nessun KP viene spostato. Scrivi all\'altra persona in chat per chiarire.')) return;
+  try {
+    await updateDoc(doc(db, 'offerte', docId), { status: 'in_trattativa', deliveredAt: null });
+    logEvent('offer_not_received', { offerId: docId }, 'warn');
+    notify('not_received', { offerId: docId });
+  } catch (e) {
+    reportError('notReceived', e, { offerId: docId });
+    alert('Operazione non riuscita: ' + friendlyError(e));
   }
 };
 
@@ -791,27 +823,28 @@ window.submitFeedback = async function (feedbackType) {
       const offerSnap = await tx.get(offerRef);
       if (!offerSnap.exists()) throw new Error('Annuncio non trovato.');
       const o = offerSnap.data();
-      if (o.ownerId !== me.uid) throw new Error('Operazione non consentita.');
-      if (o.status !== 'in_trattativa' || !o.reservedBy) throw new Error("L'annuncio non è in trattativa.");
+      if (o.reservedBy !== me.uid) throw new Error('Operazione non consentita.');
+      if (o.status !== 'consegnato') throw new Error('Chi regala non ha ancora segnato la consegna.');
       const cp = Number(o.cpValue);
       if (!Number.isInteger(cp) || cp < 1) throw new Error('Valore KP non valido.');
 
-      const giverRef = doc(db, 'users', me.uid);
-      const buyerRef = doc(db, 'users', o.reservedBy);
-      const giverSnap = await tx.get(giverRef);
+      const buyerRef = doc(db, 'users', me.uid);
+      const giverRef = doc(db, 'users', o.ownerId);
       const buyerSnap = await tx.get(buyerRef);
+      const giverSnap = await tx.get(giverRef);
       if (!giverSnap.exists() || !buyerSnap.exists()) throw new Error('Profilo utente non trovato.');
       const g = giverSnap.data(), b = buyerSnap.data();
       const buyerKarma = b.karmaPoints ?? 0;
-      if (buyerKarma < cp) throw new Error(`L'acquirente ha solo ${buyerKarma} KP: ne servono ${cp}.`);
+      if (buyerKarma < cp) throw new Error(`Hai solo ${buyerKarma} KP: ne servono ${cp}.`);
 
       tx.update(offerRef, { status: 'concluso', feedback: feedbackType, completionDate: serverTimestamp() });
-      tx.update(giverRef, { karmaPoints: (g.karmaPoints ?? 0) + cp, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: docId });
       tx.update(buyerRef, { karmaPoints: buyerKarma - cp, completedSwaps: (b.completedSwaps ?? 0) + 1, lastOfferId: docId });
-      summary = { offerId: docId, title: o.title, type: o.type, kp: cp, giverId: me.uid, buyerId: o.reservedBy, feedback: feedbackType };
+      tx.update(giverRef, { karmaPoints: (g.karmaPoints ?? 0) + cp, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: docId });
+      summary = { offerId: docId, title: o.title, type: o.type, kp: cp, giverId: o.ownerId, buyerId: me.uid, feedback: feedbackType };
     });
     logEvent('exchange_completed', summary, feedbackType === 'insoddisfacente' ? 'warn' : 'info');
-    alert(`Scambio concluso! Hai ricevuto +${summary.kp} KP.`);
+    notify('concluded', { offerId: docId });
+    alert(`Scambio concluso! Grazie: ${summary.kp} KP sono passati a chi ti ha aiutato.`);
   } catch (e) {
     reportError('submitFeedback', e, { offerId: docId });
     alert('Scambio non concluso: ' + friendlyError(e));
@@ -819,6 +852,49 @@ window.submitFeedback = async function (feedbackType) {
     window.closeFeedbackModal();
   }
 };
+
+// --- Annunci riservati a me ---
+function loadToReceive(uid) {
+  const q = query(collection(db, 'offerte'), where('reservedBy', '==', uid));
+  unsub.toReceive = onSnapshot(q, (snap) => {
+    toReceive = snap.docs
+      .map((d) => ({ id: d.id, data: d.data({ serverTimestamps: 'estimate' }) }))
+      .filter((o) => ['in_trattativa', 'consegnato'].includes(o.data.status));
+    let nuovaConsegna = false;
+    toReceive.forEach((o) => {
+      state.offers.set(o.id, o.data);
+      if (o.data.status === 'consegnato' && toReceiveStatus.get(o.id) !== 'consegnato') nuovaConsegna = true;
+      toReceiveStatus.set(o.id, o.data.status);
+    });
+    if (nuovaConsegna && !$('profile-screen').classList.contains('active')) {
+      hasNewProfileUpdate = true;
+      updateProfileTabIndicator();
+    }
+    renderToReceive();
+  }, (e) => reportError('loadToReceive', e));
+}
+
+function renderToReceive() {
+  const box = $('to-receive');
+  if (!box) return;
+  $('to-receive-section').classList.toggle('hidden', !toReceive.length);
+  box.innerHTML = toReceive.map(({ id, data: o }) => {
+    const action = o.status === 'consegnato'
+      ? `<p class="text-xs text-blue-700 mt-1">${esc(o.ownerName)} ha segnato la consegna. L'hai ricevuto?</p>
+         <button onclick="confirmReceived('${id}')" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-sm font-medium rounded-lg">✓ Sì, l'ho ricevuto</button>
+         <button onclick="notReceived('${id}')" class="mt-1 w-full text-xs text-red-600 hover:underline">Non l'ho ricevuto</button>`
+      : `<p class="text-xs text-gray-500 mt-1">Riservato per te: accordati in chat con ${esc(o.ownerName)} per la consegna.</p>`;
+    return `
+      <div class="p-3 border border-gray-200 rounded-lg text-left">
+        <div class="flex justify-between items-center gap-2">
+          <span class="font-medium text-sm text-gray-800 truncate">${esc(o.title)}</span>
+          <span class="text-xs font-bold text-amber-700 whitespace-nowrap">${o.cpValue} KP</span>
+        </div>
+        <div class="mt-1">${statusTag(o.status)}</div>
+        ${action}
+      </div>`;
+  }).join('');
+}
 
 // ---------- 10. SEGNALAZIONI ----------
 window.reportOffer = async function (offerId) {
@@ -929,7 +1005,8 @@ function renderOffers() {
       } else if (isTrattativa) {
         buttons = `
           <p class="text-xs text-gray-500 mt-2">Assegnato a: <b>${esc(o.reservedByName || 'acquirente')}</b></p>
-          <button onclick="requestFeedback('${id}')" class="mt-3 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">✓ Concludi Scambio (+${cp} KP)</button>
+          <button onclick="markDelivered('${id}')" class="mt-3 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">📦 Ho consegnato</button>
+          <p class="text-xs text-gray-500 mt-1">Riceverai ${cp} KP quando ${esc(o.reservedByName || 'l\'altra persona')} confermerà di averlo ricevuto.</p>
           <button onclick="setDisponibile('${id}')" class="mt-2 w-full bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 px-4 py-2 text-sm font-medium rounded-lg">Rendi di nuovo disponibile</button>`;
       } else {
         buttons = `
@@ -937,7 +1014,7 @@ function renderOffers() {
           <button onclick="deleteOffer('${id}')" class="mt-2 w-full bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-4 py-2 text-sm font-medium rounded-lg">Elimina Annuncio</button>`;
       }
     } else if (isTrattativa) {
-      buttons = `<button disabled class="mt-3 w-full px-4 py-2 text-sm font-medium rounded-lg ${o.reservedBy === me.uid ? 'text-green-800 bg-green-100' : 'text-gray-500 bg-gray-200'} cursor-not-allowed">${o.reservedBy === me.uid ? `Riservato per te (${cp} KP alla conclusione)` : 'In Trattativa'}</button>`;
+      buttons = `<button disabled class="mt-3 w-full px-4 py-2 text-sm font-medium rounded-lg ${o.reservedBy === me.uid ? 'text-green-800 bg-green-100' : 'text-gray-500 bg-gray-200'} cursor-not-allowed">${o.reservedBy === me.uid ? `Riservato per te: conferma la ricezione dal Profilo` : 'In Trattativa'}</button>`;
     } else {
       buttons = affordable
         ? `<button onclick="startChat('${id}')" class="mt-3 w-full ${o.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Avvia Chat</button>`
@@ -986,6 +1063,7 @@ function renderMyOffers() {
     let note = '';
     if (o.status === 'in_verifica') note = '<p class="text-xs text-purple-700 mt-1">In attesa di verifica da parte di un amministratore.</p>';
     if (o.status === 'rifiutato') note = `<p class="text-xs text-red-600 mt-1">Motivo: ${esc(o.motivoRifiuto || 'non indicato')}. Puoi eliminarlo e ripubblicarlo con dati corretti.</p>`;
+    if (o.status === 'consegnato') note = `<p class="text-xs text-blue-700 mt-1">In attesa che ${esc(o.reservedByName || 'chi riceve')} confermi di averlo ricevuto: poi riceverai ${o.cpValue} KP.</p>`;
     if ((o.reportCount || 0) >= state.catalog.sogliaSegnalazioni) note += '<p class="text-xs text-red-600 mt-1">Nascosto per segnalazioni, in revisione.</p>';
     const canDelete = ['disponibile', 'in_verifica', 'rifiutato'].includes(o.status);
     return `
@@ -1144,8 +1222,9 @@ window.deleteMyAccount = async function () {
       b.delete(doc(db, 'chats', c.id));
       await b.commit();
     }
-    // 4. Profilo
+    // 4. Profilo e token delle notifiche
     stopListeners();
+    await removePushTokens(me.uid);
     const b = writeBatch(db);
     b.delete(doc(db, 'users', me.uid));
     await b.commit();

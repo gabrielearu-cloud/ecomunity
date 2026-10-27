@@ -36,6 +36,7 @@
     <tr><td><b>Annunci</b>: titolo, descrizione, foto, categoria, marca, modello, anno di acquisto, prezzo da nuovo dichiarato, condizioni, durata dei servizi</td><td>Da te, quando pubblichi</td></tr>
     <tr><td><b>Chat</b>: messaggi scambiati con altri utenti</td><td>Da te e dagli altri partecipanti</td></tr>
     <tr><td><b>Segnalazioni</b>: motivo della segnalazione di un annuncio</td><td>Da te, se segnali</td></tr>
+    <tr><td><b>Notifiche</b> (solo se le attivi): identificativo tecnico del dispositivo per l'invio delle notifiche push</td><td>Dal tuo browser o telefono, quando premi "Attiva notifiche"</td></tr>
     <tr><td><b>Registro tecnico (log)</b>: UID, nome visualizzato, tipo di evento (es. accesso, annuncio pubblicato, errore), data e ora, versione dell'app e tipo di browser</td><td>Generati dall'app</td></tr>
     <tr><td><b>Dati di navigazione</b>: indirizzo IP e dati tecnici della connessione</td><td>Raccolti automaticamente dai fornitori tecnici (punto 6)</td></tr>
   </table>
@@ -66,7 +67,8 @@
   <table>
     <tr><th>Fornitore</th><th>Servizio</th></tr>
     <tr><td>Google (Google Ireland Ltd / Google LLC)</td><td>Accesso con Google e database (Firebase Authentication, Cloud Firestore). Località del database: <span data-legal="luogoDati"></span></td></tr>
-    <tr><td>Vercel Inc. (USA)</td><td>Pubblicazione del sito web</td></tr>
+    <tr><td>Vercel Inc. (USA)</td><td>Pubblicazione del sito web ed esecuzione della funzione che invia le notifiche</td></tr>
+    <tr><td>Google (Firebase Cloud Messaging)</td><td>Recapito delle notifiche push al tuo dispositivo. Le notifiche contengono solo il nome di chi scrive e il titolo dell'annuncio, mai il testo dei messaggi</td></tr>
     <tr><td>jsDelivr / gstatic.com</td><td>Distribuzione di file tecnici del sito (stili grafici e librerie Firebase)</td></tr>
   </table>
   <p>Questi fornitori agiscono come responsabili del trattamento o come titolari autonomi per i propri dati tecnici, secondo i rispettivi termini. Alcuni possono trattare dati negli Stati Uniti: il trasferimento avviene sulla base dell'EU-US Data Privacy Framework e/o delle Clausole Contrattuali Standard approvate dalla Commissione europea.</p>
@@ -77,6 +79,7 @@
     <li><b>Annunci e foto</b>: finché non li elimini tu o elimini l'account.</li>
     <li><b>Chat</b>: finché uno dei partecipanti non elimina la chat o il proprio account.</li>
     <li><b>Registro tecnico</b>: al massimo 90 giorni.</li>
+    <li><b>Identificativi per le notifiche</b>: finché le notifiche restano attive sul dispositivo o fino all'eliminazione dell'account. Puoi disattivarle in qualsiasi momento dalle impostazioni del browser o del telefono.</li>
     <li><b>Segnalazioni</b>: finché esiste l'annuncio segnalato.</li>
   </ul>
   <p>Puoi eliminare il tuo account in qualsiasi momento da <b>Profilo → Elimina il mio account</b>: vengono cancellati profilo, annunci, foto e chat.</p>

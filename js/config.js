@@ -29,11 +29,20 @@ export const LEGAL = {
   email: '[indirizzo email dedicato a Ecommuni]',
   comune: '[Comune di residenza]',
   luogoDati: "[località del database: Firebase → Impostazioni progetto → Località risorse, es. \"eur3 (Europa)\"]",
-  versioneTermini: '2026-10-26',
+  versioneTermini: '2026-10-27',
   etaMinima: 18
 };
 
-export const PAGE_SIZE = 20;                // annunci caricati per volta
+// =====================================================================
+// NOTIFICHE PUSH
+// VAPID_KEY: Firebase Console -> Impostazioni progetto -> Cloud Messaging ->
+//            "Certificati push web" -> Genera coppia di chiavi -> copia la chiave qui.
+// Finche' e' vuota, il pulsante "Attiva notifiche" resta nascosto.
+// =====================================================================
+export const VAPID_KEY = '';
+export const NOTIFY_URL = '/api/notify';   // funzione su Vercel (cartella api/)
+
+export const PAGE_SIZE = 20;               // annunci caricati per volta
 export const FOTO_MAX_CHARS = 180000;        // ~135 KB per foto
 export const THUMB_MAX_CHARS = 45000;        // ~35 KB per miniatura
 export const LOG_RETENTION_DAYS = 90;        // pulizia log dal pannello admin

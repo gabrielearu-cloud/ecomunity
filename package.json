@@ -1,0 +1,10 @@
+{
+  "name": "ecommuni",
+  "private": true,
+  "type": "module",
+  "description": "Ecommuni: sito statico + funzione api/notify per le notifiche push (Vercel)",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

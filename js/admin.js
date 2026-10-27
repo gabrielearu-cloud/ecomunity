@@ -13,6 +13,7 @@ import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, tsToDate } from './utils.js';
 import { switchScreen, deleteOfferWithFotos, valuationLine, thumbHtml } from './app.js';
+import { notify } from './push.js';
 
 let adminLogs = [];
 
@@ -103,6 +104,7 @@ window.approveOffer = async function (id) {
   try {
     await updateDoc(doc(db, 'offerte', id), { status: 'disponibile', verifiedBy: auth.currentUser.uid, verifiedAt: serverTimestamp() });
     logEvent('offer_approved', { offerId: id, kp: state.offers.get(id)?.cpValue });
+    notify('reviewed', { offerId: id });
     await loadReviewQueue();
   } catch (e) {
     reportError('admin.approveOffer', e, { offerId: id });
@@ -118,6 +120,7 @@ window.rejectOffer = async function (id) {
       status: 'rifiutato', motivoRifiuto: motivo.slice(0, 300), verifiedBy: auth.currentUser.uid, verifiedAt: serverTimestamp()
     });
     logEvent('offer_rejected', { offerId: id, kp: state.offers.get(id)?.cpValue, motivo: motivo.slice(0, 300) }, 'warn');
+    notify('reviewed', { offerId: id });
     await loadReviewQueue();
   } catch (e) {
     reportError('admin.rejectOffer', e, { offerId: id });

@@ -6,12 +6,12 @@
 // Quando cambi i file dell'app non serve toccare nulla; aumenta VERSIONE
 // solo se aggiungi o rinomini file nell'elenco qui sotto.
 // =====================================================================
-const VERSIONE = 'ecommuni-v2';
+const VERSIONE = 'ecommuni-v3';
 const FILE_BASE = [
   './', './index.html', './privacy.html', './termini.html', './manifest.webmanifest',
   './css/style.css',
   './js/app.js', './js/admin.js', './js/catalog.js', './js/config.js', './js/firebase.js',
-  './js/logger.js', './js/state.js', './js/utils.js', './js/legal-page.js',
+  './js/logger.js', './js/state.js', './js/utils.js', './js/legal-page.js', './js/push.js',
   './icons/icon-192.png', './icons/icon-512.png', './favicon.svg'
 ];
 
@@ -48,5 +48,44 @@ self.addEventListener('fetch', (event) => {
         return res;
       })
       .catch(() => caches.match(req).then((r) => r || caches.match('./index.html')))
+  );
+});
+
+// =====================================================================
+// NOTIFICHE PUSH (inviate da /api/notify tramite Firebase Cloud Messaging)
+// =====================================================================
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch (_) { /* testo non JSON */ }
+  const d = payload.data || payload.notification || {};
+  const title = d.title || 'Ecommuni';
+  const options = {
+    body: d.body || 'Hai una novità su Ecommuni',
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png',
+    tag: d.tag || 'ecommuni',
+    renotify: true,
+    data: { url: d.url || './index.html' }
+  };
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      // Se l'app e' aperta e in primo piano non serve la notifica.
+      // Su iPhone/iPad va mostrata sempre: Safari revoca le notifiche se un push resta "silenzioso".
+      const apple = /iphone|ipad|ipod|macintosh/i.test(self.navigator.userAgent);
+      if (!apple && wins.some((w) => w.visibilityState === 'visible' && w.focused)) return;
+      return self.registration.showNotification(title, options);
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || './index.html', self.registration.scope).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      const w = wins.find((c) => c.url.startsWith(self.registration.scope));
+      if (w) { w.navigate(target).catch(() => {}); return w.focus(); }
+      return self.clients.openWindow(target);
+    })
   );
 });

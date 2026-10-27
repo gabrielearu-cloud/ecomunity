@@ -275,6 +275,45 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neu
 .camera-flash { animation: camflash .25s; }
 @keyframes camflash { 0% { filter: brightness(2.5); } 100% { filter: none; } }
 
+/* ===== "Come funziona" in testata ===== */
+.info-btn { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid #16a34a; color: #16a34a; background: #fff;
+  font-weight: 800; font-size: .8rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.info-btn:hover, .info-btn[aria-expanded="true"] { background: #16a34a; color: #fff; }
+.info-btn.info-new { animation: infopulse 1.8s ease-in-out 4; }
+@keyframes infopulse { 0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,.45); } 50% { box-shadow: 0 0 0 7px rgba(22,163,74,0); } }
+.info-pop { position: absolute; top: calc(100% - 6px); left: 12px; right: 12px; max-width: 360px; z-index: 60;
+  background: #fff; border: 1px solid #bbf7d0; border-radius: 14px; padding: 14px 16px 10px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.14); font-size: .86rem; color: #374151; line-height: 1.45; }
+.info-pop::before { content: ""; position: absolute; top: -7px; left: var(--freccia, 150px); width: 12px; height: 12px; background: #fff;
+  border-left: 1px solid #bbf7d0; border-top: 1px solid #bbf7d0; transform: rotate(45deg); }
+.info-pop p { margin: 0 0 .5rem; }
+.info-pop ol { margin: 0 0 .5rem 1.1rem; padding: 0; list-style: decimal; }
+.info-pop li { margin-bottom: .25rem; }
+.info-title { font-weight: 700; color: #15803d; font-size: .95rem; }
+.info-foot { color: #15803d; font-weight: 600; }
+.info-close { display: block; margin-left: auto; font-size: .8rem; font-weight: 600; color: #16a34a; padding: .25rem .4rem; }
+
+/* ===== Reputazione e giudizi ===== */
+.rep { font-size: .72rem; color: #6b7280; font-weight: 500; white-space: nowrap; }
+.chat-name .rep { font-size: .7rem; }
+.rep-ok { color: #15803d; font-weight: 600; }
+.rep-low { color: #b45309; font-weight: 600; }
+.rep-new { color: #15803d; }
+.fb-btn { display: flex; flex-direction: column; align-items: center; gap: .2rem; padding: .9rem .5rem; border-radius: .8rem;
+  font-size: 1.6rem; font-weight: 600; border: 1.5px solid transparent; }
+.fb-btn span { font-size: .85rem; }
+.fb-pos { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.fb-pos:hover { background: #bbf7d0; }
+.fb-neg { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+.fb-neg:hover { background: #fecaca; }
+.suspended-banner { margin-top: .6rem; padding: .6rem .75rem; border-radius: .6rem; background: #fef2f2; border: 1px solid #fecaca;
+  color: #991b1b; font-size: .8rem; }
+.adm-card { padding: .6rem .7rem; border-radius: .6rem; border: 1px solid #e5e7eb; background: #fff; font-size: .82rem; }
+.adm-actions { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .45rem; }
+.adm-btn { padding: .3rem .6rem; border-radius: .4rem; font-size: .75rem; font-weight: 600; border: 1px solid #d1d5db; background: #f9fafb; }
+.adm-btn.ok { background: #16a34a; border-color: #16a34a; color: #fff; }
+.adm-btn.warn { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+
 .hidden { display: none !important; }
 
 /* ===== Annuncio in trattativa: leggibile, con barra gialla ===== */

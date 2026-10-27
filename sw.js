@@ -6,7 +6,7 @@
 // Quando cambi i file dell'app non serve toccare nulla; aumenta VERSIONE
 // solo se aggiungi o rinomini file nell'elenco qui sotto.
 // =====================================================================
-const VERSIONE = 'ecommuni-v1';
+const VERSIONE = 'ecommuni-v2';
 const FILE_BASE = [
   './', './index.html', './privacy.html', './termini.html', './manifest.webmanifest',
   './css/style.css',
@@ -16,7 +16,12 @@ const FILE_BASE = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(VERSIONE).then((c) => c.addAll(FILE_BASE)).then(() => self.skipWaiting()));
+  // Salva i file uno per uno: se qualcuno manca sul sito, lo salta invece di bloccare tutto
+  event.waitUntil(
+    caches.open(VERSIONE)
+      .then((c) => Promise.all(FILE_BASE.map((f) => c.add(f).catch(() => console.warn('[sw] file non trovato:', f)))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {

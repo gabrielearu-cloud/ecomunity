@@ -14,7 +14,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, googleProvider } from './firebase.js';
 import { PAGE_SIZE, FOTO_MAX_CHARS, THUMB_MAX_CHARS, LEGAL } from './config.js';
-import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie, minFotoBeni } from './catalog.js';
+import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie, minFotoBeni, gruppiOrdinati, iconaGruppo, cercaSottocategorie } from './catalog.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, safeImg, tsToDate, compressImage } from './utils.js';
@@ -162,59 +162,111 @@ function populateSelects() {
 
 // ---------- 5. FORM PUBBLICAZIONE ----------
 
-// Menu "Cosa stai regalando": mostra solo le sottocategorie suggerite da titolo e descrizione
-let showAllCats = false;     // l'utente ha chiesto di vedere tutte le categorie
+// ----- Selettore "Cosa stai regalando" -----
+// Campo che apre un pannello con ricerca e gruppi; sotto il campo, i suggerimenti
+// ricavati dal titolo come pulsanti rapidi. Il valore scelto sta nell'input nascosto
+// #bene-sottocategoria, letto da calcolaValore().
 let userPickedSub = false;   // l'utente ha scelto a mano: non cambiare piu' la selezione da solo
+let lastSugg = { lista: [], migliore: null };
 
-function renderSottocategorie() {
+const fascia = (s) => `${s.min}–${s.max} €`;
+
+function paintCatButton() {
   const c = state.catalog;
-  const select = $('bene-sottocategoria');
-  const current = select.value;
-  const sugg = suggerisciSottocategorie(c, val('title'), val('description'));
-  const filtra = sugg.lista.length > 0 && !showAllCats;
-  const chiavi = filtra ? sugg.lista : Object.keys(c.sottocategorie);
+  const k = val('bene-sottocategoria');
+  const s = c.sottocategorie[k];
+  $('cat-button').innerHTML = s
+    ? `<span class="cat-emoji">${iconaGruppo(s.gruppo)}</span>
+       <span class="cat-text"><span class="cat-label">${esc(s.label)}</span>
+       <span class="cat-sub">${esc(s.gruppo)} · nuovo ${fascia(s)}</span></span>
+       <span class="cat-change">Cambia</span>`
+    : `<span class="cat-emoji">🏷️</span>
+       <span class="cat-text"><span class="cat-placeholder">Scegli una categoria</span></span>
+       <span class="cat-change">Elenco ›</span>`;
+  $('cat-button').classList.toggle('cat-field-empty', !s);
+}
 
-  const groups = {};
-  chiavi.forEach((k) => { const s = c.sottocategorie[k]; if (s) (groups[s.gruppo] ||= []).push([k, s]); });
-  select.innerHTML = '<option value="">— Scegli cosa stai regalando —</option>' +
-    Object.entries(groups).map(([g, items]) =>
-      `<optgroup label="${esc(g)}">${items.map(([k, s]) =>
-        `<option value="${esc(k)}">${esc(s.label)} (${s.min}–${s.max} € da nuovo)</option>`).join('')}</optgroup>`).join('') +
-    (filtra ? '<option value="__all__">▸ Non è nessuna di queste: mostra tutte le categorie</option>' : '');
-
-  if (userPickedSub && chiavi.includes(current)) {
-    select.value = current;                       // scelta manuale: la rispetto
+function renderCatChips() {
+  const c = state.catalog;
+  const box = $('cat-suggest');
+  const sel = val('bene-sottocategoria');
+  const lista = lastSugg.lista.filter((k) => c.sottocategorie[k]).slice(0, 5);
+  if (!val('title').trim()) {
+    box.innerHTML = '<p class="cat-hint">Scrivi il titolo: ti suggerirò la categoria giusta.</p>';
+  } else if (!lista.length) {
+    box.innerHTML = '<p class="cat-hint">Nessuna categoria riconosciuta dal titolo: sceglila dall\'elenco.</p>';
   } else {
-    userPickedSub = false;
-    select.value = (sugg.migliore && chiavi.includes(sugg.migliore)) ? sugg.migliore : '';
-  }
-
-  const hint = $('cat-suggest');
-  if (filtra) {
-    hint.innerHTML = `🔎 ${sugg.lista.length === 1 ? 'Categoria riconosciuta' : 'Categorie suggerite'} dal titolo.
-      <button type="button" class="underline" onclick="showAllCategories(true)">Mostra tutte</button>`;
-  } else if (showAllCats && sugg.lista.length) {
-    hint.innerHTML = `<button type="button" class="underline" onclick="showAllCategories(false)">Mostra solo le categorie suggerite</button>`;
-  } else {
-    hint.textContent = val('title') ? 'Nessuna categoria riconosciuta dal titolo: scegli dall\'elenco.' : 'Scrivi il titolo: ti proporrò le categorie adatte.';
+    box.innerHTML = `<p class="cat-hint">${lista.length === 1 ? 'Categoria riconosciuta dal titolo:' : 'Suggerite dal titolo, scegli quella giusta:'}</p>
+      <div class="cat-chips">${lista.map((k) => {
+        const s = c.sottocategorie[k];
+        return `<button type="button" class="cat-chip${k === sel ? ' cat-chip-on' : ''}" onclick="pickCat('${k}')">${iconaGruppo(s.gruppo)} ${esc(s.label)}</button>`;
+      }).join('')}</div>`;
   }
 }
 
-window.showAllCategories = function (all) {
-  showAllCats = !!all;
-  renderSottocategorie();
+function renderSottocategorie() {
+  const c = state.catalog;
+  const input = $('bene-sottocategoria');
+  lastSugg = suggerisciSottocategorie(c, val('title'), val('description'));
+  if (input.value && !c.sottocategorie[input.value]) { input.value = ''; userPickedSub = false; }
+  if (!userPickedSub) input.value = (lastSugg.migliore && c.sottocategorie[lastSugg.migliore]) ? lastSugg.migliore : '';
+  paintCatButton();
+  renderCatChips();
+}
+
+window.pickCat = function (k) {
+  if (!state.catalog.sottocategorie[k]) return;
+  $('bene-sottocategoria').value = k;
+  userPickedSub = true;
+  window.closeCatSheet();
+  paintCatButton();
+  renderCatChips();
   updateValuePreview();
 };
 
-window.onSubChange = function () {
-  if (val('bene-sottocategoria') === '__all__') {
-    showAllCats = true;
-    renderSottocategorie();
-  } else {
-    userPickedSub = !!val('bene-sottocategoria');
-  }
-  updateValuePreview();
+window.openCatSheet = function () {
+  $('cat-search').value = '';
+  renderCatSheet();
+  $('cat-sheet').style.display = 'flex';
+  setTimeout(() => {
+    const on = document.querySelector('#cat-list .cat-row-on');
+    if (on) on.scrollIntoView({ block: 'center' });
+  }, 0);
 };
+
+window.closeCatSheet = function () { $('cat-sheet').style.display = 'none'; };
+
+function renderCatSheet() {
+  const c = state.catalog;
+  const sel = val('bene-sottocategoria');
+  const filtro = cercaSottocategorie(c, val('cat-search'));
+  const riga = ([k, s]) => `
+    <button type="button" class="cat-row${k === sel ? ' cat-row-on' : ''}" onclick="pickCat('${k}')">
+      <span class="cat-row-label">${esc(s.label)}</span>
+      <span class="cat-row-range">${fascia(s)}</span>
+      <span class="cat-row-check">${k === sel ? '✓' : ''}</span>
+    </button>`;
+
+  let html = '';
+  const sugg = lastSugg.lista.filter((k) => c.sottocategorie[k] && (!filtro || filtro.has(k)));
+  if (sugg.length && !filtro) {
+    html += `<div class="cat-group"><div class="cat-group-head">✨ Suggerite per «${esc(val('title').slice(0, 40))}»</div>
+      ${sugg.map((k) => riga([k, c.sottocategorie[k]])).join('')}</div>`;
+  }
+  gruppiOrdinati(c).forEach(({ gruppo, icona, voci }) => {
+    const visibili = filtro ? voci.filter(([k]) => filtro.has(k)) : voci;
+    if (!visibili.length) return;
+    html += `<div class="cat-group${gruppo === 'Altro' ? ' cat-group-last' : ''}">
+      <div class="cat-group-head">${icona} ${esc(gruppo)}</div>${visibili.map(riga).join('')}</div>`;
+  });
+  if (!html) {
+    const altro = Object.entries(c.sottocategorie).find(([k, s]) => k === 'altro' || s.gruppo === 'Altro');
+    html = `<p class="cat-empty">Nessuna categoria trovata per «${esc(val('cat-search'))}».</p>` +
+      (altro ? `<div class="cat-group cat-group-last"><div class="cat-group-head">📦 Altro</div>${riga(altro)}</div>` : '');
+  }
+  $('cat-list').innerHTML = html;
+}
+window.renderCatSheet = renderCatSheet;
 
 window.onOfferTextChange = function () {
   if (currentOfferType === 'bene') renderSottocategorie();
@@ -313,7 +365,6 @@ function resetPublishForm() {
   $('publish-form').reset();
   pendingFotos = [null, null, null];
   [0, 1, 2].forEach((i) => $('slot-remove-' + i).classList.add('hidden'));
-  showAllCats = false;
   userPickedSub = false;
   renderSottocategorie();
   $('serv-ore').value = '1';

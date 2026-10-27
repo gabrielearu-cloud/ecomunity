@@ -291,6 +291,56 @@ export function esitoPubblicazione(catalog, kp, completedSwaps) {
   return { status: kp > catalog.sogliaVerifica ? 'in_verifica' : 'disponibile' };
 }
 
+// Ordine e icone dei gruppi nel selettore. I gruppi non elencati vanno in ordine
+// alfabetico prima di "Altro", che e' SEMPRE l'ultimo.
+const ORDINE_GRUPPI = [
+  'Abbigliamento', 'Casa', 'Elettronica', 'Bici e mobilità', 'Infanzia',
+  'Libri, giochi e media', 'Cancelleria e scuola', 'Hobby, arte e musica',
+  'Sport e tempo libero', 'Giardino e bricolage', 'Animali', 'Auto e moto'
+];
+const ICONE_GRUPPI = {
+  'Abbigliamento': '👕', 'Casa': '🏠', 'Elettronica': '📱', 'Bici e mobilità': '🚲',
+  'Infanzia': '🍼', 'Libri, giochi e media': '📚', 'Cancelleria e scuola': '✏️',
+  'Hobby, arte e musica': '🎨', 'Sport e tempo libero': '⚽', 'Giardino e bricolage': '🛠️',
+  'Animali': '🐾', 'Auto e moto': '🚗', 'Altro': '📦'
+};
+export const iconaGruppo = (g) => ICONE_GRUPPI[g] || '🏷️';
+
+/** Sottocategorie raggruppate e ordinate per il selettore: [{ gruppo, icona, voci: [[chiave, sub], ...] }] */
+export function gruppiOrdinati(catalog) {
+  const mappa = new Map();
+  Object.entries(catalog?.sottocategorie || {}).forEach(([k, s]) => {
+    const g = s.gruppo || 'Altro';
+    if (!mappa.has(g)) mappa.set(g, []);
+    mappa.get(g).push([k, s]);
+  });
+  const peso = (g) => {
+    if (g === 'Altro') return [2, ''];
+    const i = ORDINE_GRUPPI.indexOf(g);
+    return i >= 0 ? [0, String(i).padStart(3, '0')] : [1, g.toLowerCase()];
+  };
+  return [...mappa.entries()]
+    .sort(([a], [b]) => { const [pa, sa] = peso(a), [pb, sb] = peso(b); return pa - pb || sa.localeCompare(sb); })
+    .map(([gruppo, voci]) => ({
+      gruppo,
+      icona: iconaGruppo(gruppo),
+      // dentro ogni gruppo la voce "altro" (chiave altro o etichetta che inizia per "Altr") va in fondo
+      voci: voci.sort((x, y) => (/^altr/i.test(x[1].label) || x[0] === 'altro') - (/^altr/i.test(y[1].label) || y[0] === 'altro'))
+    }));
+}
+
+/** Ricerca per il selettore: confronta il testo con etichetta, gruppo e parole chiave. */
+export function cercaSottocategorie(catalog, testo) {
+  const q = String(testo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  if (!q) return null;
+  const parole = q.split(/\s+/);
+  return new Set(Object.entries(catalog?.sottocategorie || {}).filter(([k, s]) => {
+    const kw = Array.isArray(s.parole) ? s.parole : (DEFAULT_CATALOG.sottocategorie[k]?.parole || []);
+    const testoVoce = [s.label, s.gruppo, ...kw].join(' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return parole.every((p) => testoVoce.includes(p.length >= 5 ? p.replace(/[aeiou]$/, '') : p));
+  }).map(([k]) => k));
+}
+
 /** Foto minime richieste per un bene. */
 export const minFotoBeni = (catalog) => (Number.isInteger(catalog?.minFotoBeni) ? catalog.minFotoBeni : 1);
 

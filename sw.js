@@ -6,7 +6,7 @@
 // Quando cambi i file dell'app non serve toccare nulla; aumenta VERSIONE
 // solo se aggiungi o rinomini file nell'elenco qui sotto.
 // =====================================================================
-const VERSIONE = 'ecommuni-v5';
+const VERSIONE = 'ecommuni-v6';
 const FILE_BASE = [
   './', './index.html', './privacy.html', './termini.html', './manifest.webmanifest',
   './css/style.css',
@@ -54,6 +54,12 @@ self.addEventListener('fetch', (event) => {
 // =====================================================================
 // NOTIFICHE PUSH (inviate da /api/notify tramite Firebase Cloud Messaging)
 // =====================================================================
+// Chat aperta in ciascuna finestra (comunicata dall'app)
+const chatAperta = new Map();
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'open-chat' && event.source) chatAperta.set(event.source.id, event.data.chatId || null);
+});
+
 self.addEventListener('push', (event) => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; } catch (_) { /* testo non JSON */ }
@@ -69,10 +75,11 @@ self.addEventListener('push', (event) => {
   };
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
-      // Se l'app e' aperta e in primo piano non serve la notifica.
+      // Si salta solo se la STESSA chat e' aperta e in primo piano.
       // Su iPhone/iPad va mostrata sempre: Safari revoca le notifiche se un push resta "silenzioso".
       const apple = /iphone|ipad|ipod|macintosh/i.test(self.navigator.userAgent);
-      if (!apple && wins.some((w) => w.visibilityState === 'visible' && w.focused)) return;
+      const chatId = (options.tag || '').startsWith('chat-') ? options.tag.slice(5) : null;
+      if (!apple && chatId && wins.some((w) => w.visibilityState === 'visible' && w.focused && chatAperta.get(w.id) === chatId)) return;
       return self.registration.showNotification(title, options);
     })
   );

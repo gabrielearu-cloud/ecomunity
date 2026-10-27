@@ -252,14 +252,14 @@ window.downloadLogs = function (format) {
       .concat(rows.map((l) => [iso(l), l.level, l.type, l.uid, l.userName, l.details, l.app].map(q).join(','))).join('\n');
     mime = 'text/csv';
   } else {
-    content = `ECOMUNITY LOG — esportato il ${new Date().toISOString()} — ${rows.length} eventi\n` +
+    content = `ECOMMUNI LOG — esportato il ${new Date().toISOString()} — ${rows.length} eventi\n` +
       rows.map((l) => `${iso(l)} | ${String(l.level).toUpperCase()} | ${l.type} | ${l.uid} | ${l.userName} | ${l.details}`).join('\n');
     mime = 'text/plain';
   }
   const url = URL.createObjectURL(new Blob(['﻿' + content], { type: mime + ';charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ecomunity-log-${new Date().toISOString().slice(0, 10)}.${format === 'csv' ? 'csv' : 'txt'}`;
+  a.download = `ecommuni-log-${new Date().toISOString().slice(0, 10)}.${format === 'csv' ? 'csv' : 'txt'}`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 };

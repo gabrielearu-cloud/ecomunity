@@ -1,5 +1,5 @@
 // =====================================================================
-// ECOMUNITY - LOGICA PRINCIPALE
+// ECOMMUNI - LOGICA PRINCIPALE
 // Sezioni: 1 Import · 2 Stato locale · 3 Navigazione · 4 Catalogo
 //          5 Form pubblicazione · 6 Auth · 7 Chat · 8 Annunci
 //          9 Scambio e KP · 10 Segnalazioni · 11 Foto/lightbox
@@ -345,7 +345,7 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     $('app-header').style.display = 'flex';
     $('tab-bar').style.display = 'flex';
-    $('profile-name-header').textContent = user.displayName || 'Utente EcoMunity';
+    $('profile-name-header').textContent = user.displayName || 'Utente Ecommuni';
     homePages = 1;
     resetCatalogReady();
     subscribeCatalog();
@@ -358,8 +358,8 @@ onAuthStateChanged(auth, (user) => {
     document.querySelectorAll('.tab-item').forEach((i) => i.classList.remove('active'));
     $('nav-home')?.classList.add('active');
     try {
-      if (!sessionStorage.getItem('em_login_logged')) {
-        sessionStorage.setItem('em_login_logged', '1');
+      if (!sessionStorage.getItem('ec_login_logged')) {
+        sessionStorage.setItem('ec_login_logged', '1');
         logEvent('login', {});
       }
     } catch (_) { /* sessionStorage non disponibile */ }
@@ -370,7 +370,7 @@ onAuthStateChanged(auth, (user) => {
     $('consent-modal').style.display = 'none';
     consentMode = null;
     deletingAccount = false;
-    try { sessionStorage.removeItem('em_login_logged'); } catch (_) {}
+    try { sessionStorage.removeItem('ec_login_logged'); } catch (_) {}
     $('login-screen').style.display = 'flex';
     $('app-header').style.display = 'none';
     $('tab-bar').style.display = 'none';
@@ -556,7 +556,7 @@ window.publishOffer = async function (event) {
       thumb: fotos.length ? fotos[0].thumb : null,
       reportCount: 0,
       ownerId: me.uid,
-      ownerName: (me.displayName || 'Utente EcoMunity').slice(0, 80),
+      ownerName: (me.displayName || 'Utente Ecommuni').slice(0, 80),
       timestamp: serverTimestamp(),
       status: esito.status
     });
@@ -1050,7 +1050,7 @@ function loadProfileData(uid) {
       <p class="text-xs text-gray-500 mb-4">Puoi richiedere beni e servizi fino a ${karma} KP. Regala per guadagnarne altri.</p>
       <p class="text-xl font-semibold text-gray-700">${state.completedSwaps}</p>
       <p class="text-xs text-gray-500">Scambi completati</p>`;
-    $('profile-name-header').textContent = data.displayName || auth.currentUser?.displayName || 'Utente EcoMunity';
+    $('profile-name-header').textContent = data.displayName || auth.currentUser?.displayName || 'Utente Ecommuni';
     renderOffers();
     updateValuePreview();
   }, (e) => reportError('loadProfileData', e));
@@ -1082,7 +1082,7 @@ window.acceptTerms = async function () {
     if (consentMode.newProfile) {
       await catalogReady;
       await setDoc(userRef, {
-        displayName: (u.displayName || 'Utente EcoMunity').slice(0, 80),
+        displayName: (u.displayName || 'Utente Ecommuni').slice(0, 80),
         karmaPoints: state.catalogOnServer ? state.catalog.kpIniziali : 100,
         completedSwaps: 0,
         termsVersion: LEGAL.versioneTermini,
@@ -1151,7 +1151,7 @@ window.deleteMyAccount = async function () {
     await b.commit();
     // 5. Account di accesso
     await deleteUser(me);
-    alert('Il tuo account è stato eliminato. Grazie per aver fatto parte di EcoMunity.');
+    alert('Il tuo account è stato eliminato. Grazie per aver fatto parte di Ecommuni.');
   } catch (e) {
     deletingAccount = false;
     if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') return;
@@ -1161,4 +1161,8 @@ window.deleteMyAccount = async function () {
 };
 
 // ---------- 14. AVVIO ----------
+// App installabile: registra il service worker (solo su http/https)
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service worker non registrato:', e));
+}
 populateSelects();

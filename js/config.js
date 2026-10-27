@@ -26,7 +26,7 @@ export const RECAPTCHA_SITE_KEY = '';
 // =====================================================================
 export const LEGAL = {
   titolare: '[Nome e Cognome]',
-  email: '[indirizzo email dedicato a EcoMunity]',
+  email: '[indirizzo email dedicato a Ecommuni]',
   comune: '[Comune di residenza]',
   luogoDati: "[località del database: Firebase → Impostazioni progetto → Località risorse, es. \"eur3 (Europa)\"]",
   versioneTermini: '2026-10-26',

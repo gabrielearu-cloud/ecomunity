@@ -3,21 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EcoMunity - Scambio Etico e Comunitario</title>
+<title>Ecommuni - Scambio Etico e Comunitario</title>
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 <link href="css/style.css" rel="stylesheet">
+<!-- App installabile (PWA) e icone -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#16a34a">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ecommuni">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 </head>
 
 <body class="bg-gray-50 font-sans">
 <div id="loading-screen">
   <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
-  <p class="mt-4 text-gray-700">Caricamento EcoMunity...</p>
+  <p class="mt-4 text-gray-700">Caricamento Ecommuni...</p>
 </div>
 
 <div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg">
 
   <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-green-600">EcoMunity</h1>
+    <h1 class="text-xl font-bold text-green-600 flex items-center"><img src="favicon.svg" alt="" width="28" height="28" class="mr-2">Ecommuni</h1>
     <button onclick="handleLogout()" class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-1 rounded-full shadow-md">Logout</button>
   </header>
 
@@ -175,7 +185,7 @@
     <section id="profile-screen" class="screen items-center">
       <div class="w-full text-center p-4 bg-white border-b border-gray-200">
         <h2 id="profile-name-header" class="text-2xl font-bold text-gray-800 mb-1">Nome Utente</h2>
-        <p class="text-sm text-gray-500">Membro EcoMunity</p>
+        <p class="text-sm text-gray-500">Membro Ecommuni</p>
       </div>
       <div id="profile-data" class="w-full text-center p-6 mt-4 bg-white rounded-lg shadow-md border border-gray-100"></div>
       <div class="w-full p-4">
@@ -303,7 +313,8 @@
   <!-- ===================== LOGIN ===================== -->
   <div id="login-screen">
     <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-xs w-full">
-      <h2 class="text-3xl font-bold text-green-600 mb-2">EcoMunity</h2>
+      <img src="icons/icon-192.png" alt="Logo Ecommuni" width="88" height="88" class="mx-auto mb-3">
+      <h2 class="text-3xl font-bold text-green-600 mb-2">Ecommuni</h2>
       <p class="text-gray-600 mb-8">Scambio Etico e Comunitario</p>
       <button onclick="handleAuth()" class="w-full py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Accedi con Google</button>
       <p class="text-xs text-gray-500 mt-6">
@@ -343,7 +354,7 @@
 <!-- MODAL: ACCETTAZIONE TERMINI (primo accesso o termini aggiornati) -->
 <div id="consent-modal" class="modal-overlay" style="z-index:250">
   <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
-    <h3 class="text-lg font-semibold text-gray-800 mb-2">Benvenuto su EcoMunity</h3>
+    <h3 class="text-lg font-semibold text-gray-800 mb-2">Benvenuto su Ecommuni</h3>
     <p class="text-sm text-gray-600 mb-4">Prima di iniziare, conferma di aver letto le regole della comunità.</p>
     <label class="flex items-start text-sm text-gray-700 mb-3 cursor-pointer">
       <input type="checkbox" id="consent-age" class="mt-1 mr-2" onchange="updateConsentButton()">

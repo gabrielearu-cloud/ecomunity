@@ -10,7 +10,7 @@
 import { signInWithPopup, onAuthStateChanged, signOut, reauthenticateWithPopup, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, addDoc, query, where, onSnapshot, doc, updateDoc, getDoc, setDoc, orderBy,
-  getDocs, limit, runTransaction, serverTimestamp, writeBatch, increment, deleteField
+  getDocs, limit, runTransaction, serverTimestamp, writeBatch, increment, deleteField, deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, googleProvider } from './firebase.js';
 import { PAGE_SIZE, FOTO_MAX_CHARS, THUMB_MAX_CHARS, LEGAL } from './config.js';
@@ -440,6 +440,7 @@ onAuthStateChanged(auth, (user) => {
     loadProfileData(user.uid);
     checkAdmin(user.uid);
     checkSuspended(user.uid);
+    checkRimozioni(user.uid);
     switchScreen('home-screen');
     document.querySelectorAll('.tab-item').forEach((i) => i.classList.remove('active'));
     $('nav-home')?.classList.add('active');
@@ -1020,7 +1021,7 @@ window.startChat = async function (offerId) {
     if (offer.ownerId === me.uid) return alert('Non puoi chattare per il tuo annuncio.');
     if (state.sospeso) return alert('Il tuo account è sospeso: non puoi avviare chat.');
     if (offer.status !== 'disponibile') return alert("L'annuncio non è più disponibile.");
-    if ((offer.reportCount || 0) >= state.catalog.sogliaSegnalazioni) return alert("L'annuncio è in revisione.");
+    if ((offer.reportCount || 0) >= state.catalog.sogliaSegnalazioni || offer.nascosto) return alert("L'annuncio è in revisione.");
 
     const cost = Number(offer.cpValue) || 0;
     if (!state.isAdmin && state.karma !== null && state.karma < cost) {
@@ -1269,24 +1270,120 @@ function renderToReceive() {
 }
 
 // ---------- 10. SEGNALAZIONI ----------
+// ---------- Segnalazioni (utenti) e rimozioni (amministratori): stessa finestra ----------
+const MOTIVI = {
+  valore: 'valore in KP non corretto',
+  offensivo: 'contenuto volgare o offensivo',
+  vietato: 'oggetto vietato o pericoloso',
+  truffa: 'possibile truffa',
+  altro: 'altro'
+};
+let reportCtx = null;   // { offerId, mode: 'segnala' | 'rimuovi' }
+
+function openReportModal(offerId, mode) {
+  const o = state.offers.get(offerId);
+  reportCtx = { offerId, mode };
+  const rimuovi = mode === 'rimuovi';
+  document.querySelectorAll('input[name="report-tipo"]').forEach((r) => { r.checked = false; });
+  $('report-nota').value = '';
+  $('report-sospendi').checked = false;
+  $('report-sospendi-wrap').classList.toggle('hidden', !rimuovi);
+  $('report-heading').textContent = rimuovi ? '🛡 Rimuovi l\'annuncio' : '⚑ Segnala l\'annuncio';
+  $('report-offer').textContent = o ? `«${o.title}» di ${o.ownerName || 'utente'}` : '';
+  $('report-hint').textContent = rimuovi
+    ? "L'annuncio viene eliminato e l'autore riceve un avviso con il motivo."
+    : 'Contenuti volgari o vietati vengono nascosti subito, in attesa di un amministratore.';
+  $('report-send').textContent = rimuovi ? 'Rimuovi annuncio' : 'Invia segnalazione';
+  $('report-modal').style.display = 'flex';
+}
+
+window.closeReport = function () {
+  $('report-modal').style.display = 'none';
+  reportCtx = null;
+};
+
 window.reportOffer = async function (offerId) {
   const me = auth.currentUser;
   try {
     const mine = await getDoc(doc(db, 'offerte', offerId, 'segnalazioni', me.uid));
     if (mine.exists()) return alert('Hai già segnalato questo annuncio. Grazie!');
-    const motivo = (prompt('Perché la valutazione non ti sembra corretta? (es. "è una bici da città, non da corsa")') || '').trim();
-    if (!motivo) return;
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'offerte', offerId, 'segnalazioni', me.uid), { motivo: motivo.slice(0, 300), ts: serverTimestamp() });
-    batch.update(doc(db, 'offerte', offerId), { reportCount: increment(1) });
-    await batch.commit();
-    logEvent('offer_reported', { offerId, motivo: motivo.slice(0, 300) }, 'warn');
-    alert('Segnalazione inviata. Un amministratore controllerà la valutazione.');
-  } catch (e) {
-    reportError('reportOffer', e, { offerId });
-    alert('Impossibile inviare la segnalazione: ' + friendlyError(e));
-  }
+  } catch (_) { /* il controllo vero lo fanno le regole */ }
+  openReportModal(offerId, 'segnala');
 };
+
+window.adminRemoveOffer = function (offerId) {
+  if (!state.isAdmin) return;
+  openReportModal(offerId, 'rimuovi');
+};
+
+window.sendReport = async function () {
+  if (!reportCtx) return;
+  const { offerId, mode } = reportCtx;
+  const tipo = document.querySelector('input[name="report-tipo"]:checked')?.value;
+  const nota = $('report-nota').value.trim().slice(0, 300);
+  if (!tipo) return alert('Scegli un motivo.');
+  if (tipo === 'altro' && !nota) return alert('Scrivi in breve il motivo.');
+  const btn = $('report-send');
+  btn.disabled = true;
+  try {
+    if (mode === 'rimuovi') await rimuoviAnnuncio(offerId, tipo, nota, $('report-sospendi').checked);
+    else {
+      const grave = tipo === 'offensivo' || tipo === 'vietato';
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'offerte', offerId, 'segnalazioni', auth.currentUser.uid), { tipo, motivo: nota, ts: serverTimestamp() });
+      batch.update(doc(db, 'offerte', offerId), { reportCount: increment(1), ...(grave ? { nascosto: true } : {}) });
+      await batch.commit();
+      logEvent('offer_reported', { offerId, tipo, motivo: nota }, 'warn');
+      alert(grave ? 'Grazie: l\'annuncio è stato nascosto e un amministratore lo controllerà.' : 'Segnalazione inviata. Un amministratore la controllerà.');
+    }
+    window.closeReport();
+  } catch (e) {
+    reportError(mode === 'rimuovi' ? 'adminRemoveOffer' : 'reportOffer', e, { offerId });
+    alert((mode === 'rimuovi' ? 'Rimozione non riuscita: ' : 'Impossibile inviare la segnalazione: ') + friendlyError(e));
+  } finally { btn.disabled = false; }
+};
+
+// Elimina l'annuncio lasciando all'autore un avviso con il motivo (e, se richiesto, lo sospende)
+async function rimuoviAnnuncio(offerId, tipo, nota, sospendi) {
+  const snap = await getDoc(doc(db, 'offerte', offerId));
+  if (!snap.exists()) throw new Error('Annuncio già eliminato.');
+  const o = snap.data();
+  await setDoc(doc(db, 'rimozioni', offerId), {
+    ownerId: o.ownerId, title: String(o.title || '').slice(0, 100), motivo: tipo, nota,
+    by: auth.currentUser.uid, at: serverTimestamp(), visto: false
+  });
+  await deleteOfferWithFotos(offerId);
+  logEvent('offer_removed_by_admin', { offerId, title: o.title, ownerId: o.ownerId, motivo: tipo, nota }, 'warn');
+  notify('removed', { offerId });
+  if (sospendi) {
+    try {
+      await setDoc(doc(db, 'sospesi', o.ownerId), {
+        nome: String(o.ownerName || 'Utente').slice(0, 80), motivo: `${MOTIVI[tipo]}${nota ? ': ' + nota : ''}`.slice(0, 300),
+        by: auth.currentUser.uid, at: serverTimestamp()
+      });
+      logEvent('user_suspended', { uid: o.ownerId, nome: o.ownerName }, 'warn');
+    } catch (e) {
+      alert('Annuncio rimosso, ma non è stato possibile sospendere l\'autore (gli amministratori non si possono sospendere).');
+    }
+  }
+  homeOffers = homeOffers.filter((x) => x.id !== offerId);
+  if (searchResults) searchResults = searchResults.filter((x) => x.id !== offerId);
+  renderOffers();
+  document.dispatchEvent(new Event('offer-removed'));
+}
+
+// All'accesso: avvisa l'autore degli annunci rimossi da un amministratore
+async function checkRimozioni(uid) {
+  try {
+    const snap = await getDocs(query(collection(db, 'rimozioni'), where('ownerId', '==', uid)));
+    for (const d of snap.docs) {
+      const r = d.data();
+      if (r.visto) continue;
+      alert(`🛡 Il tuo annuncio «${r.title}» è stato rimosso da un amministratore.\nMotivo: ${MOTIVI[r.motivo] || r.motivo}${r.nota ? ' — ' + r.nota : ''}\n\nSe non sei d'accordo puoi chiedere una revisione: trovi il contatto nei Termini.`);
+      await updateDoc(d.ref, { visto: true });
+    }
+  } catch (e) { reportError('checkRimozioni', e); }
+}
 
 // ---------- 11. FOTO / LIGHTBOX ----------
 window.openLightbox = async function (offerId) {
@@ -1367,8 +1464,8 @@ function renderOffers() {
   lista.forEach(({ id, data: o, km }) => {
     const cp = Number(o.cpValue) || 0;
     const isOwner = o.ownerId === me.uid;
-    const hidden = (o.reportCount || 0) >= soglia;
-    if (hidden && !isOwner) return;
+    const hidden = (o.reportCount || 0) >= soglia || o.nascosto === true;
+    if (hidden && !isOwner && !state.isAdmin) return;
     const isTrattativa = o.status === 'in_trattativa';
     const affordable = state.isAdmin || state.karma === null || state.karma >= cp;
     if (onlyAffordable && !isOwner && !affordable) return;
@@ -1376,7 +1473,7 @@ function renderOffers() {
     let buttons = '';
     if (isOwner) {
       if (hidden) {
-        buttons = `<p class="mt-3 text-xs text-red-600">Annuncio nascosto: ha ricevuto ${o.reportCount} segnalazioni sulla valutazione ed è in revisione.</p>`;
+        buttons = `<p class="mt-3 text-xs text-red-600">Annuncio nascosto per segnalazioni: un amministratore lo sta controllando.</p>`;
       } else if (isTrattativa) {
         buttons = `
           <p class="text-xs text-gray-500 mt-2">Assegnato a: <b>${esc(o.reservedByName || 'acquirente')}</b></p>
@@ -1394,7 +1491,7 @@ function renderOffers() {
       buttons = affordable
         ? `<button onclick="startChat('${id}')" class="mt-3 w-full ${o.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Avvia Chat</button>`
         : `<button disabled class="mt-3 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-200 cursor-not-allowed">KP insufficienti (servono ${cp}, hai ${state.karma})</button>`;
-      buttons += `<button onclick="reportOffer('${id}')" class="mt-2 w-full text-xs text-gray-400 hover:text-red-600">⚑ Valutazione non corretta?</button>`;
+      buttons += `<button onclick="reportOffer('${id}')" class="mt-2 w-full text-xs text-gray-400 hover:text-red-600">⚑ Segnala</button>`;
     }
 
     const html = `
@@ -1414,6 +1511,7 @@ function renderOffers() {
         <p class="text-xs text-gray-500 mt-2">${valuationLine(o)}</p>
         <p class="text-xs text-gray-400 mt-1">Offerto da: <span class="font-medium text-gray-500">${esc(o.ownerName)}</span> <span class="rep" data-rep="${esc(o.ownerId)}"></span>${o.zona?.nome ? ` · <span class="offer-place">📍 ${esc(o.zona.nome)}${km !== null && !isOwner ? ' · ' + etichettaDistanza(km) : ''}</span>` : ''}</p>
         ${buttons}
+        ${state.isAdmin && !isOwner ? `<button onclick="adminRemoveOffer('${id}')" class="admin-remove">🛡 Rimuovi (amministratore)${hidden ? ' · nascosto per segnalazioni' : ''}</button>` : ''}
       </div>`;
     if (o.type === 'bene') beni += html; else servizi += html;
   });
@@ -1450,7 +1548,7 @@ function renderMyOffers() {
     if (o.status === 'in_verifica') note = '<p class="text-xs text-purple-700 mt-1">In attesa di verifica da parte di un amministratore.</p>';
     if (o.status === 'rifiutato') note = `<p class="text-xs text-red-600 mt-1">Motivo: ${esc(o.motivoRifiuto || 'non indicato')}. Puoi eliminarlo e ripubblicarlo con dati corretti.</p>`;
     if (o.status === 'consegnato') note = `<p class="text-xs text-blue-700 mt-1">In attesa che ${esc(o.reservedByName || 'chi riceve')} confermi di averlo ricevuto: poi riceverai ${o.cpValue} KP.</p>`;
-    if ((o.reportCount || 0) >= state.catalog.sogliaSegnalazioni) note += '<p class="text-xs text-red-600 mt-1">Nascosto per segnalazioni, in revisione.</p>';
+    if ((o.reportCount || 0) >= state.catalog.sogliaSegnalazioni || o.nascosto) note += '<p class="text-xs text-red-600 mt-1">Nascosto per segnalazioni, in revisione.</p>';
     const canDelete = ['disponibile', 'in_verifica', 'rifiutato'].includes(o.status);
     return `
       <div class="p-3 border border-gray-200 rounded-lg text-left">
@@ -1622,6 +1720,10 @@ window.deleteMyAccount = async function () {
     // 4. Profilo e token delle notifiche
     stopListeners();
     await removePushTokens(me.uid);
+    try {
+      const rim = await getDocs(query(collection(db, 'rimozioni'), where('ownerId', '==', me.uid)));
+      for (const d of rim.docs) await deleteDoc(d.ref);
+    } catch (_) { /* nessun avviso */ }
     const b = writeBatch(db);
     b.delete(doc(db, 'users', me.uid));
     await b.commit();

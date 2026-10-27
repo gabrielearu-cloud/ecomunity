@@ -143,13 +143,14 @@ async function loadReported() {
       let reasons = '';
       try {
         const r = await getDocs(collection(db, 'offerte', d.id, 'segnalazioni'));
-        reasons = r.docs.map((x) => `<li>${esc(x.data().motivo)}</li>`).join('');
+        const TIPI = { valore: '💰 Valore', offensivo: '🤬 Volgare/offensivo', vietato: '🚫 Vietato', truffa: '⚠️ Truffa', altro: '✏️ Altro' };
+        reasons = r.docs.map((x) => { const v = x.data(); return `<li><b>${TIPI[v.tipo] || '💰 Valore'}</b>${v.motivo ? ': ' + esc(v.motivo) : ''}</li>`; }).join('');
       } catch (_) {}
       return adminOfferCard(d.id, o, `
-        <p class="w-full text-xs text-red-700"><b>${o.reportCount} segnalazioni</b>${o.reportCount >= state.catalog.sogliaSegnalazioni ? ' (nascosto)' : ''}</p>
+        <p class="w-full text-xs text-red-700"><b>${o.reportCount} ${o.reportCount === 1 ? 'segnalazione' : 'segnalazioni'}</b>${o.nascosto || o.reportCount >= state.catalog.sogliaSegnalazioni ? ' (nascosto)' : ''}</p>
         <ul class="w-full text-xs text-gray-600 list-disc ml-4">${reasons}</ul>
-        <button onclick="clearReports('${d.id}')" class="px-3 py-1 text-xs rounded bg-gray-200">Valutazione corretta: azzera</button>
-        <button onclick="adminDeleteOffer('${d.id}')" class="px-3 py-1 text-xs rounded bg-red-600 text-white">Elimina annuncio</button>`);
+        <button onclick="clearReports('${d.id}')" class="px-3 py-1 text-xs rounded bg-gray-200">Va bene così: azzera e rendi visibile</button>
+        <button onclick="adminRemoveOffer('${d.id}')" class="px-3 py-1 text-xs rounded bg-red-600 text-white">🛡 Rimuovi annuncio</button>`);
     }));
     box.innerHTML = cards.join('');
   } catch (e) {
@@ -160,7 +161,7 @@ async function loadReported() {
 
 window.clearReports = async function (id) {
   try {
-    await updateDoc(doc(db, 'offerte', id), { reportCount: 0 });
+    await updateDoc(doc(db, 'offerte', id), { reportCount: 0, nascosto: false });
     logEvent('reports_cleared', { offerId: id });
     await loadReported();
   } catch (e) {
@@ -565,3 +566,8 @@ window.unsuspendUser = async function (uid) {
     alert('Operazione non riuscita: ' + friendlyError(e));
   }
 };
+
+// Dopo una rimozione fatta da qualsiasi punto dell'app, aggiorna le liste del pannello
+document.addEventListener('offer-removed', () => {
+  if (state.isAdmin && $('admin-screen').classList.contains('active')) { loadReported(); loadReviewQueue(); }
+});

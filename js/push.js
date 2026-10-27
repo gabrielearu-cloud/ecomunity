@@ -112,3 +112,73 @@ export async function notify(type, ids) {
     console.warn('Notifica non inviata:', e);
   }
 }
+
+/**
+ * Verifica passo per passo perché le notifiche potrebbero non arrivare.
+ * Restituisce righe [esito, testo]: true = ok, false = problema, null = informazione.
+ */
+export async function testPushDiagnostics() {
+  const r = [];
+  const esci = () => r;
+
+  // 1. Dispositivo e browser
+  if (isIos && !isStandalone) { r.push([false, "Su iPhone serve l'app installata sulla schermata Home (Safari → Condividi → Aggiungi alla schermata Home)."]); return esci(); }
+  if (!(await supported())) { r.push([false, 'Questo browser non supporta le notifiche (es. browser vecchi o Windows 7). Prova da Chrome sul telefono.']); return esci(); }
+  r.push([true, 'Il browser supporta le notifiche.']);
+
+  // 2. Permesso
+  if (Notification.permission === 'denied') { r.push([false, 'Notifiche bloccate per questo sito: lucchetto accanto all\'indirizzo → Notifiche → Consenti, poi riprova.']); return esci(); }
+  if (Notification.permission !== 'granted') {
+    const p = await Notification.requestPermission();
+    if (p !== 'granted') { r.push([false, 'Permesso non concesso.']); return esci(); }
+  }
+  r.push([true, 'Permesso concesso.']);
+
+  // 3. Service worker e token
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg?.active) { r.push([false, 'Il service worker non è attivo: ricarica la pagina e riprova.']); return esci(); }
+  try {
+    const t = await registerToken();
+    if (!t) throw new Error('nessun token');
+    r.push([true, 'Dispositivo registrato per le notifiche.']);
+  } catch (e) {
+    r.push([false, 'Registrazione del dispositivo fallita: ' + (e?.message || e) + ' (controlla VAPID_KEY in js/config.js).']);
+    return esci();
+  }
+
+  // 4. Server su Vercel
+  let info;
+  try {
+    const res = await fetch(NOTIFY_URL, { cache: 'no-store' });
+    if (res.status === 404) { r.push([false, 'La funzione /api/notify non esiste sul sito: su GitHub mancano la cartella "api" o il file "package.json" (nella cartella principale).']); return esci(); }
+    info = await res.json();
+  } catch (_) {
+    r.push([false, 'La funzione /api/notify non risponde: controlla che "api/notify.js" e "package.json" siano su GitHub e che il deploy di Vercel sia riuscito.']);
+    return esci();
+  }
+  if (!info.ok) { r.push([false, `Server non configurato: ${info.problem}. Vercel → Settings → Environment Variables → FIREBASE_SERVICE_ACCOUNT, poi Deployments → Redeploy.`]); return esci(); }
+  if (info.projectId && info.projectId !== app.options.projectId) {
+    r.push([false, `La chiave su Vercel è del progetto "${info.projectId}", l'app usa "${app.options.projectId}". Genera la chiave dal progetto giusto.`]);
+    return esci();
+  }
+  r.push([true, 'Server configurato correttamente.']);
+
+  // 5. Invio di prova a questo account
+  try {
+    const idToken = await auth.currentUser.getIdToken();
+    const res = await fetch(NOTIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + idToken },
+      body: JSON.stringify({ type: 'test' })
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { r.push([false, `Errore del server (${res.status}): ${out.code || out.error || 'sconosciuto'}. Dettagli in Vercel → Logs.`]); return esci(); }
+    if (out.reason === 'throttled') { r.push([null, 'Hai già fatto una prova meno di un minuto fa: attendi e riprova.']); return esci(); }
+    if (!out.sent) { r.push([false, `Notifica non consegnata${out.errors?.length ? ': ' + out.errors.join(', ') : ''}.`]); return esci(); }
+    r.push([true, `Notifica di prova inviata a ${out.sent} dispositivo/i: dovrebbe comparire tra pochi secondi.`]);
+    r.push([null, 'Se non compare: controlla che le notifiche di Chrome siano permesse nelle impostazioni del telefono e che non sia attiva la modalità "Non disturbare".']);
+  } catch (e) {
+    r.push([false, 'Invio di prova fallito: ' + (e?.message || e)]);
+  }
+  return r;
+}

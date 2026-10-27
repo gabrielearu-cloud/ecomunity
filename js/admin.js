@@ -1,9 +1,10 @@
 // =====================================================================
 // PANNELLO ADMIN: verifica annunci, segnalazioni, catalogo, statistiche, log
-// Visibile solo a chi ha un documento in /admins/{uid} (creato a mano)
+// Visibile solo a chi ha un documento in /admins/{uid}: il primo creato a mano
+// dalla console (fondatore), gli altri nominati da qui
 // =====================================================================
 import {
-  collection, query, where, orderBy, limit, getDocs, getDoc, doc, setDoc, updateDoc, writeBatch,
+  collection, query, where, orderBy, limit, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch,
   serverTimestamp, getCountFromServer, getAggregateFromServer, sum, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db } from './firebase.js';
@@ -13,7 +14,7 @@ import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, tsToDate } from './utils.js';
 import { switchScreen, deleteOfferWithFotos, valuationLine, thumbHtml } from './app.js';
-import { notify } from './push.js';
+import { notify, testPushDiagnostics } from './push.js';
 
 let adminLogs = [];
 
@@ -23,6 +24,7 @@ export async function checkAdmin(uid) {
     state.isAdmin = (await getDoc(doc(db, 'admins', uid))).exists();
   } catch (_) { state.isAdmin = false; }
   $('admin-btn').classList.toggle('hidden', !state.isAdmin);
+  document.dispatchEvent(new Event('admin-changed'));
 }
 
 window.openAdmin = async function () {
@@ -34,7 +36,7 @@ window.openAdmin = async function () {
 
 window.refreshAdmin = async function () {
   if (!state.isAdmin) return;
-  await Promise.all([loadStats(), loadReviewQueue(), loadReported(), loadLogs()]);
+  await Promise.all([loadStats(), loadAdmins(), loadReviewQueue(), loadReported(), loadLogs()]);
   fillCatalogEditor();
 };
 
@@ -333,4 +335,103 @@ window.purgeOldLogs = async function () {
     reportError('admin.purgeOldLogs', e);
     alert('Pulizia non riuscita: ' + friendlyError(e));
   }
+};
+
+// ---------- Amministratori ----------
+async function loadAdmins() {
+  const box = $('admin-list');
+  box.innerHTML = '<p class="text-xs text-gray-500">Caricamento...</p>';
+  try {
+    const snap = await getDocs(collection(db, 'admins'));
+    const righe = await Promise.all(snap.docs.map(async (d) => {
+      const a = d.data();
+      let nome = a.nome;
+      if (!nome) {
+        try { const u = await getDoc(doc(db, 'users', d.id)); nome = u.exists() ? u.data().displayName : ''; } catch (_) {}
+      }
+      return { uid: d.id, nome: nome || 'Utente', fondatore: !('addedBy' in a), io: d.id === auth.currentUser?.uid };
+    }));
+    righe.sort((x, y) => (y.fondatore - x.fondatore) || x.nome.localeCompare(y.nome));
+    box.innerHTML = righe.map((r) => `
+      <div class="flex items-center justify-between gap-2 p-2 rounded-lg border border-gray-200 bg-white">
+        <span class="text-sm"><b>${esc(r.nome)}</b>
+          <span class="text-xs text-gray-500">${r.fondatore ? '· fondatore' : ''}${r.io ? ' · tu' : ''}</span></span>
+        ${r.fondatore || r.io ? '' : `<button onclick="revokeAdmin('${esc(r.uid)}', this.dataset.nome)" data-nome="${esc(r.nome)}"
+            class="px-2 py-1 text-xs rounded bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Rimuovi</button>`}
+      </div>`).join('') || '<p class="text-xs text-gray-500">Nessuno.</p>';
+  } catch (e) {
+    box.innerHTML = `<p class="text-xs text-red-600">Impossibile leggere l'elenco: ${esc(friendlyError(e))}. Hai pubblicato le nuove regole?</p>`;
+  }
+}
+
+window.searchUsersForAdmin = async function () {
+  const q = val('admin-search').trim();
+  const box = $('admin-search-results');
+  if (q.length < 2) { box.innerHTML = '<p class="text-xs text-gray-500">Scrivi almeno 2 lettere del nome.</p>'; return; }
+  box.innerHTML = '<p class="text-xs text-gray-500">Ricerca...</p>';
+  try {
+    const trovati = new Map();
+    // UID incollato direttamente
+    if (/^[A-Za-z0-9]{20,40}$/.test(q)) {
+      const u = await getDoc(doc(db, 'users', q));
+      if (u.exists()) trovati.set(u.id, u.data().displayName || 'Utente');
+    }
+    // Nome che inizia con il testo (come scritto e con l'iniziale maiuscola)
+    const varianti = [...new Set([q, q.charAt(0).toUpperCase() + q.slice(1), q.toLowerCase()])];
+    for (const v of varianti) {
+      const snap = await getDocs(query(collection(db, 'users'),
+        where('displayName', '>=', v), where('displayName', '<=', v + '\uf8ff'), orderBy('displayName'), limit(10)));
+      snap.docs.forEach((d) => trovati.set(d.id, d.data().displayName || 'Utente'));
+    }
+    const admins = new Set((await getDocs(collection(db, 'admins'))).docs.map((d) => d.id));
+    if (!trovati.size) { box.innerHTML = '<p class="text-xs text-gray-500">Nessun utente con questo nome. Il nome va scritto dall\'inizio, come appare nell\'app.</p>'; return; }
+    box.innerHTML = [...trovati].map(([uid, nome]) => `
+      <div class="flex items-center justify-between gap-2 p-2 rounded-lg border border-gray-200 bg-gray-50">
+        <span class="text-sm">${esc(nome)} <span class="text-[10px] text-gray-400">${esc(uid.slice(0, 6))}…</span></span>
+        ${admins.has(uid) ? '<span class="text-xs text-green-700">già amministratore</span>'
+          : `<button data-nome="${esc(nome)}" onclick="grantAdmin('${esc(uid)}', this.dataset.nome)"
+               class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700">Rendi amministratore</button>`}
+      </div>`).join('');
+  } catch (e) {
+    reportError('searchUsersForAdmin', e);
+    box.innerHTML = `<p class="text-xs text-red-600">${esc(friendlyError(e))}</p>`;
+  }
+};
+
+window.grantAdmin = async function (uid, nome) {
+  if (!confirm(`Dare a «${nome}» gli stessi poteri che hai tu?\nPotrà pubblicare e ricevere senza limiti di KP, approvare annunci, modificare il catalogo e nominare altri amministratori.`)) return;
+  try {
+    await setDoc(doc(db, 'admins', uid), { nome: String(nome).slice(0, 80), addedBy: auth.currentUser.uid, addedAt: serverTimestamp() });
+    logEvent('admin_granted', { uid, nome });
+    $('admin-search-results').innerHTML = `<p class="text-xs text-green-700">✓ ${esc(nome)} ora è amministratore. Lo vedrà al prossimo accesso o ricaricando la pagina.</p>`;
+    loadAdmins();
+  } catch (e) {
+    reportError('grantAdmin', e, { uid });
+    alert('Impossibile nominarlo: ' + friendlyError(e));
+  }
+};
+
+window.revokeAdmin = async function (uid, nome) {
+  if (!confirm(`Togliere i poteri di amministratore a «${nome}»?`)) return;
+  try {
+    await deleteDoc(doc(db, 'admins', uid));
+    logEvent('admin_revoked', { uid, nome }, 'warn');
+    loadAdmins();
+  } catch (e) {
+    reportError('revokeAdmin', e, { uid });
+    alert('Impossibile rimuoverlo: ' + friendlyError(e));
+  }
+};
+
+// ---------- Verifica notifiche ----------
+window.testPush = async function () {
+  const btn = $('push-test-btn'), box = $('push-test-result');
+  btn.disabled = true; box.innerHTML = '<p class="text-gray-500">Verifica in corso...</p>';
+  try {
+    const righe = await testPushDiagnostics();
+    box.innerHTML = righe.map(([ok, testo]) =>
+      `<p class="${ok === true ? 'text-green-700' : ok === false ? 'text-red-600' : 'text-gray-600'}">${ok === true ? '✓' : ok === false ? '✗' : '•'} ${testo}</p>`).join('');
+  } catch (e) {
+    box.innerHTML = `<p class="text-red-600">✗ ${esc(e.message)}</p>`;
+  } finally { btn.disabled = false; }
 };

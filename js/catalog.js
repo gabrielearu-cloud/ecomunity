@@ -229,7 +229,8 @@ const round2 = (n) => Math.round(n * 100) / 100;
  * KP = prezzo da nuovo x coeff. condizione x svalutazione per eta' / kpEuro
  * svalutazione per eta' = max(residuoMinimo, (1 - svalutazioneAnnua)^anni)
  */
-export function valutaBene(catalog, { sottocategoria, condizione, prezzoNuovo, annoAcquisto, marca, modello }, annoCorrente = new Date().getFullYear()) {
+// opzioni.libero = true (amministratori): nessun vincolo sulla fascia di prezzo
+export function valutaBene(catalog, { sottocategoria, condizione, prezzoNuovo, annoAcquisto, marca, modello }, annoCorrente = new Date().getFullYear(), opzioni = {}) {
   const sub = catalog?.sottocategorie?.[sottocategoria];
   const cond = catalog?.condizioni?.[condizione];
   const prezzo = Number(prezzoNuovo);
@@ -238,7 +239,8 @@ export function valutaBene(catalog, { sottocategoria, condizione, prezzoNuovo, a
   if (!sub || !cond || !prezzo || !anno || !String(marca || '').trim() || !String(modello || '').trim()) {
     return { incomplete: true };
   }
-  if (!Number.isFinite(prezzo) || prezzo < sub.min || prezzo > sub.max) {
+  if (!Number.isFinite(prezzo) || prezzo <= 0) return { error: 'Prezzo non valido.' };
+  if (!opzioni.libero && (prezzo < sub.min || prezzo > sub.max)) {
     return { error: `Per "${sub.label}" il prezzo da nuovo deve essere tra ${sub.min} € e ${sub.max} €.` };
   }
   if (!Number.isInteger(anno) || anno < 1950 || anno > annoCorrente + 1) {
@@ -267,11 +269,11 @@ export function valutaBene(catalog, { sottocategoria, condizione, prezzoNuovo, a
 }
 
 /** Valore in KP di un servizio: ore x tariffa oraria del livello. */
-export function valutaServizio(catalog, { livello, ore }) {
+export function valutaServizio(catalog, { livello, ore }, opzioni = {}) {
   const liv = catalog?.servizi?.[livello];
   const h = Number(ore);
   if (!liv || !h) return { incomplete: true };
-  if (!Number.isFinite(h) || h <= 0 || h > catalog.maxOre) {
+  if (!Number.isFinite(h) || h <= 0 || (!opzioni.libero && h > catalog.maxOre)) {
     return { error: `La durata deve essere tra 0,5 e ${catalog.maxOre} ore.` };
   }
   const oreR = Math.round(h * 2) / 2; // mezz'ore
@@ -284,7 +286,8 @@ export function valutaServizio(catalog, { livello, ore }) {
 }
 
 /** Controlli aggiuntivi che dipendono dall'utente e dalla soglia. */
-export function esitoPubblicazione(catalog, kp, completedSwaps) {
+export function esitoPubblicazione(catalog, kp, completedSwaps, opzioni = {}) {
+  if (opzioni.libero) return { status: 'disponibile' };   // amministratori
   if (!completedSwaps && kp > catalog.maxKpNuovoUtente) {
     return { error: `Finché non concludi il tuo primo scambio puoi pubblicare annunci fino a ${catalog.maxKpNuovoUtente} KP.` };
   }

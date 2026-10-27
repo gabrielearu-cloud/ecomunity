@@ -297,16 +297,18 @@ function calcolaValore() {
       annoAcquisto: val('bene-anno'),
       marca: val('bene-marca'),
       modello: val('bene-modello')
-    });
+    }, undefined, { libero: state.isAdmin });
   }
-  return valutaServizio(c, { livello: val('serv-livello'), ore: val('serv-ore') });
+  return valutaServizio(c, { livello: val('serv-livello'), ore: val('serv-ore') }, { libero: state.isAdmin });
 }
 
 function updateValuePreview() {
   const box = $('kp-preview');
   if (!box) return;
   const sub = state.catalog.sottocategorie[val('bene-sottocategoria')];
-  $('bene-prezzo-hint').textContent = sub ? `Fascia ammessa: ${sub.min}–${sub.max} €` : '';
+  $('bene-prezzo-hint').textContent = !sub ? '' : state.isAdmin
+    ? `Fascia consigliata: ${sub.min}–${sub.max} € (come amministratore puoi uscirne)`
+    : `Fascia ammessa: ${sub.min}–${sub.max} €`;
 
   const r = calcolaValore();
   if (r.incomplete) {
@@ -317,7 +319,7 @@ function updateValuePreview() {
     box.innerHTML = `<span class="text-red-600">${esc(r.error)}</span>`;
     return;
   }
-  const esito = esitoPubblicazione(state.catalog, r.kp, state.completedSwaps);
+  const esito = esitoPubblicazione(state.catalog, r.kp, state.completedSwaps, { libero: state.isAdmin });
   let note = '';
   if (esito.error) note = `<br><span class="text-red-600">${esc(esito.error)}</span>`;
   else if (esito.status === 'in_verifica') note = `<br><span class="text-purple-700">Sopra ${state.catalog.sogliaVerifica} KP: sarà visibile dopo la verifica di un amministratore.</span>`;
@@ -326,7 +328,7 @@ function updateValuePreview() {
 window.updateValuePreview = updateValuePreview;
 
 function updateFotoLabels() {
-  const minimo = currentOfferType === 'bene' ? minFotoBeni(state.catalog) : 0;
+  const minimo = currentOfferType === 'bene' && !state.isAdmin ? minFotoBeni(state.catalog) : 0;
   $('img-hint').textContent = minimo
     ? `Serve almeno ${minimo === 1 ? '1 foto reale' : minimo + ' foto reali'} del bene (max 3). Più foto (insieme, dettagli, difetti) aiutano chi riceve e la verifica del valore.`
     : 'Le foto sono facoltative (max 3).';
@@ -468,6 +470,7 @@ window.openChat = function (chatId, offerTitle) {
   const chat = allChatsData.find((c) => c.id === chatId)?.data;
   const me = auth.currentUser;
   currentChatId = chatId;
+  tellServiceWorkerChat();
   $('current-chat-id').value = chatId;
   $('current-chat-title').textContent = offerTitle || chat?.offerTitle || '';
   const otherId = (chat?.users || []).find((u) => u !== me.uid);
@@ -499,7 +502,9 @@ function watchChatOffer(chat) {
   if (!chat?.offerId) { box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
   box.innerHTML = '<p class="deal-text">Caricamento dello scambio…</p>';
+  const ctx = chatCtx;
   unsub.chatOffer = onSnapshot(doc(db, 'offerte', chat.offerId), (snap) => {
+    if (chatCtx !== ctx) return;   // chat già chiusa o cambiata
     chatCtx.offer = snap.exists() ? snap.data() : null;
     if (chatCtx.offer) state.offers.set(chat.offerId, chatCtx.offer);
     renderChatDeal();
@@ -567,7 +572,8 @@ window.reserveFromChat = async function () {
     const u = await getDoc(doc(db, 'users', chat.buyerId));
     const karma = u.exists() ? (u.data().karmaPoints ?? 0) : 0;
     if (u.exists() && u.data().displayName) chat.buyerName = u.data().displayName;
-    if (karma < o.cpValue) return alert(`${nome} ha ${karma} KP: ne servono ${o.cpValue} per questo annuncio.`);
+    const buyerAdmin = (await getDoc(doc(db, 'admins', chat.buyerId))).exists();
+    if (!buyerAdmin && karma < o.cpValue) return alert(`${nome} ha ${karma} KP: ne servono ${o.cpValue} per questo annuncio.`);
   } catch (_) { /* il controllo vero lo fanno le regole */ }
   if (!confirm(`Riservare «${o.title}» per ${chat.buyerName || nome}?\nGli altri non potranno più richiederlo finché la trattativa è in corso.`)) return;
   await window.confirmReserve(offerId, chat.buyerId, chat.buyerName || nome);
@@ -678,6 +684,7 @@ window.navigateFromChat = function (screenId, element) {
   $('app-header').style.display = 'flex';
   $('tab-bar').style.display = 'flex';
   currentChatId = null;
+  tellServiceWorkerChat();
   window.navigate(screenId, element);
 };
 
@@ -768,11 +775,11 @@ window.publishOffer = async function (event) {
   if (valore.incomplete) return alert('Compila tutti i campi di valutazione.');
   if (valore.error) return alert(valore.error);
 
-  const esito = esitoPubblicazione(state.catalog, valore.kp, state.completedSwaps);
+  const esito = esitoPubblicazione(state.catalog, valore.kp, state.completedSwaps, { libero: state.isAdmin });
   if (esito.error) return alert(esito.error);
 
   const fotos = pendingFotos.filter((f) => f && f.full);
-  const minimoFoto = currentOfferType === 'bene' ? minFotoBeni(state.catalog) : 0;
+  const minimoFoto = currentOfferType === 'bene' && !state.isAdmin ? minFotoBeni(state.catalog) : 0;
   if (fotos.length < minimoFoto) return alert(`Per un bene serve almeno ${minimoFoto === 1 ? '1 foto' : minimoFoto + ' foto'}.`);
 
   const btn = $('publish-btn');
@@ -987,7 +994,7 @@ window.startChat = async function (offerId) {
     if ((offer.reportCount || 0) >= state.catalog.sogliaSegnalazioni) return alert("L'annuncio è in revisione.");
 
     const cost = Number(offer.cpValue) || 0;
-    if (state.karma !== null && state.karma < cost) {
+    if (!state.isAdmin && state.karma !== null && state.karma < cost) {
       logEvent('kp_blocked', { offerId, cost, balance: state.karma }, 'warn');
       return alert(`KP insufficienti: servono ${cost} KP, ne hai ${state.karma}. Regala qualcosa per accumularne!`);
     }
@@ -1035,21 +1042,22 @@ window.setInTrattativa = async function (docId) {
 
     const buyers = await Promise.all(buyerIds.map(async (uid) => {
       const chat = chats.docs.find((c) => (c.data().users || []).includes(uid))?.data() || {};
-      let karma = 0, name = chat.buyerName || 'Utente';
+      let karma = 0, name = chat.buyerName || 'Utente', admin = false;
       try {
         const u = await getDoc(doc(db, 'users', uid));
         if (u.exists()) { karma = u.data().karmaPoints ?? 0; name = u.data().displayName || name; }
+        admin = (await getDoc(doc(db, 'admins', uid))).exists();
       } catch (_) {}
-      return { uid, name, karma };
+      return { uid, name, karma, admin };
     }));
 
     $('buyer-offer-info').textContent = `"${offer.title}" — valore ${cost} KP. Scegli a chi assegnarlo:`;
     $('buyer-list').innerHTML = buyers.map((b) => {
-      const ok = b.karma >= cost;
+      const ok = b.admin || b.karma >= cost;
       return `<button ${ok ? '' : 'disabled'} data-uid="${esc(b.uid)}" data-name="${esc(b.name)}" onclick="confirmReserve('${docId}', this.dataset.uid, this.dataset.name)"
                 class="w-full text-left p-3 rounded-lg border ${ok ? 'border-green-300 bg-green-50 hover:bg-green-100' : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'}">
                 <span class="font-medium">${esc(b.name)}</span>
-                <span class="block text-xs">${b.karma} KP ${ok ? '' : `(ne servono ${cost})`}</span>
+                <span class="block text-xs">${b.admin ? 'Amministratore · nessun limite di KP' : `${b.karma} KP ${ok ? '' : `(ne servono ${cost})`}`}</span>
               </button>`;
     }).join('');
     $('buyer-modal').style.display = 'flex';
@@ -1162,10 +1170,11 @@ window.submitFeedback = async function (feedbackType) {
       if (!giverSnap.exists() || !buyerSnap.exists()) throw new Error('Profilo utente non trovato.');
       const g = giverSnap.data(), b = buyerSnap.data();
       const buyerKarma = b.karmaPoints ?? 0;
-      if (buyerKarma < cp) throw new Error(`Hai solo ${buyerKarma} KP: ne servono ${cp}.`);
+      const paga = state.isAdmin ? 0 : cp;   // gli amministratori non pagano KP
+      if (buyerKarma < paga) throw new Error(`Hai solo ${buyerKarma} KP: ne servono ${cp}.`);
 
       tx.update(offerRef, { status: 'concluso', feedback: feedbackType, completionDate: serverTimestamp() });
-      tx.update(buyerRef, { karmaPoints: buyerKarma - cp, completedSwaps: (b.completedSwaps ?? 0) + 1, lastOfferId: docId });
+      tx.update(buyerRef, { karmaPoints: buyerKarma - paga, completedSwaps: (b.completedSwaps ?? 0) + 1, lastOfferId: docId });
       tx.update(giverRef, { karmaPoints: (g.karmaPoints ?? 0) + cp, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: docId });
       summary = { offerId: docId, title: o.title, type: o.type, kp: cp, giverId: o.ownerId, buyerId: me.uid, feedback: feedbackType };
     });
@@ -1326,7 +1335,7 @@ function renderOffers() {
     const hidden = (o.reportCount || 0) >= soglia;
     if (hidden && !isOwner) return;
     const isTrattativa = o.status === 'in_trattativa';
-    const affordable = state.karma === null || state.karma >= cp;
+    const affordable = state.isAdmin || state.karma === null || state.karma >= cp;
     if (onlyAffordable && !isOwner && !affordable) return;
 
     let buttons = '';
@@ -1476,7 +1485,7 @@ function loadProfileData(uid) {
       </div>
       <p class="text-3xl font-bold text-gray-900 flex items-center justify-center">${karma} ${badge}</p>
       <p class="text-sm text-gray-500 mb-1">Punti Karma (KP)</p>
-      <p class="text-xs text-gray-500 mb-4">Puoi richiedere beni e servizi fino a ${karma} KP. Regala per guadagnarne altri.</p>
+      <p id="kp-hint" class="text-xs text-gray-500 mb-4">${state.isAdmin ? '🛡️ Amministratore: puoi richiedere e pubblicare senza limiti di KP.' : `Puoi richiedere beni e servizi fino a ${karma} KP. Regala per guadagnarne altri.`}</p>
       <p class="text-xl font-semibold text-gray-700">${state.completedSwaps}</p>
       <p class="text-xs text-gray-500">Scambi completati</p>`;
     $('profile-name-header').textContent = data.displayName || auth.currentUser?.displayName || 'Utente Ecommuni';
@@ -1683,4 +1692,95 @@ window.useMyPosition = async function () {
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service worker non registrato:', e));
 }
+// Dice al service worker quale chat è aperta: la notifica di quella chat non serve,
+// tutte le altre arrivano anche con l'app aperta.
+function tellServiceWorkerChat() {
+  try { navigator.serviceWorker?.controller?.postMessage({ type: 'open-chat', chatId: currentChatId }); } catch (_) {}
+}
 populateSelects();
+
+// Quando si scopre (o cambia) il ruolo di amministratore, aggiorna ciò che dipende dai limiti
+document.addEventListener('admin-changed', () => {
+  renderOffers();
+  updateFotoLabels();
+  updateValuePreview();
+  const h = $('kp-hint');
+  if (h && state.isAdmin) h.textContent = '🛡️ Amministratore: puoi richiedere e pubblicare senza limiti di KP.';
+});
+
+// ---------- FOTOCAMERA INTEGRATA ----------
+// Apre la fotocamera dentro l'app: il browser chiede il permesso la prima volta.
+// Se non è disponibile (o il permesso è negato) si usa l'app fotocamera del telefono.
+let camStream = null, camFacing = 'environment';
+
+function camLiberi() { return [0, 1, 2].filter((i) => !pendingFotos[i]); }
+function camAggiornaContatore() {
+  const n = 3 - camLiberi().length;
+  $('camera-count').textContent = `${n}/3 foto`;
+  $('camera-shot').disabled = camLiberi().length === 0;
+}
+function camStop() {
+  camStream?.getTracks().forEach((t) => t.stop());
+  camStream = null;
+  $('camera-video').srcObject = null;
+}
+async function camStart() {
+  camStop();
+  const msg = $('camera-msg');
+  msg.classList.add('hidden');
+  camStream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: camFacing }, width: { ideal: 1920 }, height: { ideal: 1440 } },
+    audio: false
+  });
+  $('camera-video').srcObject = camStream;
+}
+
+window.openCamera = async function () {
+  if (!camLiberi().length) return alert('Hai già 3 foto: toccane una con la ✕ per sostituirla.');
+  if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) { $('camera-fallback').click(); return; }
+  $('camera-modal').classList.remove('hidden');
+  camAggiornaContatore();
+  try {
+    await camStart();
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
+    $('camera-switch').classList.toggle('hidden', cams.length < 2);
+  } catch (e) {
+    const negato = e.name === 'NotAllowedError' || e.name === 'SecurityError';
+    const msg = $('camera-msg');
+    msg.classList.remove('hidden');
+    msg.innerHTML = negato
+      ? 'Accesso alla fotocamera negato.<br>Per consentirlo: tocca il lucchetto 🔒 accanto all\'indirizzo → Autorizzazioni → Fotocamera → Consenti, poi riprova.<br><br><button class="underline" onclick="closeCamera();document.getElementById(\'camera-fallback\').click()">Usa l\'app fotocamera del telefono</button>'
+      : 'Nessuna fotocamera disponibile.<br><br><button class="underline" onclick="closeCamera();document.getElementById(\'camera-fallback\').click()">Scegli una foto dal dispositivo</button>';
+    $('camera-shot').disabled = true;
+    logEvent('camera_error', { name: e.name }, 'warn');
+  }
+};
+
+window.switchCamera = async function () {
+  camFacing = camFacing === 'environment' ? 'user' : 'environment';
+  try { await camStart(); } catch (e) { reportError('switchCamera', e); }
+};
+
+window.takeShot = async function () {
+  const video = $('camera-video');
+  const liberi = camLiberi();
+  if (!camStream || !video.videoWidth || !liberi.length) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  video.classList.remove('camera-flash'); void video.offsetWidth; video.classList.add('camera-flash');
+  const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.9));
+  if (!blob) return;
+  const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+  const slot = liberi[0];
+  pendingFotos[slot] = { loading: true };
+  camAggiornaContatore();
+  await setFoto(slot, file);
+  camAggiornaContatore();
+  if (!camLiberi().length) setTimeout(() => window.closeCamera(), 400);
+};
+
+window.closeCamera = function () {
+  camStop();
+  $('camera-modal').classList.add('hidden');
+};

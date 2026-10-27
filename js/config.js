@@ -39,7 +39,7 @@ export const LEGAL = {
 //            "Certificati push web" -> Genera coppia di chiavi -> copia la chiave qui.
 // Finche' e' vuota, il pulsante "Attiva notifiche" resta nascosto.
 // =====================================================================
-export const VAPID_KEY = '';
+export const VAPID_KEY = 'BFe2xj27l8IS2o7uIbfIktNeWugWvjpdKneqKHKKqaX3GZDL-6gACRQjt2FwvAMaK7gkEWXXn4XCHEm87h_kkyU';
 export const NOTIFY_URL = '/api/notify';   // funzione su Vercel (cartella api/)
 
 export const PAGE_SIZE = 20;               // annunci caricati per volta

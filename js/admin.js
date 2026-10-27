@@ -8,7 +8,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db } from './firebase.js';
 import { LOG_RETENTION_DAYS } from './config.js';
-import { DEFAULT_CATALOG, validaCatalogo, unisciNovita } from './catalog.js';
+import { DEFAULT_CATALOG, validaCatalogo, unisciNovita, paroleChiaveAnnuncio } from './catalog.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, tsToDate } from './utils.js';
@@ -226,6 +226,33 @@ window.saveCatalog = async function () {
   } catch (e) {
     reportError('admin.saveCatalog', e);
     alert('Salvataggio non riuscito: ' + friendlyError(e));
+  }
+};
+
+// ---------- Ricerca: prepara gli annunci pubblicati prima della funzione ----------
+window.prepareSearch = async function () {
+  if (!confirm('Calcolare le parole chiave per gli annunci che non le hanno ancora? Serve una sola volta.')) return;
+  const btn = $('prepare-search-btn');
+  btn.disabled = true;
+  let fatti = 0;
+  try {
+    const snap = await getDocs(collection(db, 'offerte'));
+    const daFare = snap.docs.filter((d) => !Array.isArray(d.data().keywords) && d.data().status !== 'concluso');
+    for (let i = 0; i < daFare.length; i += 400) {
+      const b = writeBatch(db);
+      daFare.slice(i, i + 400).forEach((d) => b.update(d.ref, { keywords: paroleChiaveAnnuncio(state.catalog, d.data()) }));
+      await b.commit();
+      fatti += Math.min(400, daFare.length - i);
+      btn.textContent = `Preparati ${fatti} di ${daFare.length}…`;
+    }
+    logEvent('search_prepared', { annunci: fatti });
+    alert(fatti ? `Fatto: ${fatti} annunci ora si trovano con la ricerca.` : 'Tutti gli annunci erano già pronti per la ricerca.');
+  } catch (e) {
+    reportError('admin.prepareSearch', e);
+    alert('Operazione non riuscita: ' + friendlyError(e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔎 Prepara la ricerca per gli annunci vecchi';
   }
 };
 

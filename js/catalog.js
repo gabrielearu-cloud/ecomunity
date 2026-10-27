@@ -341,6 +341,41 @@ export function cercaSottocategorie(catalog, testo) {
   }).map(([k]) => k));
 }
 
+// ---------------------------------------------------------------------
+// RICERCA ANNUNCI
+// Ogni annuncio salva l'elenco "keywords": le parole di titolo, descrizione,
+// marca, modello e categoria, piu' i loro inizi ("bic", "bici", "bicic"...),
+// cosi' la ricerca trova risultati gia' mentre si scrive.
+// ---------------------------------------------------------------------
+const STOP = new Set(['con', 'per', 'del', 'della', 'delle', 'dei', 'degli', 'una', 'uno', 'che', 'non', 'sono', 'nel', 'nella', 'alla', 'alle', 'dal', 'dalla', 'come', 'anche', 'molto', 'poco', 'tra', 'fra', 'piu', 'gli', 'le', 'il', 'lo', 'la', 'di', 'da', 'in', 'su', 'ed']);
+export const MAX_KEYWORDS = 300;
+const MAX_PREFISSO = 12;
+
+export const normalizzaTesto = (s) => String(s || '').toLowerCase().normalize('NFD')
+  .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** Parole chiave di un annuncio (con i prefissi da 3 lettere in su). */
+export function paroleChiaveAnnuncio(catalog, o) {
+  const sub = catalog?.sottocategorie?.[o.sottocategoria];
+  const liv = catalog?.servizi?.[o.livello];
+  const fonti = [o.title, o.marca, o.modello, sub?.label, sub?.gruppo, liv?.label, o.type === 'servizio' ? 'servizio aiuto' : '', o.description];
+  const out = new Set();
+  for (const f of fonti) {
+    for (const w of normalizzaTesto(f).split(' ')) {
+      if (w.length < 3 || STOP.has(w)) continue;
+      const max = Math.min(w.length, MAX_PREFISSO);
+      for (let n = 3; n <= max; n++) out.add(w.slice(0, n));
+      if (out.size >= MAX_KEYWORDS) return [...out].slice(0, MAX_KEYWORDS);
+    }
+  }
+  return [...out];
+}
+
+/** Trasforma il testo cercato in termini: il primo va al database, gli altri filtrano. */
+export function terminiRicerca(testo) {
+  return normalizzaTesto(testo).split(' ').filter((w) => w.length >= 3 && !STOP.has(w)).map((w) => w.slice(0, MAX_PREFISSO));
+}
+
 /** Foto minime richieste per un bene. */
 export const minFotoBeni = (catalog) => (Number.isInteger(catalog?.minFotoBeni) ? catalog.minFotoBeni : 1);
 

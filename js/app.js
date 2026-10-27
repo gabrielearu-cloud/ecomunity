@@ -14,7 +14,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, googleProvider } from './firebase.js';
 import { PAGE_SIZE, FOTO_MAX_CHARS, THUMB_MAX_CHARS, LEGAL } from './config.js';
-import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie, minFotoBeni, gruppiOrdinati, iconaGruppo, cercaSottocategorie } from './catalog.js';
+import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie, minFotoBeni, gruppiOrdinati, iconaGruppo, cercaSottocategorie, paroleChiaveAnnuncio, terminiRicerca, normalizzaTesto } from './catalog.js';
+import { distanzaKm, etichettaDistanza, cercaComuni, posizioneAttuale, zonaValida } from './geo.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, safeImg, tsToDate, compressImage } from './utils.js';
@@ -449,6 +450,8 @@ onAuthStateChanged(auth, (user) => {
     state.karma = null; state.completedSwaps = 0; state.isAdmin = false; lastKnownKarma = null;
     myOfferStatus = new Map();
     toReceive = []; toReceiveStatus = new Map();
+    state.zona = null; zonePromptShown = false;
+    searchTerms = []; searchResults = null; groupFilter = '';
     $('consent-modal').style.display = 'none';
     consentMode = null;
     deletingAccount = false;
@@ -678,7 +681,9 @@ window.publishOffer = async function (event) {
       ownerId: me.uid,
       ownerName: (me.displayName || 'Utente Ecommuni').slice(0, 80),
       timestamp: serverTimestamp(),
-      status: esito.status
+      status: esito.status,
+      keywords: paroleChiaveAnnuncio(state.catalog, { title, description, type: currentOfferType, ...valore.dati }),
+      zona: zonaValida(state.zona) ? { nome: state.zona.nome, lat: state.zona.lat, lng: state.zona.lng } : null
     });
     fotos.forEach((f, i) => batch.set(doc(db, 'offerte', offerRef.id, 'foto', String(i)), { src: f.full }));
     await batch.commit();
@@ -726,12 +731,16 @@ window.deleteOffer = async function (docId) {
 
 window.loadMoreOffers = function () {
   homePages++;
-  loadOffers();
+  if (searchTerms.length) runSearch(); else loadOffers();
 };
+
+// In home si caricano gli annunci piu' recenti (HOME_BATCH per volta) e si
+// mostrano ordinati per vicinanza alla zona dell'utente.
+const HOME_BATCH = 60;
 
 function loadOffers() {
   unsub.offers?.();
-  const lim = PAGE_SIZE * homePages;
+  const lim = HOME_BATCH * homePages;
   const q = query(collection(db, 'offerte'),
     where('status', 'in', ['disponibile', 'in_trattativa']),
     orderBy('timestamp', 'desc'),
@@ -739,14 +748,101 @@ function loadOffers() {
   unsub.offers = onSnapshot(q, (snap) => {
     homeOffers = snap.docs.map((d) => ({ id: d.id, data: d.data({ serverTimestamps: 'estimate' }) }));
     homeOffers.forEach((o) => state.offers.set(o.id, o.data));
-    $('load-more').classList.toggle('hidden', snap.size < lim);
+    homeHasMore = snap.size >= lim;
     renderOffers();
   }, (e) => {
     reportError('loadOffers', e);
     if (e.code === 'failed-precondition') {
-      $('item-list-bene').innerHTML = `<p class="text-sm text-red-600">Manca l'indice Firestore per gli annunci. L'amministratore deve pubblicare firestore.indexes.json (vedi LEGGIMI).</p>`;
+      $('item-list-bene').innerHTML = `<p class="text-sm text-red-600">Manca l'indice Firestore per gli annunci. L'amministratore deve crearlo (vedi LEGGIMI).</p>`;
     }
   });
+}
+
+// ---------- Ricerca ----------
+let searchTerms = [];          // termini cercati (normalizzati)
+let searchResults = null;      // risultati dal database, oppure null se non si sta cercando
+let searchTimer = null;
+let searchSeq = 0;
+let homeHasMore = false;
+let groupFilter = '';          // gruppo di categorie scelto nei filtri rapidi
+
+window.onSearchInput = function (value) {
+  clearTimeout(searchTimer);
+  $('search-clear').classList.toggle('hidden', !value);
+  searchTimer = setTimeout(() => {
+    searchTerms = terminiRicerca(value);
+    homePages = 1;
+    if (!searchTerms.length) { searchResults = null; renderOffers(); return; }
+    runSearch();
+  }, 300);
+};
+
+window.clearSearch = function () {
+  $('search-input').value = '';
+  window.onSearchInput('');
+};
+
+async function runSearch() {
+  const seq = ++searchSeq;
+  const lim = HOME_BATCH * homePages;
+  $('search-status').textContent = 'Cerco…';
+  try {
+    const snap = await getDocs(query(collection(db, 'offerte'),
+      where('keywords', 'array-contains', searchTerms[0]),
+      where('status', 'in', ['disponibile', 'in_trattativa']),
+      orderBy('timestamp', 'desc'),
+      limit(lim)));
+    if (seq !== searchSeq) return;                      // e' arrivata una ricerca piu' recente
+    searchResults = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+    searchResults.forEach((o) => state.offers.set(o.id, o.data));
+    homeHasMore = snap.size >= lim;
+    if (homePages === 1) logEvent('search', { q: searchTerms.join(' ').slice(0, 60), results: snap.size });
+  } catch (e) {
+    if (seq !== searchSeq) return;
+    reportError('runSearch', e);
+    // Se manca l'indice o c'e' un errore, cerca almeno tra gli annunci gia' caricati
+    searchResults = homeOffers.filter((o) => (o.data.keywords || []).includes(searchTerms[0]) || normalizzaTesto(o.data.title + ' ' + o.data.description).includes(searchTerms[0]));
+    homeHasMore = false;
+  }
+  renderOffers();
+}
+
+window.setGroupFilter = function (g) {
+  groupFilter = groupFilter === g ? '' : g;
+  renderOffers();
+};
+
+function renderGroupChips() {
+  const box = $('group-chips');
+  if (!box) return;
+  box.innerHTML = [`<button type="button" class="filter-chip${groupFilter ? '' : ' filter-chip-on'}" onclick="setGroupFilter('')">Tutte</button>`]
+    .concat(gruppiOrdinati(state.catalog).map(({ gruppo, icona }) =>
+      `<button type="button" class="filter-chip${groupFilter === gruppo ? ' filter-chip-on' : ''}" data-g="${esc(gruppo)}" onclick="setGroupFilter(this.dataset.g)">${icona} ${esc(gruppo)}</button>`))
+    .join('');
+}
+
+/** Annunci da mostrare: ricerca + filtri, ordinati per vicinanza (poi per data). */
+function annunciVisibili() {
+  const base = searchResults || homeOffers;
+  const altri = searchTerms.slice(1);
+  const lista = base.filter(({ data: o }) => {
+    if (altri.length) {
+      const kw = o.keywords || [];
+      const testo = normalizzaTesto(`${o.title} ${o.description} ${o.marca || ''} ${o.modello || ''}`);
+      if (!altri.every((t) => kw.includes(t) || testo.includes(t))) return false;
+    }
+    if (groupFilter) {
+      const g = o.type === 'servizio' ? null : state.catalog.sottocategorie[o.sottocategoria]?.gruppo || 'Altro';
+      if (g !== groupFilter) return false;
+    }
+    return true;
+  }).map((x) => ({ ...x, km: distanzaKm(state.zona, x.data.zona) }));
+  lista.sort((a, b) => {
+    const da = a.km ?? Infinity, dbk = b.km ?? Infinity;
+    if (da !== dbk) return da - dbk;
+    return (b.data.timestamp?.toMillis?.() || 0) - (a.data.timestamp?.toMillis?.() || 0);
+  });
+  return lista;
 }
 
 function loadMyOffers(uid) {
@@ -1099,8 +1195,11 @@ function renderOffers() {
   if (!me) return;
   const soglia = state.catalog.sogliaSegnalazioni;
   let beni = '', servizi = '';
+  renderGroupChips();
+  renderZoneBanner();
+  const lista = annunciVisibili();
 
-  homeOffers.forEach(({ id, data: o }) => {
+  lista.forEach(({ id, data: o, km }) => {
     const cp = Number(o.cpValue) || 0;
     const isOwner = o.ownerId === me.uid;
     const hidden = (o.reportCount || 0) >= soglia;
@@ -1148,7 +1247,7 @@ function renderOffers() {
         ${thumbHtml(id, o)}
         <p class="text-sm text-gray-600 whitespace-pre-line" style="word-break:break-word">${esc(o.description)}</p>
         <p class="text-xs text-gray-500 mt-2">${valuationLine(o)}</p>
-        <p class="text-xs text-gray-400 mt-1">Offerto da: <span class="font-medium text-gray-500">${esc(o.ownerName)}</span></p>
+        <p class="text-xs text-gray-400 mt-1">Offerto da: <span class="font-medium text-gray-500">${esc(o.ownerName)}</span>${o.zona?.nome ? ` · <span class="offer-place">📍 ${esc(o.zona.nome)}${km !== null && !isOwner ? ' · ' + etichettaDistanza(km) : ''}</span>` : ''}</p>
         ${buttons}
       </div>`;
     if (o.type === 'bene') beni += html; else servizi += html;
@@ -1156,8 +1255,18 @@ function renderOffers() {
 
   $('item-list-bene').innerHTML = beni;
   $('item-list-servizio').innerHTML = servizi;
+  const cerco = searchTerms.length > 0 || !!groupFilter;
+  const vuoto = (tipo) => cerco
+    ? `Nessun ${tipo === 'bene' ? 'bene' : 'servizio'} trovato${searchTerms.length ? ` per «${esc($('search-input').value.trim())}»` : ''}. Prova con un'altra parola o togli i filtri.`
+    : `Nessun ${tipo === 'bene' ? 'bene' : 'servizio'} disponibile.`;
+  $('empty-bene').textContent = vuoto('bene');
+  $('empty-servizio').textContent = vuoto('servizio');
   $('empty-bene').classList.toggle('hidden', !!beni);
   $('empty-servizio').classList.toggle('hidden', !!servizi);
+  $('load-more').classList.toggle('hidden', !homeHasMore);
+  $('search-status').textContent = searchTerms.length
+    ? `${lista.length} ${lista.length === 1 ? 'risultato' : 'risultati'}${state.zona ? ', i più vicini per primi' : ''}`
+    : (state.zona ? `Ordinati per vicinanza a ${state.zona.nome}` : '');
 }
 
 function renderMyOffers() {
@@ -1206,6 +1315,16 @@ function loadProfileData(uid) {
     if ('email' in data && !emailRemovalTried) {
       emailRemovalTried = true;   // un solo tentativo per sessione
       updateDoc(userRef, { email: deleteField() }).catch((e) => reportError('removeEmail', e));
+    }
+
+    // Zona dell'utente (per ordinare gli annunci per vicinanza)
+    const zonaPrima = JSON.stringify(state.zona || null);
+    state.zona = zonaValida(data.zona) ? data.zona : null;
+    renderZoneProfile();
+    if (JSON.stringify(state.zona) !== zonaPrima) renderOffers();
+    if (!state.zona && !zonePromptShown && !consentMode && data.termsVersion === LEGAL.versioneTermini) {
+      zonePromptShown = true;
+      setTimeout(() => window.openZoneModal(true), 400);
     }
 
     const karma = data.karmaPoints ?? 0;
@@ -1284,6 +1403,7 @@ window.acceptTerms = async function () {
     }
     $('consent-modal').style.display = 'none';
     consentMode = null;
+    if (!state.zona && !zonePromptShown) { zonePromptShown = true; setTimeout(() => window.openZoneModal(true), 300); }
   } catch (e) {
     reportError('acceptTerms', e);
     alert('Non è stato possibile salvare la tua scelta: ' + friendlyError(e));
@@ -1347,6 +1467,93 @@ window.deleteMyAccount = async function () {
     if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') return;
     reportError('deleteMyAccount', e);
     alert('Eliminazione non completata: ' + friendlyError(e) + '\nRiprova; se il problema continua scrivi al gestore.');
+  }
+};
+
+// ---------- 13d. ZONA DELL'UTENTE ----------
+let zonePromptShown = false;
+let zoneAbort = null;
+let zoneTimer = null;
+let zoneResults = [];
+
+function renderZoneProfile() {
+  const el = $('zone-current');
+  if (!el) return;
+  el.innerHTML = state.zona
+    ? `📍 <b>${esc(state.zona.nome)}</b>`
+    : '<span class="text-gray-500">Non ancora impostata</span>';
+}
+
+function renderZoneBanner() {
+  const b = $('zone-banner');
+  if (b) b.classList.toggle('hidden', !!state.zona || !auth.currentUser);
+}
+
+window.openZoneModal = function (primoAccesso = false) {
+  $('zone-intro').textContent = primoAccesso
+    ? 'Indica dove ti trovi: vedrai per primi gli annunci più vicini a te. Vedrai comunque anche tutti gli altri.'
+    : 'Cambia la tua zona: gli annunci verranno ordinati dal più vicino.';
+  $('zone-search').value = '';
+  $('zone-results').innerHTML = '';
+  $('zone-msg').textContent = '';
+  $('zone-modal').style.display = 'flex';
+  setTimeout(() => $('zone-search').focus(), 50);
+};
+
+window.closeZoneModal = function () {
+  zoneAbort?.abort();
+  $('zone-modal').style.display = 'none';
+};
+
+window.onZoneSearch = function (value) {
+  clearTimeout(zoneTimer);
+  zoneTimer = setTimeout(async () => {
+    zoneAbort?.abort();
+    zoneAbort = new AbortController();
+    const box = $('zone-results');
+    if (String(value).trim().length < 2) { box.innerHTML = ''; return; }
+    $('zone-msg').textContent = 'Cerco…';
+    try {
+      zoneResults = await cercaComuni(value, zoneAbort.signal);
+      $('zone-msg').textContent = zoneResults.length ? '' : 'Nessun Comune trovato con questo nome.';
+      box.innerHTML = zoneResults.map((r, i) => `
+        <button type="button" class="zone-row" onclick="chooseZone(${i})">
+          <span class="zone-name">${esc(r.nome)}</span>
+          <span class="zone-detail">${esc(r.dettaglio)}</span>
+        </button>`).join('');
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      $('zone-msg').textContent = 'Ricerca non disponibile in questo momento: riprova o usa la posizione.';
+      reportError('zoneSearch', e);
+    }
+  }, 350);
+};
+
+async function saveZone(z) {
+  const me = auth.currentUser;
+  if (!me || !zonaValida(z)) return;
+  try {
+    await updateDoc(doc(db, 'users', me.uid), { zona: { nome: z.nome, lat: z.lat, lng: z.lng } });
+    logEvent('zone_set', { nome: z.nome });
+    window.closeZoneModal();
+  } catch (e) {
+    reportError('saveZone', e);
+    $('zone-msg').textContent = 'Salvataggio non riuscito: ' + friendlyError(e);
+  }
+}
+
+window.chooseZone = function (i) {
+  const r = zoneResults[i];
+  if (r) saveZone({ nome: r.nome, lat: r.lat, lng: r.lng });
+};
+
+window.useMyPosition = async function () {
+  $('zone-msg').textContent = 'Rilevo la posizione…';
+  try {
+    const p = await posizioneAttuale();
+    await saveZone({ nome: 'Vicino a me', lat: p.lat, lng: p.lng });
+  } catch (e) {
+    $('zone-msg').textContent = e.message + ' Puoi cercare il tuo Comune qui sopra.';
   }
 };
 

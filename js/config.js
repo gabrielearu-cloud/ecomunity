@@ -29,7 +29,7 @@ export const LEGAL = {
   email: '[indirizzo email dedicato a Ecommuni]',
   comune: '[Comune di residenza]',
   luogoDati: "[località del database: Firebase → Impostazioni progetto → Località risorse, es. \"eur3 (Europa)\"]",
-  versioneTermini: '2026-10-27',
+  versioneTermini: '2026-10-27-zona',
   etaMinima: 18
 };
 

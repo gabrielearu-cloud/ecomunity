@@ -8,6 +8,7 @@ export const state = {
   catalogOnServer: false,     // false = l'admin deve ancora inizializzarlo
   isAdmin: false,
   karma: null,
+  zona: null,                 // { nome, lat, lng } zona scelta dall'utente
   completedSwaps: 0,
   offers: new Map()           // id -> dati, per tutti gli annunci gia' scaricati
 };

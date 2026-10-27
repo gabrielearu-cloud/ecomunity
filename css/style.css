@@ -258,3 +258,32 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neu
 
 /* "hidden" deve vincere sempre, anche sugli elementi a cui questo file assegna un display */
 .hidden { display: none !important; }
+
+/* ===== Annuncio in trattativa: leggibile, con barra gialla ===== */
+.card-trattativa { border-left: 4px solid #f59e0b !important; background: #fffdf5 !important; }
+
+/* ===== Riquadro scambio in cima alla chat ===== */
+.chat-deal { padding: .7rem .9rem; border-bottom: 1px solid #e5e7eb; background: #fff; }
+.deal-head { display: flex; align-items: baseline; gap: .5rem; min-width: 0; }
+.deal-state { flex: 0 0 auto; font-size: .78rem; font-weight: 700; }
+.deal-title { min-width: 0; font-size: .78rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.deal-text { font-size: .85rem; color: #374151; margin-top: .25rem; line-height: 1.35; }
+.deal-actions { display: flex; gap: .5rem; margin-top: .55rem; flex-wrap: wrap; }
+.deal-btn { flex: 1 1 auto; padding: .55rem .8rem; border-radius: .6rem; font-size: .85rem; font-weight: 600; cursor: pointer; font-family: inherit; border: 1px solid transparent; }
+.deal-primary { background: #16a34a; color: #fff; }
+.deal-primary:hover { background: #15803d; }
+.deal-danger { background: #fff; color: #dc2626; border-color: #fecaca; }
+.deal-ghost { background: #fff; color: #374151; border-color: #d1d5db; }
+.deal-action { background: #f0fdf4; }
+.deal-action .deal-state { color: #15803d; }
+.deal-done { background: #ecfdf5; }
+.deal-done .deal-state { color: #047857; }
+.deal-off .deal-state, .deal-info .deal-state { color: #4b5563; }
+
+/* messaggi automatici dello scambio */
+.msg-system { display: flex; flex-direction: column; align-items: center; margin: .7rem 0 .2rem; }
+.msg-system span:first-child {
+  max-width: 85%; text-align: center; font-size: .78rem; color: #374151; background: #fef9c3;
+  padding: .35rem .75rem; border-radius: .75rem; box-shadow: 0 1px 2px rgba(0,0,0,.05);
+}
+.msg-system-time { font-size: .62rem; color: #9ca3af; margin-top: .15rem; }

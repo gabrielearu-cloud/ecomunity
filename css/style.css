@@ -47,3 +47,81 @@
 }
 .field { margin-top: .25rem; display: block; width: 100%; padding: .5rem .75rem; border: 1px solid #d1d5db; border-radius: .375rem; background: #fff; }
 #catalog-editor { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+
+/* ===== Selettore categoria ===== */
+.cat-field {
+  margin-top: .35rem; width: 100%; display: flex; align-items: center; gap: .75rem;
+  padding: .7rem .85rem; background: #fff; border: 1px solid #d1d5db; border-radius: .75rem;
+  text-align: left; transition: border-color .15s, box-shadow .15s;
+}
+.cat-field:hover { border-color: #16a34a; }
+.cat-field:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,.15); }
+.cat-field-empty { border-style: dashed; }
+.cat-emoji {
+  flex: 0 0 2.25rem; height: 2.25rem; display: flex; align-items: center; justify-content: center;
+  background: #f0fdf4; border-radius: .6rem; font-size: 1.15rem;
+}
+.cat-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cat-label { font-weight: 600; color: #111827; font-size: .95rem; line-height: 1.25; }
+.cat-sub { color: #6b7280; font-size: .75rem; margin-top: .1rem; }
+.cat-placeholder { color: #6b7280; font-size: .95rem; }
+.cat-change { flex: 0 0 auto; color: #16a34a; font-size: .8rem; font-weight: 600; }
+
+.cat-hint { font-size: .75rem; color: #6b7280; margin-bottom: .35rem; }
+.cat-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.cat-chip {
+  font-size: .8rem; padding: .35rem .7rem; border-radius: 9999px; background: #fff;
+  border: 1px solid #d1d5db; color: #374151; transition: all .15s;
+}
+.cat-chip:hover { border-color: #16a34a; color: #15803d; }
+.cat-chip-on { background: #16a34a; border-color: #16a34a; color: #fff; }
+.cat-chip-on:hover { color: #fff; }
+
+/* Pannello: dal basso su telefono, centrato su schermi grandi */
+.sheet-overlay { align-items: flex-end; padding: 0; }
+.sheet {
+  width: 100%; max-width: 28rem; max-height: 85vh; display: flex; flex-direction: column;
+  background: #fff; border-radius: 1rem 1rem 0 0; box-shadow: 0 -10px 30px rgba(0,0,0,.15);
+  animation: sheet-up .2s ease-out;
+}
+@media (min-width: 640px) {
+  .sheet-overlay { align-items: center; padding: 1rem; }
+  .sheet { border-radius: 1rem; max-height: 80vh; }
+}
+@keyframes sheet-up { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1rem .5rem; }
+.sheet-head h3 { font-size: 1.1rem; font-weight: 700; color: #111827; }
+.sheet-close { width: 2rem; height: 2rem; border-radius: 9999px; color: #6b7280; }
+.sheet-close:hover { background: #f3f4f6; }
+.sheet-search { padding: 0 1rem .75rem; border-bottom: 1px solid #f3f4f6; }
+.sheet-search input {
+  width: 100%; padding: .6rem .85rem; border: 1px solid #e5e7eb; border-radius: .6rem;
+  background: #f9fafb; font-size: .9rem;
+}
+.sheet-search input:focus { outline: none; border-color: #16a34a; background: #fff; }
+.sheet-list { overflow-y: auto; padding-bottom: 1rem; -webkit-overflow-scrolling: touch; }
+
+.cat-group + .cat-group { margin-top: .25rem; }
+.cat-group-last { border-top: 1px solid #e5e7eb; margin-top: .5rem; padding-top: .25rem; }
+.cat-group-head {
+  position: sticky; top: 0; z-index: 1; background: #f9fafb; color: #4b5563;
+  font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: .5rem 1rem; border-bottom: 1px solid #f3f4f6;
+}
+.cat-row {
+  width: 100%; display: flex; align-items: center; gap: .75rem; text-align: left;
+  padding: .7rem 1rem; border-bottom: 1px solid #f3f4f6; background: #fff;
+}
+.cat-row:hover { background: #f0fdf4; }
+.cat-row-label { flex: 1; color: #1f2937; font-size: .92rem; }
+.cat-row-range { color: #9ca3af; font-size: .75rem; white-space: nowrap; }
+.cat-row-check { width: 1rem; color: #16a34a; font-weight: 700; text-align: right; }
+.cat-row-on { background: #f0fdf4; }
+.cat-row-on .cat-row-label { color: #15803d; font-weight: 600; }
+.cat-empty { padding: 1rem; color: #6b7280; font-size: .9rem; }
+/* Il selettore non dipende dagli stili di base: azzera bordi e caratteri dei pulsanti */
+.cat-field, .cat-chip, .cat-row, .sheet-close { font-family: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.cat-row { border: 0; border-bottom: 1px solid #f3f4f6; }
+.sheet-close { border: 0; background: transparent; font-size: 1rem; }
+.sheet, .sheet input, .cat-hint, .cat-group-head { font-family: inherit; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }

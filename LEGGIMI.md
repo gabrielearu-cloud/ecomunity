@@ -58,6 +58,13 @@ non si può pubblicare un valore più alto di quello che risulta dai dati dichia
 2. Chi riceve, dal **Profilo → Da ricevere**, preme **✓ Sì, l'ho ricevuto** e dà una valutazione: solo ora i KP passano.
    Se preme "Non l'ho ricevuto", lo scambio torna "in trattativa".
 
+## Giudizi, scambi fermi e sospensioni
+
+- **Giudizi**: a scambio concluso chi riceve e chi regala danno all'altro 👍 positivo o 👎 negativo (una volta). Accanto al nome compaiono scambi conclusi e % di positivi.
+- **Scambi fermi**: se chi riceve non conferma entro 7 giorni, chi ha regalato preme "🆘 Chiedi aiuto" nella chat; gli amministratori ricevono una notifica.
+- **Pannello Admin → Da controllare**: scambi fermi (Concludi / Annulla), utenti con 2+ giudizi negativi, account sospesi (Sospendi / Riattiva).
+  Un account sospeso vede gli annunci ma non può pubblicare né scrivere: lo bloccano anche le regole di Firebase.
+
 ## Notifiche push (configurazione una tantum, gratuita)
 
 1. **Chiave web**: Firebase → ⚙ Impostazioni progetto → **Cloud Messaging** → "Certificati push web" → **Genera coppia di chiavi**. Copia la chiave in `js/config.js` → `VAPID_KEY`.

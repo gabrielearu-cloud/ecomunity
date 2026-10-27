@@ -26,8 +26,22 @@
 
 <div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg">
 
-  <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center">
-    <h1 class="text-xl font-bold text-green-600 flex items-center"><img src="favicon.svg" alt="" width="28" height="28" class="mr-2">Ecommuni</h1>
+  <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center relative">
+    <div class="flex items-center gap-2">
+      <h1 class="text-xl font-bold text-green-600 flex items-center"><img src="favicon.svg" alt="" width="28" height="28" class="mr-2">Ecommuni</h1>
+      <button type="button" id="info-btn" class="info-btn" onclick="toggleInfo(event)" aria-label="Come funziona Ecommuni" aria-expanded="false">?</button>
+    </div>
+    <div id="info-pop" class="info-pop hidden" role="dialog" aria-label="Come funziona" onclick="event.stopPropagation()">
+      <p class="info-title">🌱 Regala, ricevi, ricambia</p>
+      <p>Qui non girano soldi: chi regala un oggetto o un po' del suo tempo guadagna <b>Karma Points (KP)</b>, e con i KP riceve ciò che offrono gli altri.</p>
+      <ol>
+        <li><b>Pubblica</b> ciò che non usi più o un aiuto che sai dare: il valore in KP si calcola da solo.</li>
+        <li>Chi è interessato ti <b>scrive in chat</b> e scegli tu a chi darlo.</li>
+        <li>Dopo la consegna, chi riceve <b>conferma</b> e i KP passano a te.</li>
+      </ol>
+      <p class="info-foot">Meno sprechi, più vicinato.</p>
+      <button type="button" class="info-close" onclick="toggleInfo(event, false)">Ho capito</button>
+    </div>
     <button onclick="handleLogout()" class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-1 rounded-full shadow-md">Logout</button>
   </header>
 
@@ -51,6 +65,7 @@
         </div>
         <div id="group-chips" class="filter-chips"></div>
         <p id="search-status" class="search-status"></p>
+        <div id="suspended-banner" class="hidden suspended-banner">⛔ Il tuo account è sospeso da un amministratore: puoi consultare gli annunci ma non pubblicare né scrivere in chat.</div>
         <button type="button" id="zone-banner" class="zone-banner hidden" onclick="openZoneModal(false)">
           📍 <span><b>Imposta la tua zona</b> per vedere prima gli annunci vicini a te</span> <span class="zone-banner-go">›</span>
         </button>
@@ -277,6 +292,12 @@
         </div>
 
         <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-1">Da controllare</h3>
+          <p class="text-xs text-gray-500 mb-2">Scambi fermi per cui è stato chiesto aiuto, utenti con 2 o più giudizi negativi e account sospesi.</p>
+          <div id="admin-control" class="space-y-2"></div>
+        </div>
+
+        <div>
           <h3 class="text-sm font-semibold text-gray-700 mb-1">Verifica notifiche</h3>
           <p class="text-xs text-gray-500 mb-2">Controlla il server e invia una notifica di prova ai tuoi dispositivi.</p>
           <button id="push-test-btn" onclick="testPush()" class="px-3 py-2 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700">🔔 Verifica e invia prova</button>
@@ -339,7 +360,7 @@
         </button>
         <div id="chat-avatar" class="chat-avatar">?</div>
         <div class="chat-head-text">
-          <h2 id="current-chat-name" class="chat-name">Chat</h2>
+          <h2 class="chat-name"><span id="current-chat-name">Chat</span> <span id="current-chat-rep" class="rep"></span></h2>
           <p id="current-chat-title" class="chat-offer"></p>
         </div>
       </header>
@@ -414,11 +435,11 @@
     <h3 class="text-lg font-semibold text-gray-800 mb-2">Conferma di aver ricevuto</h3>
     <p id="feedback-offer-title" class="text-sm text-gray-600 mb-2"></p>
     <p id="feedback-kp-info" class="text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-4"></p>
-    <p class="text-xs text-gray-500 mb-2">Com'è andato lo scambio? Scegliendo una risposta confermi la ricezione.</p>
-    <div class="space-y-3">
-      <button onclick="submitFeedback('eccellente')" class="w-full p-3 rounded-lg bg-green-100 hover:bg-green-200 text-green-800 font-medium text-left">Eccellente</button>
-      <button onclick="submitFeedback('corretto')" class="w-full p-3 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium text-left">Corretto</button>
-      <button onclick="submitFeedback('insoddisfacente')" class="w-full p-3 rounded-lg bg-red-100 hover:bg-red-200 text-red-800 font-medium text-left">Insoddisfacente</button>
+    <p class="text-xs text-gray-500 mb-2">Com'è andato lo scambio? Scegliendo una risposta confermi la ricezione.
+      Il giudizio conta nella percentuale 👍 visibile accanto al nome dell'altra persona.</p>
+    <div class="grid grid-cols-2 gap-3">
+      <button onclick="submitFeedback('positivo')" class="fb-btn fb-pos">👍<span>Positivo</span></button>
+      <button onclick="submitFeedback('negativo')" class="fb-btn fb-neg">👎<span>Negativo</span></button>
     </div>
     <button onclick="closeFeedbackModal()" class="w-full text-center py-2 mt-6 text-sm text-gray-500 hover:text-gray-800">Annulla</button>
   </div>

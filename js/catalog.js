@@ -20,6 +20,7 @@ export const DEFAULT_CATALOG = {
   kpIniziali: 100,           // KP assegnati alla registrazione
   maxOre: 8,                 // durata massima di un servizio
   sogliaSegnalazioni: 3,     // segnalazioni oltre le quali l'annuncio si nasconde
+  minFotoBeni: 1,            // foto minime per pubblicare un bene (massimo 3)
 
   condizioni: {
     nuovo:    { label: 'Nuovo / mai usato',          coeff: 0.8 },
@@ -79,6 +80,20 @@ export const DEFAULT_CATALOG = {
     fai_elettrici:   { gruppo: 'Giardino e bricolage',   label: 'Elettroutensili (trapano, avvitatore)',    min: 30,  max: 400 },
     giard_attrezzi:  { gruppo: 'Giardino e bricolage',   label: 'Attrezzi da giardino',                     min: 10,  max: 300 },
     giard_piante:    { gruppo: 'Giardino e bricolage',   label: 'Piante / vasi',                            min: 3,   max: 100 },
+
+    canc_scrittura:  { gruppo: 'Cancelleria e scuola',   label: 'Penne, pennarelli, matite, colori',        min: 1,   max: 50 },
+    canc_quaderni:   { gruppo: 'Cancelleria e scuola',   label: 'Quaderni, blocchi, agende, carta',         min: 1,   max: 40 },
+    canc_scuola:     { gruppo: 'Cancelleria e scuola',   label: 'Astucci, calcolatrici, materiale scolastico', min: 3, max: 120 },
+    canc_ufficio:    { gruppo: 'Cancelleria e scuola',   label: 'Articoli da ufficio (raccoglitori, cucitrici)', min: 2, max: 80 },
+
+    arte_materiale:  { gruppo: 'Hobby, arte e musica',   label: 'Materiale per disegno e pittura',          min: 3,   max: 200 },
+    arte_cucito:     { gruppo: 'Hobby, arte e musica',   label: 'Cucito, maglia e bricolage creativo',      min: 3,   max: 300 },
+    musica_strum:    { gruppo: 'Hobby, arte e musica',   label: 'Strumenti musicali',                       min: 20,  max: 2000 },
+    hobby_collez:    { gruppo: 'Hobby, arte e musica',   label: 'Modellismo e collezionismo',               min: 5,   max: 300 },
+
+    anim_accessori:  { gruppo: 'Animali',                label: 'Accessori per animali (cucce, guinzagli, trasportini)', min: 5, max: 250 },
+
+    auto_accessori:  { gruppo: 'Auto e moto',            label: 'Accessori auto/moto (portapacchi, catene, caschi moto)', min: 10, max: 600 },
 
     altro:           { gruppo: 'Altro',                  label: 'Altro (non presente in elenco)',           min: 1,   max: 150 }
   },
@@ -143,7 +158,21 @@ const PAROLE = {
   fai_manuali:     ['martello', 'cacciavite', 'pinza', 'chiave inglese', 'sega', 'cassetta attrezzi', 'livella', 'metro', 'attrezzi'],
   fai_elettrici:   ['trapano', 'avvitatore', 'smerigliatrice', 'flessibile', 'seghetto', 'levigatrice', 'saldatrice', 'compressore', 'pistola colla', 'tassellatore'],
   giard_attrezzi:  ['tosaerba', 'rasaerba', 'decespugliatore', 'tagliasiepi', 'rastrello', 'pala', 'zappa', 'cesoie', 'tubo giardino', 'annaffiatoio', 'idropulitrice', 'soffiatore', 'motosega'],
-  giard_piante:    ['pianta', 'vaso', 'fiore', 'talea', 'semi', 'fioriera', 'bonsai', 'orchidea']
+  giard_piante:    ['pianta', 'vaso', 'fiore', 'talea', 'semi', 'fioriera', 'bonsai', 'orchidea'],
+
+  canc_scrittura:  ['penna', 'pennarello', 'matita', 'evidenziatore', 'colori', 'pastelli', 'acquerelli', 'gessetti', 'biro', 'stilografica', 'correttore'],
+  canc_quaderni:   ['quaderno', 'blocco', 'blocchetto', 'agenda', 'diario', 'carta', 'risma', 'album da disegno', 'post-it'],
+  canc_scuola:     ['astuccio', 'calcolatrice', 'righello', 'squadra', 'compasso', 'goniometro', 'zaino scuola', 'materiale scolastico'],
+  canc_ufficio:    ['raccoglitore', 'cucitrice', 'pinzatrice', 'perforatrice', 'cartellina', 'faldone', 'portadocumenti', 'scotch', 'nastro adesivo'],
+
+  arte_materiale:  ['tela', 'pennello', 'colori acrilici', 'colori a olio', 'cavalletto', 'tempere', 'argilla', 'das', 'disegno', 'pittura'],
+  arte_cucito:     ['macchina da cucire', 'filo', 'lana', 'ferri', 'uncinetto', 'stoffa', 'tessuto', 'bottoni', 'cucito', 'perline'],
+  musica_strum:    ['chitarra', 'pianoforte', 'tastiera musicale', 'violino', 'batteria', 'flauto', 'ukulele', 'basso', 'sassofono', 'tromba', 'leggio', 'amplificatore chitarra'],
+  hobby_collez:    ['modellino', 'modellismo', 'francobolli', 'monete', 'figurine', 'collezione', 'trenino', 'plastico'],
+
+  anim_accessori:  ['cuccia', 'guinzaglio', 'collare', 'trasportino', 'gabbia', 'acquario', 'tiragraffi', 'lettiera', 'ciotola', 'cane', 'gatto'],
+
+  auto_accessori:  ['portapacchi auto', 'catene neve', 'casco moto', 'portabici', 'tappetini auto', 'seggiolino moto', 'bauletto', 'navigatore', 'dashcam']
 };
 Object.entries(PAROLE).forEach(([k, p]) => { if (DEFAULT_CATALOG.sottocategorie[k]) DEFAULT_CATALOG.sottocategorie[k].parole = p; });
 
@@ -154,8 +183,8 @@ const normalizza = (s) => String(s || '').toLowerCase().normalize('NFD').replace
 const radice = (w) => (w.length >= 5 ? w.replace(/[aeiou]$/, '') : w);
 const tokens = (s) => normalizza(s).split(/[\s'-]+/).filter(Boolean).map(radice);
 
-function contieneParola(tok, parola) {
-  const p = radice(parola);
+// "p" e' gia' ridotta alla radice da tokens(): non va accorciata di nuovo
+function contieneParola(tok, p) {
   return tok.some((t) => (p.length >= 4 ? t.startsWith(p) : t === p));
 }
 
@@ -262,6 +291,32 @@ export function esitoPubblicazione(catalog, kp, completedSwaps) {
   return { status: kp > catalog.sogliaVerifica ? 'in_verifica' : 'disponibile' };
 }
 
+/** Foto minime richieste per un bene. */
+export const minFotoBeni = (catalog) => (Number.isInteger(catalog?.minFotoBeni) ? catalog.minFotoBeni : 1);
+
+/**
+ * Aggiunge al catalogo salvato le novita' del catalogo predefinito
+ * (nuove sottocategorie, parole chiave, parametri nuovi) SENZA toccare
+ * prezzi, etichette o valori gia' modificati dall'admin.
+ */
+export function unisciNovita(salvato, predefinito = DEFAULT_CATALOG) {
+  const out = JSON.parse(JSON.stringify(salvato || {}));
+  const aggiunte = [];
+  Object.entries(predefinito).forEach(([k, v]) => {
+    if (typeof v !== 'object' && out[k] === undefined) { out[k] = v; aggiunte.push(k); }
+  });
+  ['condizioni', 'servizi'].forEach((sez) => {
+    out[sez] ||= {};
+    Object.entries(predefinito[sez]).forEach(([k, v]) => { if (!out[sez][k]) { out[sez][k] = v; aggiunte.push(`${sez}.${k}`); } });
+  });
+  out.sottocategorie ||= {};
+  Object.entries(predefinito.sottocategorie).forEach(([k, v]) => {
+    if (!out.sottocategorie[k]) { out.sottocategorie[k] = JSON.parse(JSON.stringify(v)); aggiunte.push(v.label); }
+    else if (!Array.isArray(out.sottocategorie[k].parole) && v.parole) out.sottocategorie[k].parole = [...v.parole];
+  });
+  return { catalogo: out, aggiunte };
+}
+
 /** Validazione del catalogo prima del salvataggio dal pannello admin. */
 export function validaCatalogo(c) {
   const errs = [];
@@ -280,6 +335,7 @@ export function validaCatalogo(c) {
   int(c.kpIniziali, 'kpIniziali', 0, 10000);
   num(c.maxOre, 'maxOre', 0.5, 24);
   int(c.sogliaSegnalazioni, 'sogliaSegnalazioni', 1, 100);
+  if (c.minFotoBeni !== undefined) int(c.minFotoBeni, 'minFotoBeni', 0, 3);
 
   const conds = c.condizioni && typeof c.condizioni === 'object' ? Object.entries(c.condizioni) : [];
   if (!conds.length) errs.push('condizioni mancanti');

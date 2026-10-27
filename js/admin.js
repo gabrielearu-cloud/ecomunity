@@ -8,7 +8,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db } from './firebase.js';
 import { LOG_RETENTION_DAYS } from './config.js';
-import { DEFAULT_CATALOG, validaCatalogo } from './catalog.js';
+import { DEFAULT_CATALOG, validaCatalogo, unisciNovita } from './catalog.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, tsToDate } from './utils.js';
@@ -187,6 +187,25 @@ function fillCatalogEditor() {
   $('catalog-editor').value = JSON.stringify(state.catalog, null, 2);
 }
 document.addEventListener('catalog-changed', () => { if (state.isAdmin && $('admin-screen').classList.contains('active')) fillCatalogEditor(); });
+
+// Aggiunge le nuove categorie dell'app al catalogo salvato, senza toccare quello che hai gia' modificato
+window.addCatalogNews = async function () {
+  const { catalogo, aggiunte } = unisciNovita(state.catalog);
+  if (!aggiunte.length) return alert('Il catalogo è già aggiornato: non ci sono novità da aggiungere.');
+  const elenco = aggiunte.slice(0, 15).join('\n- ') + (aggiunte.length > 15 ? `\n… e altre ${aggiunte.length - 15}` : '');
+  if (!confirm(`Aggiungere ${aggiunte.length} novità al catalogo?\n\n- ${elenco}\n\nPrezzi e valori già modificati non cambiano.`)) return;
+  const errs = validaCatalogo(catalogo);
+  if (errs.length) return alert('Errore nel catalogo:\n- ' + errs.join('\n- '));
+  try {
+    catalogo.versione = (Number(state.catalog.versione) || 0) + 1;
+    await setDoc(doc(db, 'config', 'catalogo'), catalogo);
+    logEvent('catalog_news_added', { aggiunte: aggiunte.length, versione: catalogo.versione }, 'warn');
+    alert(`Fatto: ${aggiunte.length} novità aggiunte.`);
+  } catch (e) {
+    reportError('admin.addCatalogNews', e);
+    alert('Aggiornamento non riuscito: ' + friendlyError(e));
+  }
+};
 
 window.resetCatalogEditor = function () {
   if (!confirm('Caricare nell\'editor i valori predefiniti? (non salva finché non premi Salva)')) return;

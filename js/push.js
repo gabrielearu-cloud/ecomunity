@@ -22,38 +22,43 @@ async function supported() {
   } catch (_) { return false; }
 }
 
-/** Mostra lo stato delle notifiche nel Profilo. */
+/**
+ * Aggiorna i riquadri delle notifiche: nel Profilo (sempre visibile, mostra lo stato)
+ * e in cima alla lista Chat (visibile solo finche' le notifiche non sono attive).
+ */
+function paint(stato, testo, mostraPulsante) {
+  const profilo = $('push-box'), chat = $('push-box-chat');
+  if (profilo) {
+    profilo.classList.toggle('hidden', stato === 'off');
+    $('push-info').textContent = testo;
+    $('push-btn').classList.toggle('hidden', !mostraPulsante);
+  }
+  if (chat) {
+    // in Chat non disturbiamo se sono gia' attive o se il dispositivo non le supporta
+    chat.classList.toggle('hidden', ['off', 'attive', 'non-supportate'].includes(stato));
+    $('push-info-chat').textContent = stato === 'da-attivare'
+      ? '🔔 Vuoi sapere subito quando qualcuno ti scrive, anche ad app chiusa?'
+      : testo;
+    $('push-btn-chat').classList.toggle('hidden', !mostraPulsante);
+  }
+}
+
 export async function initPushUi() {
-  const box = $('push-box');
-  if (!box) return;
-  if (!VAPID_KEY) { box.classList.add('hidden'); return; }
-  box.classList.remove('hidden');
-  const btn = $('push-btn'), info = $('push-info');
+  if (!VAPID_KEY) return paint('off', '', false);
 
   if (isIos && !isStandalone) {
-    btn.classList.add('hidden');
-    info.textContent = "Su iPhone le notifiche funzionano solo dall'app installata: Safari → Condividi → Aggiungi alla schermata Home, poi apri Ecommuni dall'icona.";
-    return;
+    return paint('ios-browser', "Su iPhone le notifiche funzionano solo dall'app installata: Safari → Condividi □↑ → Aggiungi alla schermata Home, poi apri Ecommuni dall'icona.", false);
   }
-  if (!(await supported())) {
-    btn.classList.add('hidden');
-    info.textContent = 'Questo browser non supporta le notifiche.';
-    return;
-  }
+  if (!(await supported())) return paint('non-supportate', 'Questo browser non supporta le notifiche.', false);
   if (Notification.permission === 'denied') {
-    btn.classList.add('hidden');
-    info.textContent = 'Notifiche bloccate: riattivale dalle impostazioni del browser per questo sito.';
-    return;
+    return paint('bloccate', 'Notifiche bloccate: riattivale dalle impostazioni del browser (icona del lucchetto accanto all\'indirizzo → Notifiche → Consenti).', false);
   }
   if (Notification.permission === 'granted') {
     // Rinnova il token in silenzio (i token possono cambiare nel tempo)
     registerToken().catch((e) => reportError('push.refresh', e));
-    btn.classList.add('hidden');
-    info.textContent = '🔔 Notifiche attive su questo dispositivo.';
-    return;
+    return paint('attive', '🔔 Notifiche attive su questo dispositivo.', false);
   }
-  btn.classList.remove('hidden');
-  info.textContent = 'Ricevi un avviso per nuovi messaggi e per i tuoi scambi, anche ad app chiusa.';
+  return paint('da-attivare', 'Ricevi un avviso per nuovi messaggi e per i tuoi scambi, anche ad app chiusa.', true);
 }
 
 async function registerToken() {

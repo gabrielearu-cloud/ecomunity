@@ -14,7 +14,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, googleProvider } from './firebase.js';
 import { PAGE_SIZE, FOTO_MAX_CHARS, THUMB_MAX_CHARS, LEGAL } from './config.js';
-import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie } from './catalog.js';
+import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie, minFotoBeni } from './catalog.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, safeImg, tsToDate, compressImage } from './utils.js';
@@ -273,13 +273,13 @@ function updateValuePreview() {
 window.updateValuePreview = updateValuePreview;
 
 function updateFotoLabels() {
-  const required = currentOfferType === 'bene';
-  $('img-hint').textContent = required
-    ? 'Servono almeno 2 foto reali del bene (max 3): una d\'insieme e una dei dettagli (marca, modello, eventuali difetti).'
-    : 'Per i servizi le foto sono facoltative (max 3).';
+  const minimo = currentOfferType === 'bene' ? minFotoBeni(state.catalog) : 0;
+  $('img-hint').textContent = minimo
+    ? `Serve almeno ${minimo === 1 ? '1 foto reale' : minimo + ' foto reali'} del bene (max 3). Più foto (insieme, dettagli, difetti) aiutano chi riceve e la verifica del valore.`
+    : 'Le foto sono facoltative (max 3).';
   [0, 1, 2].forEach((i) => {
     if (pendingFotos[i]) return;
-    const star = required && i < 2 ? ' *' : '';
+    const star = i < minimo ? ' *' : '';
     $('slot-label-' + i).innerHTML = `<span style="font-size:1.5rem">＋</span><small>Foto ${i + 1}${star}</small>`;
   });
 }
@@ -548,7 +548,8 @@ window.publishOffer = async function (event) {
   if (esito.error) return alert(esito.error);
 
   const fotos = pendingFotos.filter(Boolean);
-  if (currentOfferType === 'bene' && fotos.length < 2) return alert('Per un bene servono almeno 2 foto.');
+  const minimoFoto = currentOfferType === 'bene' ? minFotoBeni(state.catalog) : 0;
+  if (fotos.length < minimoFoto) return alert(`Per un bene serve almeno ${minimoFoto === 1 ? '1 foto' : minimoFoto + ' foto'}.`);
 
   const btn = $('publish-btn');
   btn.disabled = true; btn.textContent = 'Pubblicazione...';

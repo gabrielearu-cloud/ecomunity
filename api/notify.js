@@ -56,6 +56,16 @@ async function buildNotification(db, uid, body) {
     };
   }
 
+  // Annuncio rimosso da un amministratore: l'annuncio non esiste piu', si legge l'avviso
+  if (type === 'removed') {
+    const id = clip(body.offerId, 100);
+    const r = (await db.doc(`rimozioni/${id}`).get()).data();
+    if (!r || r.by !== uid || !(await db.doc(`admins/${uid}`).get()).exists) return null;
+    const MOTIVI = { valore: 'valore in KP non corretto', offensivo: 'contenuto volgare o offensivo', vietato: 'oggetto vietato o pericoloso', truffa: 'possibile truffa', altro: 'altro' };
+    return { to: r.ownerId, key: `removed_${id}`, status: 'rimosso', tag: `removed-${id}`,
+      title: '🛡 Annuncio rimosso', body: `«${clip(r.title, 60)}»: ${MOTIVI[r.motivo] || 'violazione dei Termini'}${r.nota ? ' — ' + clip(r.nota, 80) : ''}` };
+  }
+
   const snap = await db.doc(`offerte/${clip(body.offerId, 100)}`).get();
   if (!snap.exists) return null;
   const o = snap.data();

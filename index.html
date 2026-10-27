@@ -178,6 +178,10 @@
       <div class="p-4 border-b border-gray-200">
         <h2 class="text-xl font-semibold text-gray-800">Le Tue Chat</h2>
       </div>
+      <div id="push-box-chat" class="hidden mx-4 mt-3 p-3 rounded-lg bg-green-50 border border-green-200">
+        <p id="push-info-chat" class="text-sm text-gray-700"></p>
+        <button id="push-btn-chat" onclick="enablePush()" class="hidden mt-2 w-full py-2 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700">🔔 Attiva notifiche</button>
+      </div>
       <div id="chat-list" class="flex-1 overflow-y-auto"></div>
     </section>
 
@@ -244,6 +248,7 @@
           <textarea id="catalog-editor" rows="14" class="field" spellcheck="false"></textarea>
           <div class="flex gap-2 mt-2">
             <button onclick="saveCatalog()" class="px-3 py-2 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700">💾 Salva catalogo</button>
+            <button onclick="addCatalogNews()" class="px-3 py-2 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700">✨ Aggiungi novità</button>
             <button onclick="resetCatalogEditor()" class="px-3 py-2 text-xs font-medium rounded bg-gray-200 hover:bg-gray-300">Valori predefiniti</button>
           </div>
         </div>

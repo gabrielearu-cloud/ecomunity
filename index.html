@@ -185,6 +185,11 @@
       <div class="w-full p-4 space-y-3">
         <button id="admin-btn" onclick="openAdmin()" class="hidden w-full py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-gray-800 hover:bg-gray-900">🛠 Pannello Admin</button>
         <button onclick="handleLogout()" class="w-full py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700">Logout</button>
+        <p class="text-center text-xs text-gray-500 pt-2">
+          <a href="privacy.html" target="_blank" class="underline">Privacy</a> ·
+          <a href="termini.html" target="_blank" class="underline">Termini d'uso</a> ·
+          <button onclick="deleteMyAccount()" class="underline text-red-600">Elimina il mio account</button>
+        </p>
       </div>
     </section>
 
@@ -301,6 +306,10 @@
       <h2 class="text-3xl font-bold text-green-600 mb-2">EcoMunity</h2>
       <p class="text-gray-600 mb-8">Scambio Etico e Comunitario</p>
       <button onclick="handleAuth()" class="w-full py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Accedi con Google</button>
+      <p class="text-xs text-gray-500 mt-6">
+        <a href="privacy.html" target="_blank" class="underline">Informativa Privacy</a> ·
+        <a href="termini.html" target="_blank" class="underline">Termini d'uso</a>
+      </p>
     </div>
   </div>
 </div>
@@ -328,6 +337,24 @@
       <button onclick="submitFeedback('insoddisfacente')" class="w-full p-3 rounded-lg bg-red-100 hover:bg-red-200 text-red-800 font-medium text-left">Insoddisfacente</button>
     </div>
     <button onclick="closeFeedbackModal()" class="w-full text-center py-2 mt-6 text-sm text-gray-500 hover:text-gray-800">Annulla</button>
+  </div>
+</div>
+
+<!-- MODAL: ACCETTAZIONE TERMINI (primo accesso o termini aggiornati) -->
+<div id="consent-modal" class="modal-overlay" style="z-index:250">
+  <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+    <h3 class="text-lg font-semibold text-gray-800 mb-2">Benvenuto su EcoMunity</h3>
+    <p class="text-sm text-gray-600 mb-4">Prima di iniziare, conferma di aver letto le regole della comunità.</p>
+    <label class="flex items-start text-sm text-gray-700 mb-3 cursor-pointer">
+      <input type="checkbox" id="consent-age" class="mt-1 mr-2" onchange="updateConsentButton()">
+      <span>Ho almeno <b id="consent-age-num">18</b> anni.</span>
+    </label>
+    <label class="flex items-start text-sm text-gray-700 mb-5 cursor-pointer">
+      <input type="checkbox" id="consent-terms" class="mt-1 mr-2" onchange="updateConsentButton()">
+      <span>Ho letto e accetto i <a href="termini.html" target="_blank" class="text-green-700 underline">Termini d'uso</a> e ho letto l'<a href="privacy.html" target="_blank" class="text-green-700 underline">Informativa Privacy</a>.</span>
+    </label>
+    <button id="consent-btn" disabled onclick="acceptTerms()" class="w-full py-3 rounded-md text-sm font-medium text-white bg-green-600 disabled:opacity-50">Continua</button>
+    <button onclick="declineTerms()" class="w-full text-center py-2 mt-3 text-sm text-gray-500 hover:text-gray-800">Non accetto, esci</button>
   </div>
 </div>
 

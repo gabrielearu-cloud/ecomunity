@@ -7,13 +7,13 @@
 // =====================================================================
 
 // ---------- 1. IMPORT ----------
-import { signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { signInWithPopup, onAuthStateChanged, signOut, reauthenticateWithPopup, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, addDoc, query, where, onSnapshot, doc, updateDoc, getDoc, setDoc, orderBy,
   getDocs, limit, runTransaction, serverTimestamp, writeBatch, increment, deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, googleProvider } from './firebase.js';
-import { PAGE_SIZE, FOTO_MAX_CHARS, THUMB_MAX_CHARS } from './config.js';
+import { PAGE_SIZE, FOTO_MAX_CHARS, THUMB_MAX_CHARS, LEGAL } from './config.js';
 import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie } from './catalog.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
@@ -367,6 +367,9 @@ onAuthStateChanged(auth, (user) => {
     homeOffers = []; myOffers = []; allChatsData = []; unreadChatIds = [];
     state.karma = null; state.completedSwaps = 0; state.isAdmin = false; lastKnownKarma = null;
     myOfferStatus = new Map();
+    $('consent-modal').style.display = 'none';
+    consentMode = null;
+    deletingAccount = false;
     try { sessionStorage.removeItem('em_login_logged'); } catch (_) {}
     $('login-screen').style.display = 'flex';
     $('app-header').style.display = 'none';
@@ -1003,16 +1006,12 @@ function loadProfileData(uid) {
   const userRef = doc(db, 'users', uid);
   unsub.profile = onSnapshot(userRef, (snap) => {
     if (!snap.exists()) {
-      const u = auth.currentUser;
-      catalogReady.then(() => setDoc(userRef, {
-        displayName: (u?.displayName || 'Utente EcoMunity').slice(0, 80),
-        karmaPoints: state.catalogOnServer ? state.catalog.kpIniziali : 100,
-        completedSwaps: 0
-      })).then(() => logEvent('user_created', {}))
-        .catch((e) => reportError('createProfile', e));
+      // Nuovo utente: il profilo si crea solo dopo l'accettazione dei Termini
+      if (!deletingAccount) showConsent({ newProfile: true });
       return;
     }
     const data = snap.data();
+    if (data.termsVersion !== LEGAL.versioneTermini) showConsent({ newProfile: false });
 
     // Privacy: l'email non deve stare nel profilo pubblico (migrazione dei vecchi profili)
     if ('email' in data && !emailRemovalTried) {
@@ -1056,6 +1055,110 @@ function loadProfileData(uid) {
     updateValuePreview();
   }, (e) => reportError('loadProfileData', e));
 }
+
+// ---------- 13b. ACCETTAZIONE TERMINI ----------
+let consentMode = null;   // { newProfile: bool } mentre il modal e' aperto
+
+function showConsent(mode) {
+  if (consentMode) return;
+  consentMode = mode;
+  $('consent-age-num').textContent = String(LEGAL.etaMinima);
+  $('consent-age').checked = false;
+  $('consent-terms').checked = false;
+  window.updateConsentButton();
+  $('consent-modal').style.display = 'flex';
+}
+
+window.updateConsentButton = function () {
+  $('consent-btn').disabled = !($('consent-age').checked && $('consent-terms').checked);
+};
+
+window.acceptTerms = async function () {
+  const u = auth.currentUser;
+  if (!u || !consentMode) return;
+  const userRef = doc(db, 'users', u.uid);
+  $('consent-btn').disabled = true;
+  try {
+    if (consentMode.newProfile) {
+      await catalogReady;
+      await setDoc(userRef, {
+        displayName: (u.displayName || 'Utente EcoMunity').slice(0, 80),
+        karmaPoints: state.catalogOnServer ? state.catalog.kpIniziali : 100,
+        completedSwaps: 0,
+        termsVersion: LEGAL.versioneTermini,
+        termsAcceptedAt: serverTimestamp()
+      });
+      logEvent('user_created', { termsVersion: LEGAL.versioneTermini });
+    } else {
+      await updateDoc(userRef, { termsVersion: LEGAL.versioneTermini, termsAcceptedAt: serverTimestamp() });
+      logEvent('terms_accepted', { termsVersion: LEGAL.versioneTermini });
+    }
+    $('consent-modal').style.display = 'none';
+    consentMode = null;
+  } catch (e) {
+    reportError('acceptTerms', e);
+    alert('Non è stato possibile salvare la tua scelta: ' + friendlyError(e));
+    window.updateConsentButton();
+  }
+};
+
+window.declineTerms = async function () {
+  $('consent-modal').style.display = 'none';
+  consentMode = null;
+  await signOut(auth);
+};
+
+// ---------- 13c. ELIMINAZIONE ACCOUNT (diritto alla cancellazione) ----------
+let deletingAccount = false;
+
+window.deleteMyAccount = async function () {
+  const me = auth.currentUser;
+  if (!me) return;
+  const inTrattativa = myOffers.filter((o) => o.data.status === 'in_trattativa').length;
+  const msg = 'Vuoi eliminare definitivamente il tuo account?\n\n' +
+    'Verranno cancellati profilo, saldo KP, tutti i tuoi annunci con le foto e tutte le tue chat. ' +
+    'L\'operazione non si può annullare.' +
+    (inTrattativa ? `\n\nAttenzione: hai ${inTrattativa} annunci in trattativa, che verranno annullati.` : '');
+  if (!confirm(msg)) return;
+  if ((prompt('Per confermare scrivi ELIMINA') || '').trim().toUpperCase() !== 'ELIMINA') return;
+
+  try {
+    // 1. Conferma l'identità con Google (richiesto da Firebase per eliminare un account)
+    await reauthenticateWithPopup(me, googleProvider);
+    deletingAccount = true;
+    logEvent('account_deleted', { offers: myOffers.length, chats: allChatsData.length }, 'warn');
+
+    // 2. Annunci e foto
+    for (const o of myOffers) {
+      await deleteOfferWithFotos(o.id);
+    }
+    // 3. Chat e messaggi
+    for (const c of allChatsData) {
+      const msgs = await getDocs(collection(db, 'chats', c.id, 'messages'));
+      for (let i = 0; i < msgs.docs.length; i += 450) {
+        const b = writeBatch(db);
+        msgs.docs.slice(i, i + 450).forEach((m) => b.delete(m.ref));
+        await b.commit();
+      }
+      const b = writeBatch(db);
+      b.delete(doc(db, 'chats', c.id));
+      await b.commit();
+    }
+    // 4. Profilo
+    stopListeners();
+    const b = writeBatch(db);
+    b.delete(doc(db, 'users', me.uid));
+    await b.commit();
+    // 5. Account di accesso
+    await deleteUser(me);
+    alert('Il tuo account è stato eliminato. Grazie per aver fatto parte di EcoMunity.');
+  } catch (e) {
+    deletingAccount = false;
+    if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') return;
+    reportError('deleteMyAccount', e);
+    alert('Eliminazione non completata: ' + friendlyError(e) + '\nRiprova; se il problema continua scrivi al gestore.');
+  }
+};
 
 // ---------- 14. AVVIO ----------
 populateSelects();

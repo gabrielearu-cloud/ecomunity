@@ -18,7 +18,22 @@ export const firebaseConfig = {
 // verifiche al mese, poi a pagamento: attivalo solo se serve.
 export const RECAPTCHA_SITE_KEY = '';
 
-export const PAGE_SIZE = 20;                 // annunci caricati per volta
+// =====================================================================
+// DATI LEGALI: compila questi campi prima di aprire l'app al pubblico.
+// Vengono mostrati in privacy.html e termini.html.
+// Se modifichi i testi dei Termini o della Privacy, cambia anche
+// "versioneTermini": a tutti gli utenti verra' richiesto di accettarli di nuovo.
+// =====================================================================
+export const LEGAL = {
+  titolare: '[Nome e Cognome]',
+  email: '[indirizzo email dedicato a EcoMunity]',
+  comune: '[Comune di residenza]',
+  luogoDati: "[località del database: Firebase → Impostazioni progetto → Località risorse, es. \"eur3 (Europa)\"]",
+  versioneTermini: '2026-10-26',
+  etaMinima: 18
+};
+
+export const PAGE_SIZE = 20;                // annunci caricati per volta
 export const FOTO_MAX_CHARS = 180000;        // ~135 KB per foto
 export const THUMB_MAX_CHARS = 45000;        // ~35 KB per miniatura
 export const LOG_RETENTION_DAYS = 90;        // pulizia log dal pannello admin

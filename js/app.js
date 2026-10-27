@@ -43,7 +43,7 @@ let emailRemovalTried = false;
 let toReceive = [];           // [{id, data}] annunci riservati a me (in trattativa o consegnati)
 let toReceiveStatus = new Map();
 
-let unsub = { offers: null, myOffers: null, toReceive: null, chats: null, profile: null, messages: null, catalog: null };
+let unsub = { offers: null, myOffers: null, toReceive: null, chats: null, profile: null, messages: null, chatOffer: null, catalog: null };
 
 // Il profilo nuovo va creato solo dopo aver letto il catalogo (serve kpIniziali)
 let catalogReady, resolveCatalogReady;
@@ -485,8 +485,113 @@ window.openChat = function (chatId, offerTitle) {
   hasUnreadMessages = unreadChatIds.length > 0;
   updateChatTabIndicator();
   loadChatMessages(chatId);
+  watchChatOffer(chat);
   setTimeout(() => $('message-input').focus({ preventScroll: true }), 50);
 };
+
+// ----- Riquadro "scambio" in cima alla chat (come su Subito) -----
+let chatCtx = null;   // { chat, offer, offerId }
+
+function watchChatOffer(chat) {
+  unsub.chatOffer?.(); unsub.chatOffer = null;
+  chatCtx = { chat, offer: null, offerId: chat?.offerId || null };
+  const box = $('chat-deal');
+  if (!chat?.offerId) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  box.innerHTML = '<p class="deal-text">Caricamento dello scambio…</p>';
+  unsub.chatOffer = onSnapshot(doc(db, 'offerte', chat.offerId), (snap) => {
+    chatCtx.offer = snap.exists() ? snap.data() : null;
+    if (chatCtx.offer) state.offers.set(chat.offerId, chatCtx.offer);
+    renderChatDeal();
+  }, (e) => { reportError('watchChatOffer', e); box.classList.add('hidden'); });
+}
+
+function renderChatDeal() {
+  const box = $('chat-deal');
+  const me = auth.currentUser;
+  const { chat, offer: o, offerId } = chatCtx || {};
+  if (!box || !chat || !me) return;
+  if (!o) {
+    box.className = 'chat-deal deal-off';
+    box.innerHTML = '<p class="deal-text">Questo annuncio non è più disponibile.</p>';
+    return;
+  }
+  const isOwner = o.ownerId === me.uid;
+  const altro = chat.buyerId && chat.buyerId !== me.uid ? (chat.buyerName || 'questa persona') : (o.ownerName || 'chi regala');
+  const perQuesto = o.reservedBy && o.reservedBy === chat.buyerId;
+  const kp = `<b>${o.cpValue} KP</b>`;
+  let stato = '', testo = '', azioni = '', cls = 'deal-info';
+
+  if (o.status === 'concluso') {
+    stato = '✅ Scambio concluso'; cls = 'deal-done';
+    testo = perQuesto ? (isOwner ? `Hai ricevuto ${kp}. Grazie!` : `Hai donato ${kp} a chi ti ha aiutato.`) : 'L\'annuncio è stato assegnato.';
+  } else if (o.status === 'consegnato' && perQuesto) {
+    stato = '📦 Consegnato'; cls = 'deal-action';
+    if (isOwner) testo = `In attesa che ${esc(altro)} confermi di averlo ricevuto. Poi riceverai ${kp}.`;
+    else {
+      testo = `${esc(altro)} ha segnato la consegna. L'hai ricevuto?`;
+      azioni = `<button class="deal-btn deal-primary" onclick="confirmReceived('${offerId}')">✓ Sì, l'ho ricevuto</button>
+                <button class="deal-btn deal-danger" onclick="notReceived('${offerId}')">Non l'ho ricevuto</button>`;
+    }
+  } else if (o.status === 'in_trattativa' && perQuesto) {
+    stato = '🤝 In trattativa'; cls = 'deal-action';
+    if (isOwner) {
+      testo = `Hai scelto ${esc(altro)}. Dopo la consegna premi "Ho consegnato".`;
+      azioni = `<button class="deal-btn deal-primary" onclick="markDelivered('${offerId}')">📦 Ho consegnato</button>
+                <button class="deal-btn deal-ghost" onclick="setDisponibile('${offerId}')">Annulla trattativa</button>`;
+    } else testo = `Sei stato scelto! Accordatevi qui su quando e dove fare lo scambio (${kp}).`;
+  } else if (o.status === 'in_trattativa' || o.status === 'consegnato') {
+    stato = '🤝 In trattativa con un\'altra persona'; cls = 'deal-off';
+    testo = isOwner ? 'Puoi annullarla dalla scheda dell\'annuncio se l\'accordo salta.' : 'Se l\'accordo salta, l\'annuncio tornerà disponibile.';
+  } else if (o.status === 'disponibile') {
+    stato = '🟢 Disponibile';
+    if (isOwner) {
+      testo = `Vuoi regalarlo a ${esc(altro)}? Vale ${kp}.`;
+      azioni = `<button class="deal-btn deal-primary" onclick="reserveFromChat()">Scegli ${esc(altro)}</button>`;
+      cls = 'deal-action';
+    } else testo = `Quando ${esc(altro)} ti sceglie, l'annuncio sarà riservato per te (${kp}).`;
+  } else {
+    stato = 'Annuncio non disponibile'; cls = 'deal-off';
+  }
+  box.className = `chat-deal ${cls}`;
+  box.innerHTML = `<div class="deal-head"><span class="deal-state">${stato}</span><span class="deal-title">${esc(o.title)}</span></div>
+    ${testo ? `<p class="deal-text">${testo}</p>` : ''}${azioni ? `<div class="deal-actions">${azioni}</div>` : ''}`;
+}
+
+// Chi regala sceglie la persona con cui sta chattando
+window.reserveFromChat = async function () {
+  const { chat, offer: o, offerId } = chatCtx || {};
+  if (!chat || !o) return;
+  const nome = chat.buyerName || 'questa persona';
+  try {
+    const u = await getDoc(doc(db, 'users', chat.buyerId));
+    const karma = u.exists() ? (u.data().karmaPoints ?? 0) : 0;
+    if (u.exists() && u.data().displayName) chat.buyerName = u.data().displayName;
+    if (karma < o.cpValue) return alert(`${nome} ha ${karma} KP: ne servono ${o.cpValue} per questo annuncio.`);
+  } catch (_) { /* il controllo vero lo fanno le regole */ }
+  if (!confirm(`Riservare «${o.title}» per ${chat.buyerName || nome}?\nGli altri non potranno più richiederlo finché la trattativa è in corso.`)) return;
+  await window.confirmReserve(offerId, chat.buyerId, chat.buyerName || nome);
+};
+
+async function postChatEventTo(chatId, testo) {
+  try {
+    const me = auth.currentUser;
+    await addDoc(collection(db, 'chats', chatId, 'messages'), { senderId: me.uid, senderName: me.displayName || 'Utente', text: testo, system: true, timestamp: serverTimestamp() });
+    await updateDoc(doc(db, 'chats', chatId), { lastMessage: testo.slice(0, 50), lastMessageTimestamp: serverTimestamp(), lastMessageSenderId: me.uid });
+  } catch (e) { console.warn('Evento chat non scritto', e); }
+}
+
+// Messaggio automatico nella chat collegata all'annuncio (es. "📦 Consegnato")
+async function postChatEvent(offerId, testo) {
+  try {
+    const me = auth.currentUser;
+    const chat = allChatsData.find((c) => c.data.offerId === offerId && (c.data.users || []).includes(state.offers.get(offerId)?.reservedBy || chatCtx?.chat?.buyerId))
+      || (chatCtx?.offerId === offerId ? { id: currentChatId } : null);
+    if (!chat?.id || !me) return;
+    await addDoc(collection(db, 'chats', chat.id, 'messages'), { senderId: me.uid, senderName: me.displayName || 'Utente', text: testo, system: true, timestamp: serverTimestamp() });
+    await updateDoc(doc(db, 'chats', chat.id), { lastMessage: testo.slice(0, 50), lastMessageTimestamp: serverTimestamp(), lastMessageSenderId: me.uid });
+  } catch (e) { console.warn('Evento chat non scritto', e); }
+}
 
 function setChatPerson(name) {
   $('current-chat-name').textContent = name;
@@ -549,6 +654,11 @@ function loadChatMessages(chatId) {
       const t = tsToDate(m.timestamp) || new Date();
       const g = t.toDateString();
       if (g !== giorno) { html += `<div class="chat-day"><span>${esc(etichettaGiorno(t))}</span></div>`; giorno = g; prevSender = null; }
+      if (m.system) {
+        html += `<div class="msg-system"><span>${esc(m.text)}</span><span class="msg-system-time">${ora(t)}</span></div>`;
+        prevSender = null;
+        return;
+      }
       const isMe = m.senderId === me.uid;
       // messaggi consecutivi dello stesso autore entro 3 minuti: bolle raggruppate
       const continua = prevSender === m.senderId && t.getTime() - prevTime < 3 * 60 * 1000;
@@ -563,6 +673,7 @@ function loadChatMessages(chatId) {
 
 window.navigateFromChat = function (screenId, element) {
   unsub.messages?.(); unsub.messages = null;
+  unsub.chatOffer?.(); unsub.chatOffer = null; chatCtx = null;
   $('chat-screen').style.display = 'none';
   $('app-header').style.display = 'flex';
   $('tab-bar').style.display = 'flex';
@@ -957,6 +1068,8 @@ window.confirmReserve = async function (docId, buyerId, buyerName) {
     });
     logEvent('offer_reserved', { offerId: docId, buyerId });
     notify('reserved', { offerId: docId });
+    state.offers.set(docId, { ...(state.offers.get(docId) || {}), reservedBy: buyerId });
+    postChatEvent(docId, `🤝 ${auth.currentUser.displayName || 'Chi regala'} ha riservato l'annuncio per ${String(buyerName || 'te').slice(0, 40)}`);
     window.closeBuyerModal();
   } catch (e) {
     reportError('confirmReserve', e, { offerId: docId, buyerId });
@@ -967,8 +1080,13 @@ window.confirmReserve = async function (docId, buyerId, buyerName) {
 window.setDisponibile = async function (docId) {
   if (!confirm("Rendere l'annuncio nuovamente disponibile a tutti?")) return;
   try {
+    const prima = state.offers.get(docId);
     await updateDoc(doc(db, 'offerte', docId), { status: 'disponibile', reservedBy: null, reservedByName: null });
     logEvent('offer_released', { offerId: docId });
+    if (prima?.reservedBy) {
+      const c = allChatsData.find((x) => x.data.offerId === docId && (x.data.users || []).includes(prima.reservedBy));
+      if (c) postChatEventTo(c.id, '↩️ Trattativa annullata: l\'annuncio è di nuovo disponibile');
+    }
   } catch (e) {
     reportError('setDisponibile', e, { offerId: docId });
     alert("Impossibile ripristinare l'annuncio: " + friendlyError(e));
@@ -989,6 +1107,7 @@ window.markDelivered = async function (docId) {
     await updateDoc(doc(db, 'offerte', docId), { status: 'consegnato', deliveredAt: serverTimestamp() });
     logEvent('offer_delivered', { offerId: docId, buyerId: o?.reservedBy || null });
     notify('delivered', { offerId: docId });
+    postChatEvent(docId, '📦 Consegna segnata: conferma la ricezione qui sopra');
   } catch (e) {
     reportError('markDelivered', e, { offerId: docId });
     alert('Operazione non riuscita: ' + friendlyError(e));
@@ -997,7 +1116,7 @@ window.markDelivered = async function (docId) {
 
 // --- Passo 2: chi riceve conferma e valuta: solo ora i KP si spostano ---
 window.confirmReceived = function (docId) {
-  const o = toReceive.find((x) => x.id === docId)?.data;
+  const o = toReceive.find((x) => x.id === docId)?.data || state.offers.get(docId);
   if (!o) return;
   $('feedback-modal').dataset.docId = docId;
   $('feedback-offer-title').textContent = `"${o.title}" da ${o.ownerName || 'chi lo regala'}`;
@@ -1011,6 +1130,7 @@ window.notReceived = async function (docId) {
     await updateDoc(doc(db, 'offerte', docId), { status: 'in_trattativa', deliveredAt: null });
     logEvent('offer_not_received', { offerId: docId }, 'warn');
     notify('not_received', { offerId: docId });
+    postChatEvent(docId, '⚠️ Ricezione non confermata: parliamone qui');
   } catch (e) {
     reportError('notReceived', e, { offerId: docId });
     alert('Operazione non riuscita: ' + friendlyError(e));
@@ -1051,6 +1171,7 @@ window.submitFeedback = async function (feedbackType) {
     });
     logEvent('exchange_completed', summary, feedbackType === 'insoddisfacente' ? 'warn' : 'info');
     notify('concluded', { offerId: docId });
+    postChatEvent(docId, `✅ Scambio concluso: ${summary.kp} KP trasferiti. Grazie!`);
     alert(`Scambio concluso! Grazie: ${summary.kp} KP sono passati a chi ti ha aiutato.`);
   } catch (e) {
     reportError('submitFeedback', e, { offerId: docId });
@@ -1233,7 +1354,7 @@ function renderOffers() {
     }
 
     const html = `
-      <div class="p-4 rounded-xl shadow-lg border border-gray-100 flex flex-col ${isTrattativa || hidden ? 'opacity-60 bg-gray-50' : 'bg-white'}">
+      <div class="p-4 rounded-xl shadow-lg border border-gray-100 flex flex-col ${hidden ? 'opacity-60 bg-gray-50' : 'bg-white'}${isTrattativa ? ' card-trattativa' : ''}">
         <div class="flex items-start mb-3">
           <div class="p-3 rounded-full ${o.type === 'bene' ? 'bg-green-600' : 'bg-blue-600'} text-white mr-3 shadow-sm">${o.type === 'bene' ? ICON_BENE : ICON_SERV}</div>
           <div class="flex-1">

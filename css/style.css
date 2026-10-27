@@ -206,3 +206,55 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neu
 /* la colonna della chat sta al centro dello schermo, allineata all'app */
 #chat-screen { flex-direction: row; justify-content: center; align-items: stretch; }
 .img-slot input[type=file] { display: none; }
+
+/* ===== Ricerca e filtri in home ===== */
+.search-box { position: relative; display: flex; align-items: center; }
+.search-icon { position: absolute; left: .85rem; color: #9ca3af; pointer-events: none; }
+.search-box input {
+  width: 100%; padding: .7rem 2.4rem .7rem 2.5rem; border: 1px solid #e5e7eb; border-radius: 9999px;
+  background: #f9fafb; font-size: .95rem; font-family: inherit; -webkit-appearance: none; appearance: none;
+}
+.search-box input:focus { outline: none; border-color: #16a34a; background: #fff; box-shadow: 0 0 0 3px rgba(22,163,74,.12); }
+.search-box input::-webkit-search-cancel-button { display: none; }
+.search-clear { position: absolute; right: .55rem; width: 1.8rem; height: 1.8rem; border: 0; border-radius: 9999px; background: #e5e7eb; color: #4b5563; font-size: .75rem; cursor: pointer; }
+.filter-chips { display: flex; gap: .4rem; overflow-x: auto; padding: .7rem 0 .2rem; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.filter-chips::-webkit-scrollbar { display: none; }
+.filter-chip {
+  flex: 0 0 auto; font-size: .8rem; padding: .35rem .75rem; border-radius: 9999px; white-space: nowrap;
+  background: #fff; border: 1px solid #e5e7eb; color: #374151; cursor: pointer; font-family: inherit;
+}
+.filter-chip:hover { border-color: #16a34a; }
+.filter-chip-on { background: #16a34a; border-color: #16a34a; color: #fff; }
+.search-status { font-size: .75rem; color: #6b7280; margin-top: .35rem; min-height: 1rem; }
+.offer-place { color: #15803d; }
+
+.zone-banner {
+  width: 100%; display: flex; align-items: center; gap: .5rem; text-align: left; margin-top: .6rem;
+  padding: .65rem .8rem; border-radius: .75rem; background: #f0fdf4; border: 1px solid #bbf7d0;
+  color: #166534; font-size: .85rem; cursor: pointer; font-family: inherit;
+}
+.zone-banner-go { margin-left: auto; font-size: 1.2rem; }
+.zone-card { display: flex; align-items: center; justify-content: space-between; padding: .75rem; border: 1px solid #e5e7eb; border-radius: .75rem; background: #fff; text-align: left; }
+.zone-change { font-size: .8rem; font-weight: 600; color: #16a34a; background: none; border: 0; cursor: pointer; }
+
+/* finestra zona */
+.zone-intro { padding: 0 1rem .75rem; font-size: .85rem; color: #4b5563; }
+.zone-gps-wrap { padding: .6rem 1rem 0; }
+.zone-gps {
+  width: 100%; padding: .6rem; border-radius: .6rem; border: 1px dashed #16a34a; background: #f0fdf4;
+  color: #15803d; font-size: .85rem; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.zone-msg { padding: .4rem 1rem 0; font-size: .8rem; color: #6b7280; min-height: 1.2rem; }
+.zone-row {
+  width: 100%; display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+  padding: .65rem 1rem; border: 0; border-bottom: 1px solid #f3f4f6; background: #fff; cursor: pointer; font-family: inherit;
+}
+.zone-row:hover { background: #f0fdf4; }
+.zone-name { font-size: .95rem; font-weight: 600; color: #111827; }
+.zone-detail { font-size: .75rem; color: #6b7280; }
+.zone-credit { padding: .5rem 1rem 0; font-size: .68rem; color: #9ca3af; }
+.zone-credit a { color: #6b7280; text-decoration: underline; }
+.zone-later { margin: .5rem 1rem 1rem; padding: .55rem; border: 0; background: none; color: #6b7280; font-size: .85rem; cursor: pointer; font-family: inherit; }
+
+/* "hidden" deve vincere sempre, anche sugli elementi a cui questo file assegna un display */
+.hidden { display: none !important; }

@@ -336,22 +336,45 @@ function updateFotoLabels() {
   });
 }
 
-window.handleImagePick = async function (index, input) {
-  const file = input.files && input.files[0];
-  input.value = '';
-  if (!file) return;
-  if (!file.type.startsWith('image/')) return alert('Seleziona un file immagine.');
+// Elabora una foto (ridimensiona + miniatura) e la mette nello spazio indicato
+async function setFoto(index, file) {
+  if (!file.type.startsWith('image/')) { alert('Seleziona un file immagine.'); return; }
+  const label = $('slot-label-' + index);
+  label.innerHTML = '<span class="foto-loading">…</span>';
   try {
     const [full, thumb] = await Promise.all([
       compressImage(file, { maxSide: 900, quality: 0.72, maxChars: FOTO_MAX_CHARS }),
       compressImage(file, { maxSide: 360, quality: 0.6, maxChars: THUMB_MAX_CHARS })
     ]);
     pendingFotos[index] = { full, thumb };
-    $('slot-label-' + index).innerHTML = `<img src="${thumb}" alt="Anteprima foto ${index + 1}">`;
+    label.innerHTML = `<img src="${thumb}" alt="Anteprima foto ${index + 1}">`;
     $('slot-remove-' + index).classList.remove('hidden');
   } catch (e) {
-    reportError('handleImagePick', e, { size: file.size, type: file.type });
+    pendingFotos[index] = null;
+    updateFotoLabels();
+    reportError('setFoto', e, { size: file.size, type: file.type });
     alert('Impossibile usare questa foto: ' + e.message);
+  }
+}
+
+// Tocco su uno spazio: sceglie la foto per quello spazio
+window.handleImagePick = async function (index, input) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (file) await setFoto(index, file);
+};
+
+// Pulsanti "Scatta foto" e "Galleria": riempiono gli spazi liberi in ordine
+window.addPhotos = async function (input) {
+  const files = [...(input.files || [])];
+  input.value = '';
+  if (!files.length) return;
+  const liberi = [0, 1, 2].filter((i) => !pendingFotos[i]);
+  if (!liberi.length) return alert('Hai già 3 foto: toccane una con la ✕ per sostituirla.');
+  if (files.length > liberi.length) alert(`Puoi aggiungere ancora ${liberi.length} ${liberi.length === 1 ? 'foto' : 'foto'}: userò le prime.`);
+  for (let i = 0; i < Math.min(files.length, liberi.length); i++) {
+    pendingFotos[liberi[i]] = { loading: true };   // prenota lo spazio
+    await setFoto(liberi[i], files[i]);
   }
 };
 
@@ -439,10 +462,19 @@ onAuthStateChanged(auth, (user) => {
 
 // ---------- 7. CHAT ----------
 window.openChat = function (chatId, offerTitle) {
-  const chat = allChatsData.find((c) => c.id === chatId);
+  const chat = allChatsData.find((c) => c.id === chatId)?.data;
+  const me = auth.currentUser;
   currentChatId = chatId;
   $('current-chat-id').value = chatId;
-  $('current-chat-title').textContent = offerTitle || chat?.data?.offerTitle || 'Chat';
+  $('current-chat-title').textContent = offerTitle || chat?.offerTitle || '';
+  const otherId = (chat?.users || []).find((u) => u !== me.uid);
+  const fallback = chat && chat.buyerId === me.uid ? 'Chi regala' : (chat?.buyerName || 'Utente');
+  setChatPerson(fallback);
+  if (otherId) {
+    getDoc(doc(db, 'users', otherId))
+      .then((u) => { if (currentChatId === chatId && u.exists()) setChatPerson(u.data().displayName || fallback); })
+      .catch(() => {});
+  }
   $('chat-screen').style.display = 'flex';
   $('app-header').style.display = 'none';
   $('tab-bar').style.display = 'none';
@@ -450,7 +482,13 @@ window.openChat = function (chatId, offerTitle) {
   hasUnreadMessages = unreadChatIds.length > 0;
   updateChatTabIndicator();
   loadChatMessages(chatId);
+  setTimeout(() => $('message-input').focus({ preventScroll: true }), 50);
 };
+
+function setChatPerson(name) {
+  $('current-chat-name').textContent = name;
+  $('chat-avatar').textContent = (String(name).trim()[0] || '?').toUpperCase();
+}
 
 window.sendMessage = async function (event) {
   event.preventDefault();
@@ -459,6 +497,7 @@ window.sendMessage = async function (event) {
   const chatId = $('current-chat-id').value;
   const me = auth.currentUser;
   if (!text || !chatId || !me) return;
+  input.value = '';
   try {
     await addDoc(collection(db, 'chats', chatId, 'messages'), {
       senderId: me.uid,
@@ -471,30 +510,50 @@ window.sendMessage = async function (event) {
       lastMessageTimestamp: serverTimestamp(),
       lastMessageSenderId: me.uid
     });
-    input.value = '';
     notify('message', { chatId });
   } catch (e) {
+    if (!input.value) input.value = text;
     reportError('sendMessage', e, { chatId });
     alert('Impossibile inviare il messaggio: ' + friendlyError(e));
   }
 };
 
+const ora = (d) => d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+function etichettaGiorno(d) {
+  const oggi = new Date(); const ieri = new Date(); ieri.setDate(oggi.getDate() - 1);
+  const stesso = (a, b) => a.toDateString() === b.toDateString();
+  if (stesso(d, oggi)) return 'Oggi';
+  if (stesso(d, ieri)) return 'Ieri';
+  return d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== oggi.getFullYear() ? { year: 'numeric' } : {}) });
+}
+
 function loadChatMessages(chatId) {
   unsub.messages?.();
   const me = auth.currentUser;
   const box = $('messages-container');
+  box.innerHTML = '<p class="chat-empty">Caricamento…</p>';
   const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('timestamp', 'asc'));
   unsub.messages = onSnapshot(q, (snap) => {
-    box.innerHTML = snap.docs.map((d) => {
+    if (snap.empty) {
+      box.innerHTML = `<div class="chat-empty">
+        <p class="chat-empty-title">Inizia la conversazione 👋</p>
+        <p>Accordatevi su quando e dove fare lo scambio. Per sicurezza incontratevi in un luogo pubblico.</p></div>`;
+      return;
+    }
+    let html = '', giorno = '', prevSender = null, prevTime = 0;
+    snap.docs.forEach((d) => {
       const m = d.data({ serverTimestamps: 'estimate' });
+      const t = tsToDate(m.timestamp) || new Date();
+      const g = t.toDateString();
+      if (g !== giorno) { html += `<div class="chat-day"><span>${esc(etichettaGiorno(t))}</span></div>`; giorno = g; prevSender = null; }
       const isMe = m.senderId === me.uid;
-      const t = tsToDate(m.timestamp);
-      return `
-        <div class="max-w-[75%] p-3 shadow-sm ${isMe ? 'self-end rounded-bl-xl rounded-tl-xl rounded-tr-xl' : 'self-start bg-white rounded-br-xl rounded-tr-xl rounded-tl-xl border border-gray-100'}" style="${isMe ? 'background:#dcf8c6' : ''}">
-          <p class="text-sm text-gray-900" style="word-break:break-word">${esc(m.text)}</p>
-          <span class="text-xs text-right block text-gray-500 mt-1">${t ? t.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-        </div>`;
-    }).join('');
+      // messaggi consecutivi dello stesso autore entro 3 minuti: bolle raggruppate
+      const continua = prevSender === m.senderId && t.getTime() - prevTime < 3 * 60 * 1000;
+      html += `<div class="msg-row ${isMe ? 'msg-me' : 'msg-them'}${continua ? ' msg-cont' : ''}">
+        <div class="msg-bubble"><span class="msg-text">${esc(m.text)}</span><span class="msg-time">${ora(t)}</span></div></div>`;
+      prevSender = m.senderId; prevTime = t.getTime();
+    });
+    box.innerHTML = html;
     box.scrollTop = box.scrollHeight;
   }, (e) => reportError('loadChatMessages', e, { chatId }));
 }
@@ -598,7 +657,7 @@ window.publishOffer = async function (event) {
   const esito = esitoPubblicazione(state.catalog, valore.kp, state.completedSwaps);
   if (esito.error) return alert(esito.error);
 
-  const fotos = pendingFotos.filter(Boolean);
+  const fotos = pendingFotos.filter((f) => f && f.full);
   const minimoFoto = currentOfferType === 'bene' ? minFotoBeni(state.catalog) : 0;
   if (fotos.length < minimoFoto) return alert(`Per un bene serve almeno ${minimoFoto === 1 ? '1 foto' : minimoFoto + ' foto'}.`);
 

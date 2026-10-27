@@ -445,6 +445,28 @@
   </div>
 </div>
 
+<!-- MODAL: SEGNALAZIONE (utenti) / RIMOZIONE (amministratori) -->
+<div id="report-modal" class="modal-overlay" onclick="closeReport()">
+  <div class="bg-white p-5 rounded-xl shadow-xl w-full max-w-sm" onclick="event.stopPropagation()">
+    <h3 id="report-heading" class="text-lg font-semibold text-gray-800">Segnala l'annuncio</h3>
+    <p id="report-offer" class="text-sm text-gray-500 mb-3"></p>
+    <div class="report-options">
+      <label><input type="radio" name="report-tipo" value="valore"> 💰 Valore in KP non corretto</label>
+      <label><input type="radio" name="report-tipo" value="offensivo"> 🤬 Contenuto volgare o offensivo</label>
+      <label><input type="radio" name="report-tipo" value="vietato"> 🚫 Oggetto vietato o pericoloso</label>
+      <label><input type="radio" name="report-tipo" value="truffa"> ⚠️ Sembra una truffa</label>
+      <label><input type="radio" name="report-tipo" value="altro"> ✏️ Altro</label>
+    </div>
+    <textarea id="report-nota" rows="2" maxlength="300" class="field mt-3" placeholder="Spiega in breve (facoltativo)"></textarea>
+    <label id="report-sospendi-wrap" class="report-suspend hidden"><input type="checkbox" id="report-sospendi"> Sospendi anche l'autore</label>
+    <p id="report-hint" class="text-xs text-gray-500 mt-2"></p>
+    <div class="flex gap-2 mt-4">
+      <button type="button" onclick="closeReport()" class="flex-1 py-2 rounded-lg border border-gray-300 text-sm text-gray-700">Annulla</button>
+      <button type="button" id="report-send" onclick="sendReport()" class="flex-1 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold">Invia segnalazione</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: ACCETTAZIONE TERMINI (primo accesso o termini aggiornati) -->
 <div id="consent-modal" class="modal-overlay" style="z-index:250">
   <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">

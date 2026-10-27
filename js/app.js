@@ -26,6 +26,7 @@ import { notify, initPushUi, removePushTokens } from './push.js';
 let currentOfferType = 'bene';
 let onlyAffordable = false;
 let currentChatId = null;
+const repCache = new Map();   // reputazione: uid -> dati utente (o Promise in corso)
 let lastKnownKarma = null;
 let homePages = 1;
 let homeOffers = [];          // [{id, data}] annunci visibili in home
@@ -438,6 +439,7 @@ onAuthStateChanged(auth, (user) => {
     loadChatList();
     loadProfileData(user.uid);
     checkAdmin(user.uid);
+    checkSuspended(user.uid);
     switchScreen('home-screen');
     document.querySelectorAll('.tab-item').forEach((i) => i.classList.remove('active'));
     $('nav-home')?.classList.add('active');
@@ -449,7 +451,8 @@ onAuthStateChanged(auth, (user) => {
     } catch (_) { /* sessionStorage non disponibile */ }
   } else {
     homeOffers = []; myOffers = []; allChatsData = []; unreadChatIds = [];
-    state.karma = null; state.completedSwaps = 0; state.isAdmin = false; lastKnownKarma = null;
+    state.karma = null; state.completedSwaps = 0; state.isAdmin = false; state.sospeso = false; lastKnownKarma = null;
+    repCache.clear();
     $('profile-role').textContent = 'Membro Ecommuni';
     myOfferStatus = new Map();
     toReceive = []; toReceiveStatus = new Map();
@@ -477,9 +480,15 @@ window.openChat = function (chatId, offerTitle) {
   const otherId = (chat?.users || []).find((u) => u !== me.uid);
   const fallback = chat && chat.buyerId === me.uid ? 'Chi regala' : (chat?.buyerName || 'Utente');
   setChatPerson(fallback);
+  $('current-chat-rep').textContent = '';
   if (otherId) {
     getDoc(doc(db, 'users', otherId))
-      .then((u) => { if (currentChatId === chatId && u.exists()) setChatPerson(u.data().displayName || fallback); })
+      .then((u) => {
+        if (currentChatId !== chatId || !u.exists()) return;
+        setChatPerson(u.data().displayName || fallback);
+        repCache.set(otherId, u.data());
+        $('current-chat-rep').innerHTML = testoReputazione(u.data());
+      })
       .catch(() => {});
   }
   $('chat-screen').style.display = 'flex';
@@ -531,10 +540,26 @@ function renderChatDeal() {
   if (o.status === 'concluso') {
     stato = '✅ Scambio concluso'; cls = 'deal-done';
     testo = perQuesto ? (isOwner ? `Hai ricevuto ${kp}. Grazie!` : `Hai donato ${kp} a chi ti ha aiutato.`) : 'L\'annuncio è stato assegnato.';
+    if (isOwner && perQuesto) {
+      if (o.feedbackGiver) testo += ` Il tuo giudizio su ${esc(altro)}: ${o.feedbackGiver === 'positivo' ? '👍 positivo' : '👎 negativo'}.`;
+      else {
+        testo += ` Com'è andata con ${esc(altro)}?`;
+        cls = 'deal-action';
+        azioni = `<button class="deal-btn deal-primary" onclick="rateReceiver('${offerId}', 'positivo')">👍 Positivo</button>
+                  <button class="deal-btn deal-danger" onclick="rateReceiver('${offerId}', 'negativo')">👎 Negativo</button>`;
+      }
+    }
   } else if (o.status === 'consegnato' && perQuesto) {
     stato = '📦 Consegnato'; cls = 'deal-action';
-    if (isOwner) testo = `In attesa che ${esc(altro)} confermi di averlo ricevuto. Poi riceverai ${kp}.`;
-    else {
+    if (isOwner) {
+      testo = `In attesa che ${esc(altro)} confermi di averlo ricevuto. Poi riceverai ${kp}.`;
+      const consegnatoMs = o.deliveredAt?.toMillis?.() || 0;
+      if (o.aiutoRichiesto) testo += ' Hai chiesto aiuto: un amministratore se ne sta occupando.';
+      else if (consegnatoMs && Date.now() - consegnatoMs > 7 * 864e5) {
+        testo += ' Sono passati più di 7 giorni senza conferma.';
+        azioni = `<button class="deal-btn deal-ghost" onclick="askAdminHelp('${offerId}')">🆘 Chiedi aiuto a un amministratore</button>`;
+      } else testo += ' Se non conferma entro 7 giorni potrai chiedere aiuto a un amministratore.';
+    } else {
       testo = `${esc(altro)} ha segnato la consegna. L'hai ricevuto?`;
       azioni = `<button class="deal-btn deal-primary" onclick="confirmReceived('${offerId}')">✓ Sì, l'ho ricevuto</button>
                 <button class="deal-btn deal-danger" onclick="notReceived('${offerId}')">Non l'ho ricevuto</button>`;
@@ -612,6 +637,7 @@ window.sendMessage = async function (event) {
   const chatId = $('current-chat-id').value;
   const me = auth.currentUser;
   if (!text || !chatId || !me) return;
+  if (state.sospeso) return alert('Il tuo account è sospeso: non puoi scrivere messaggi.');
   input.value = '';
   try {
     await addDoc(collection(db, 'chats', chatId, 'messages'), {
@@ -766,6 +792,7 @@ window.publishOffer = async function (event) {
   event.preventDefault();
   const me = auth.currentUser;
   if (!me) return alert('Devi autenticarti per pubblicare un annuncio.');
+  if (state.sospeso) return alert('Il tuo account è sospeso: non puoi pubblicare annunci.');
   if (!state.catalogOnServer) return alert("Il catalogo dei valori non è ancora stato attivato dall'amministratore.");
 
   const title = val('title').trim();
@@ -991,6 +1018,7 @@ window.startChat = async function (offerId) {
     if (!snap.exists()) return alert('Annuncio non trovato.');
     const offer = snap.data();
     if (offer.ownerId === me.uid) return alert('Non puoi chattare per il tuo annuncio.');
+    if (state.sospeso) return alert('Il tuo account è sospeso: non puoi avviare chat.');
     if (offer.status !== 'disponibile') return alert("L'annuncio non è più disponibile.");
     if ((offer.reportCount || 0) >= state.catalog.sogliaSegnalazioni) return alert("L'annuncio è in revisione.");
 
@@ -1043,13 +1071,13 @@ window.setInTrattativa = async function (docId) {
 
     const buyers = await Promise.all(buyerIds.map(async (uid) => {
       const chat = chats.docs.find((c) => (c.data().users || []).includes(uid))?.data() || {};
-      let karma = 0, name = chat.buyerName || 'Utente', admin = false;
+      let karma = 0, name = chat.buyerName || 'Utente', admin = false, rep = '';
       try {
         const u = await getDoc(doc(db, 'users', uid));
-        if (u.exists()) { karma = u.data().karmaPoints ?? 0; name = u.data().displayName || name; }
+        if (u.exists()) { karma = u.data().karmaPoints ?? 0; name = u.data().displayName || name; rep = testoReputazione(u.data()); }
         admin = (await getDoc(doc(db, 'admins', uid))).exists();
       } catch (_) {}
-      return { uid, name, karma, admin };
+      return { uid, name, karma, admin, rep };
     }));
 
     $('buyer-offer-info').textContent = `"${offer.title}" — valore ${cost} KP. Scegli a chi assegnarlo:`;
@@ -1058,7 +1086,7 @@ window.setInTrattativa = async function (docId) {
       return `<button ${ok ? '' : 'disabled'} data-uid="${esc(b.uid)}" data-name="${esc(b.name)}" onclick="confirmReserve('${docId}', this.dataset.uid, this.dataset.name)"
                 class="w-full text-left p-3 rounded-lg border ${ok ? 'border-green-300 bg-green-50 hover:bg-green-100' : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'}">
                 <span class="font-medium">${esc(b.name)}</span>
-                <span class="block text-xs">${b.karma} KP ${ok ? '' : `(ne servono ${cost})`}</span>
+                <span class="block text-xs">${b.karma} KP ${ok ? '' : `(ne servono ${cost})`} ${b.rep ? '· ' + b.rep : ''}</span>
               </button>`;
     }).join('');
     $('buyer-modal').style.display = 'flex';
@@ -1113,7 +1141,7 @@ window.markDelivered = async function (docId) {
   if (!confirm(`Confermi di aver consegnato "${o?.title || 'l\'annuncio'}" a ${o?.reservedByName || 'chi lo riceve'}?\n\n` +
                'I KP ti verranno accreditati quando l\'altra persona confermerà di averlo ricevuto.')) return;
   try {
-    await updateDoc(doc(db, 'offerte', docId), { status: 'consegnato', deliveredAt: serverTimestamp() });
+    await updateDoc(doc(db, 'offerte', docId), { status: 'consegnato', deliveredAt: serverTimestamp(), aiutoRichiesto: false });
     logEvent('offer_delivered', { offerId: docId, buyerId: o?.reservedBy || null });
     notify('delivered', { offerId: docId });
     postChatEvent(docId, '📦 Consegna segnata: conferma la ricezione qui sopra');
@@ -1129,7 +1157,9 @@ window.confirmReceived = function (docId) {
   if (!o) return;
   $('feedback-modal').dataset.docId = docId;
   $('feedback-offer-title').textContent = `"${o.title}" da ${o.ownerName || 'chi lo regala'}`;
-  $('feedback-kp-info').textContent = `Confermando, paghi −${o.cpValue} KP e ${o.ownerName || 'chi regala'} li riceve.`;
+  $('feedback-kp-info').textContent = state.isAdmin
+    ? `Confermando, ${o.ownerName || 'chi regala'} riceve ${o.cpValue} KP (come amministratore non li paghi).`
+    : `Confermando, paghi −${o.cpValue} KP e ${o.ownerName || 'chi regala'} li riceve.`;
   $('feedback-modal').style.display = 'flex';
 };
 
@@ -1150,7 +1180,7 @@ window.submitFeedback = async function (feedbackType) {
   const docId = $('feedback-modal').dataset.docId;
   const me = auth.currentUser;
   if (!me || !docId) return alert('Errore nei dati.');
-  if (!['eccellente', 'corretto', 'insoddisfacente'].includes(feedbackType)) return;
+  if (!['positivo', 'negativo'].includes(feedbackType)) return;
 
   const offerRef = doc(db, 'offerte', docId);
   let summary = null;
@@ -1176,10 +1206,14 @@ window.submitFeedback = async function (feedbackType) {
 
       tx.update(offerRef, { status: 'concluso', feedback: feedbackType, completionDate: serverTimestamp() });
       tx.update(buyerRef, { karmaPoints: buyerKarma - paga, completedSwaps: (b.completedSwaps ?? 0) + 1, lastOfferId: docId });
-      tx.update(giverRef, { karmaPoints: (g.karmaPoints ?? 0) + cp, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: docId });
+      tx.update(giverRef, {
+        karmaPoints: (g.karmaPoints ?? 0) + cp, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: docId,
+        ...(feedbackType === 'positivo' ? { fbPos: (g.fbPos ?? 0) + 1 } : { fbNeg: (g.fbNeg ?? 0) + 1 })
+      });
       summary = { offerId: docId, title: o.title, type: o.type, kp: cp, giverId: o.ownerId, buyerId: me.uid, feedback: feedbackType };
     });
-    logEvent('exchange_completed', summary, feedbackType === 'insoddisfacente' ? 'warn' : 'info');
+    logEvent('exchange_completed', summary, feedbackType === 'negativo' ? 'warn' : 'info');
+    repCache.delete(summary.giverId);
     notify('concluded', { offerId: docId });
     postChatEvent(docId, `✅ Scambio concluso: ${summary.kp} KP trasferiti. Grazie!`);
     alert(`Scambio concluso! Grazie: ${summary.kp} KP sono passati a chi ti ha aiutato.`);
@@ -1378,7 +1412,7 @@ function renderOffers() {
         ${thumbHtml(id, o)}
         <p class="text-sm text-gray-600 whitespace-pre-line" style="word-break:break-word">${esc(o.description)}</p>
         <p class="text-xs text-gray-500 mt-2">${valuationLine(o)}</p>
-        <p class="text-xs text-gray-400 mt-1">Offerto da: <span class="font-medium text-gray-500">${esc(o.ownerName)}</span>${o.zona?.nome ? ` · <span class="offer-place">📍 ${esc(o.zona.nome)}${km !== null && !isOwner ? ' · ' + etichettaDistanza(km) : ''}</span>` : ''}</p>
+        <p class="text-xs text-gray-400 mt-1">Offerto da: <span class="font-medium text-gray-500">${esc(o.ownerName)}</span> <span class="rep" data-rep="${esc(o.ownerId)}"></span>${o.zona?.nome ? ` · <span class="offer-place">📍 ${esc(o.zona.nome)}${km !== null && !isOwner ? ' · ' + etichettaDistanza(km) : ''}</span>` : ''}</p>
         ${buttons}
       </div>`;
     if (o.type === 'bene') beni += html; else servizi += html;
@@ -1395,6 +1429,7 @@ function renderOffers() {
   $('empty-bene').classList.toggle('hidden', !!beni);
   $('empty-servizio').classList.toggle('hidden', !!servizi);
   $('load-more').classList.toggle('hidden', !homeHasMore);
+  fillReputazioni();
   $('search-status').textContent = searchTerms.length
     ? `${lista.length} ${lista.length === 1 ? 'risultato' : 'risultati'}${state.zona ? ', i più vicini per primi' : ''}`
     : (state.zona ? `Ordinati per vicinanza a ${state.zona.nome}` : '');
@@ -1786,3 +1821,105 @@ window.closeCamera = function () {
   camStop();
   $('camera-modal').classList.add('hidden');
 };
+
+
+// ---------- REPUTAZIONE: scambi conclusi e % di giudizi positivi ----------
+
+export function testoReputazione(u) {
+  const scambi = u?.completedSwaps ?? 0, pos = u?.fbPos ?? 0, neg = u?.fbNeg ?? 0, tot = pos + neg;
+  if (!scambi && !tot) return '<span class="rep-new">🌱 nuovo</span>';
+  const pct = tot ? Math.round((pos / tot) * 100) : null;
+  return `${scambi} ${scambi === 1 ? 'scambio' : 'scambi'}${pct === null ? '' : ` · <span class="${pct < 70 ? 'rep-low' : 'rep-ok'}">👍 ${pct}%</span>`}`;
+}
+
+async function datiUtente(uid) {
+  if (!repCache.has(uid)) {
+    repCache.set(uid, getDoc(doc(db, 'users', uid)).then((s) => {
+      const d = s.exists() ? s.data() : null;
+      repCache.set(uid, d);
+      return d;
+    }).catch(() => { repCache.delete(uid); return null; }));
+  }
+  return repCache.get(uid);
+}
+
+function fillReputazioni() {
+  document.querySelectorAll('[data-rep]').forEach(async (el) => {
+    const d = await datiUtente(el.dataset.rep);
+    if (d) el.innerHTML = '· ' + testoReputazione(d);
+  });
+}
+
+// Chi ha regalato giudica chi ha ricevuto (una volta sola)
+window.rateReceiver = async function (offerId, giudizio) {
+  if (!['positivo', 'negativo'].includes(giudizio)) return;
+  if (giudizio === 'negativo' && !confirm('Confermi un giudizio negativo? Conta nella percentuale visibile agli altri e non si può cambiare.')) return;
+  const me = auth.currentUser;
+  try {
+    let altro = null;
+    await runTransaction(db, async (tx) => {
+      const oRef = doc(db, 'offerte', offerId);
+      const oSnap = await tx.get(oRef);
+      if (!oSnap.exists()) throw new Error('Annuncio non trovato.');
+      const o = oSnap.data();
+      if (o.ownerId !== me.uid || o.status !== 'concluso' || !o.reservedBy) throw new Error('Operazione non consentita.');
+      if (o.feedbackGiver) throw new Error('Hai già dato il tuo giudizio.');
+      altro = o.reservedBy;
+      const uRef = doc(db, 'users', o.reservedBy);
+      const uSnap = await tx.get(uRef);
+      if (!uSnap.exists()) throw new Error('Profilo non trovato.');
+      const u = uSnap.data();
+      tx.update(oRef, { feedbackGiver: giudizio });
+      tx.update(uRef, {
+        lastOfferId: offerId,
+        ...(giudizio === 'positivo' ? { fbPos: (u.fbPos ?? 0) + 1 } : { fbNeg: (u.fbNeg ?? 0) + 1 })
+      });
+    });
+    repCache.delete(altro);
+    logEvent('giver_feedback', { offerId, giudizio, receiverId: altro }, giudizio === 'negativo' ? 'warn' : 'info');
+  } catch (e) {
+    reportError('rateReceiver', e, { offerId });
+    alert('Giudizio non salvato: ' + friendlyError(e));
+  }
+};
+
+// Scambio fermo da più di 7 giorni: chi ha regalato chiede l'intervento di un amministratore
+window.askAdminHelp = async function (offerId) {
+  if (!confirm('Chiedere a un amministratore di intervenire?\nPotrà concludere lo scambio (e accreditarti i KP) oppure annullarlo.')) return;
+  try {
+    await updateDoc(doc(db, 'offerte', offerId), { aiutoRichiesto: true });
+    logEvent('help_requested', { offerId }, 'warn');
+    notify('help', { offerId });
+    postChatEvent(offerId, '🆘 Chi regala ha chiesto aiuto a un amministratore per concludere lo scambio');
+  } catch (e) {
+    reportError('askAdminHelp', e, { offerId });
+    alert('Richiesta non inviata: ' + friendlyError(e));
+  }
+};
+
+// Account sospeso: si può solo consultare
+async function checkSuspended(uid) {
+  try { state.sospeso = (await getDoc(doc(db, 'sospesi', uid))).exists(); } catch (_) { state.sospeso = false; }
+  $('suspended-banner').classList.toggle('hidden', !state.sospeso);
+}
+
+// ---------- "COME FUNZIONA" (nuvoletta in testata) ----------
+window.toggleInfo = function (ev, apri) {
+  ev?.stopPropagation();
+  const pop = $('info-pop'), btn = $('info-btn');
+  const mostra = apri ?? pop.classList.contains('hidden');
+  pop.classList.toggle('hidden', !mostra);
+  btn.setAttribute('aria-expanded', String(mostra));
+  if (mostra) {
+    // la punta della nuvoletta indica il "?"
+    const b = btn.getBoundingClientRect(), q = pop.getBoundingClientRect();
+    pop.style.setProperty('--freccia', Math.max(12, b.left + b.width / 2 - q.left - 6) + 'px');
+    btn.classList.remove('info-new');
+    try { localStorage.setItem('ec_info_vista', '1'); } catch (_) {}
+  }
+};
+document.addEventListener('click', () => {
+  if (!$('info-pop').classList.contains('hidden')) window.toggleInfo(null, false);
+});
+// Finché non l'ha aperta almeno una volta, l'icona pulsa per farsi notare
+try { if (!localStorage.getItem('ec_info_vista')) $('info-btn').classList.add('info-new'); } catch (_) {}

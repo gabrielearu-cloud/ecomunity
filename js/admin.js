@@ -5,7 +5,7 @@
 // =====================================================================
 import {
   collection, query, where, orderBy, limit, getDocs, getDoc, doc, setDoc, updateDoc, deleteDoc, writeBatch,
-  serverTimestamp, getCountFromServer, getAggregateFromServer, sum, Timestamp
+  serverTimestamp, getCountFromServer, getAggregateFromServer, sum, Timestamp, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db } from './firebase.js';
 import { LOG_RETENTION_DAYS } from './config.js';
@@ -36,7 +36,7 @@ window.openAdmin = async function () {
 
 window.refreshAdmin = async function () {
   if (!state.isAdmin) return;
-  await Promise.all([loadStats(), loadAdmins(), loadReviewQueue(), loadReported(), loadLogs()]);
+  await Promise.all([loadStats(), loadAdmins(), loadControl(), loadReviewQueue(), loadReported(), loadLogs()]);
   fillCatalogEditor();
 };
 
@@ -360,7 +360,8 @@ async function loadAdmins() {
             class="px-2 py-1 text-xs rounded bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Rimuovi</button>`}
       </div>`).join('') || '<p class="text-xs text-gray-500">Nessuno.</p>';
   } catch (e) {
-    box.innerHTML = `<p class="text-xs text-red-600">Impossibile leggere l'elenco: ${esc(friendlyError(e))}. Hai pubblicato le nuove regole?</p>`;
+    reportError('loadAdmins', e);
+    box.innerHTML = `<p class="text-xs text-red-600">${regoleVecchie(e)}</p>`;
   }
 }
 
@@ -383,18 +384,23 @@ window.searchUsersForAdmin = async function () {
         where('displayName', '>=', v), where('displayName', '<=', v + '\uf8ff'), orderBy('displayName'), limit(10)));
       snap.docs.forEach((d) => trovati.set(d.id, d.data().displayName || 'Utente'));
     }
-    const admins = new Set((await getDocs(collection(db, 'admins'))).docs.map((d) => d.id));
+    let admins = new Set();
+    try { admins = new Set((await getDocs(collection(db, 'admins'))).docs.map((d) => d.id)); } catch (_) { /* elenco non leggibile: si mostra comunque il risultato */ }
     if (!trovati.size) { box.innerHTML = '<p class="text-xs text-gray-500">Nessun utente con questo nome. Il nome va scritto dall\'inizio, come appare nell\'app.</p>'; return; }
     box.innerHTML = [...trovati].map(([uid, nome]) => `
       <div class="flex items-center justify-between gap-2 p-2 rounded-lg border border-gray-200 bg-gray-50">
         <span class="text-sm">${esc(nome)} <span class="text-[10px] text-gray-400">${esc(uid.slice(0, 6))}…</span></span>
         ${admins.has(uid) ? '<span class="text-xs text-green-700">già amministratore</span>'
-          : `<button data-nome="${esc(nome)}" onclick="grantAdmin('${esc(uid)}', this.dataset.nome)"
-               class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700">Rendi amministratore</button>`}
+          : `<span class="flex gap-1">
+               <button data-nome="${esc(nome)}" onclick="grantAdmin('${esc(uid)}', this.dataset.nome)"
+                 class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700">Rendi admin</button>
+               <button data-nome="${esc(nome)}" onclick="suspendUser('${esc(uid)}', this.dataset.nome)"
+                 class="px-2 py-1 text-xs rounded bg-red-50 text-red-700 border border-red-200">Sospendi</button>
+             </span>`}
       </div>`).join('');
   } catch (e) {
     reportError('searchUsersForAdmin', e);
-    box.innerHTML = `<p class="text-xs text-red-600">${esc(friendlyError(e))}</p>`;
+    box.innerHTML = `<p class="text-xs text-red-600">${regoleVecchie(e)}</p>`;
   }
 };
 
@@ -407,7 +413,7 @@ window.grantAdmin = async function (uid, nome) {
     loadAdmins();
   } catch (e) {
     reportError('grantAdmin', e, { uid });
-    alert('Impossibile nominarlo: ' + friendlyError(e));
+    alert('Impossibile nominarlo: ' + (e?.code === 'permission-denied' ? 'Firebase sta usando regole vecchie (manca la parte Amministratori).' : friendlyError(e)));
   }
 };
 
@@ -434,4 +440,128 @@ window.testPush = async function () {
   } catch (e) {
     box.innerHTML = `<p class="text-red-600">✗ ${esc(e.message)}</p>`;
   } finally { btn.disabled = false; }
+};
+
+// Messaggio chiaro quando Firebase rifiuta per le regole
+function regoleVecchie(e) {
+  if (e?.code === 'permission-denied') {
+    return 'Firebase rifiuta l\'operazione: le regole attive sono ancora quelle vecchie, senza la parte "Amministratori". '
+      + 'In Firebase → Firestore → Regole cerca la parola <b>addedBy</b>: se non c\'è, incolla le regole nuove e premi Pubblica.';
+  }
+  return esc(friendlyError(e)) + (e?.code ? ` (${esc(e.code)})` : '');
+}
+
+// ---------- Da controllare: scambi fermi, giudizi negativi, sospesi ----------
+const giorni = (ts) => { const d = tsToDate(ts); return d ? Math.floor((Date.now() - d.getTime()) / 864e5) : '?'; };
+
+async function loadControl() {
+  const box = $('admin-control');
+  box.innerHTML = '<p class="text-xs text-gray-500">Caricamento...</p>';
+  try {
+    const [aiuti, negativi, sospesi] = await Promise.all([
+      getDocs(query(collection(db, 'offerte'), where('aiutoRichiesto', '==', true), limit(50))),
+      getDocs(query(collection(db, 'users'), where('fbNeg', '>=', 2), orderBy('fbNeg', 'desc'), limit(50))),
+      getDocs(collection(db, 'sospesi'))
+    ]);
+    const idSospesi = new Set(sospesi.docs.map((d) => d.id));
+    let html = '';
+
+    const fermi = aiuti.docs.filter((d) => d.data().status === 'consegnato');
+    html += `<p class="text-xs font-semibold text-gray-600">🆘 Scambi fermi (${fermi.length})</p>`;
+    html += fermi.map((d) => {
+      const o = d.data();
+      return `<div class="adm-card"><b>${esc(o.title)}</b> · ${o.cpValue} KP<br>
+        <span class="text-xs text-gray-500">${esc(o.ownerName || '?')} dice di averlo consegnato a ${esc(o.reservedByName || '?')} ${giorni(o.deliveredAt)} giorni fa; nessuna conferma.</span>
+        <div class="adm-actions">
+          <button class="adm-btn ok" onclick="adminCloseDeal('${d.id}')">Concludi: KP a chi ha regalato</button>
+          <button class="adm-btn" onclick="adminCancelDeal('${d.id}')">Annulla lo scambio</button>
+        </div></div>`;
+    }).join('') || '<p class="text-xs text-gray-400">Nessuno.</p>';
+
+    html += `<p class="text-xs font-semibold text-gray-600 pt-2">👎 Giudizi negativi (${negativi.size})</p>`;
+    html += negativi.docs.map((d) => {
+      const u = d.data(), pos = u.fbPos ?? 0, neg = u.fbNeg ?? 0;
+      return `<div class="adm-card"><b>${esc(u.displayName || 'Utente')}</b>
+        <span class="text-xs text-gray-500">· ${u.completedSwaps ?? 0} scambi · 👍 ${pos} · 👎 ${neg}${idSospesi.has(d.id) ? ' · <b class="text-red-700">sospeso</b>' : ''}</span>
+        <div class="adm-actions">${idSospesi.has(d.id)
+          ? `<button class="adm-btn" onclick="unsuspendUser('${d.id}')">Riattiva</button>`
+          : `<button class="adm-btn warn" data-nome="${esc(u.displayName || 'Utente')}" onclick="suspendUser('${d.id}', this.dataset.nome)">Sospendi</button>`}</div></div>`;
+    }).join('') || '<p class="text-xs text-gray-400">Nessuno.</p>';
+
+    html += `<p class="text-xs font-semibold text-gray-600 pt-2">⛔ Account sospesi (${sospesi.size})</p>`;
+    html += sospesi.docs.map((d) => {
+      const x = d.data();
+      return `<div class="adm-card"><b>${esc(x.nome || 'Utente')}</b>
+        <span class="text-xs text-gray-500">${x.motivo ? '· ' + esc(x.motivo) : ''}</span>
+        <div class="adm-actions"><button class="adm-btn" onclick="unsuspendUser('${d.id}')">Riattiva</button></div></div>`;
+    }).join('') || '<p class="text-xs text-gray-400">Nessuno.</p>';
+
+    box.innerHTML = html;
+  } catch (e) {
+    reportError('loadControl', e);
+    box.innerHTML = `<p class="text-xs text-red-600">${regoleVecchie(e)}</p>`;
+  }
+}
+
+window.adminCloseDeal = async function (offerId) {
+  if (!confirm('Concludere lo scambio?\nChi ha regalato riceve i KP; a chi ha ricevuto vengono tolti (senza scendere sotto zero).')) return;
+  try {
+    await runTransaction(db, async (tx) => {
+      const oRef = doc(db, 'offerte', offerId);
+      const o = (await tx.get(oRef)).data();
+      if (!o || o.status !== 'consegnato' || !o.reservedBy) throw new Error('Lo scambio non è più in attesa di conferma.');
+      const cp = Number(o.cpValue);
+      const gRef = doc(db, 'users', o.ownerId), rRef = doc(db, 'users', o.reservedBy);
+      const g = (await tx.get(gRef)).data(), r = (await tx.get(rRef)).data();
+      const rAdmin = (await tx.get(doc(db, 'admins', o.reservedBy))).exists();
+      if (!g || !r) throw new Error('Profilo utente non trovato.');
+      const rk = r.karmaPoints ?? 0;
+      tx.update(oRef, { status: 'concluso', chiusoDaAdmin: true, completionDate: serverTimestamp() });
+      tx.update(gRef, { karmaPoints: (g.karmaPoints ?? 0) + cp, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: offerId });
+      tx.update(rRef, { karmaPoints: rAdmin ? rk : Math.max(0, rk - cp), completedSwaps: (r.completedSwaps ?? 0) + 1, lastOfferId: offerId });
+    });
+    logEvent('admin_closed_deal', { offerId }, 'warn');
+    loadControl();
+  } catch (e) {
+    reportError('adminCloseDeal', e, { offerId });
+    alert('Operazione non riuscita: ' + (e?.code ? regoleVecchie(e).replace(/<[^>]+>/g, '') : e.message));
+  }
+};
+
+window.adminCancelDeal = async function (offerId) {
+  if (!confirm("Annullare lo scambio?\nL'annuncio torna disponibile e nessun KP si sposta.")) return;
+  try {
+    await updateDoc(doc(db, 'offerte', offerId), { status: 'disponibile', reservedBy: null, reservedByName: null, deliveredAt: null, aiutoRichiesto: false });
+    logEvent('admin_cancelled_deal', { offerId }, 'warn');
+    loadControl();
+  } catch (e) {
+    reportError('adminCancelDeal', e, { offerId });
+    alert('Operazione non riuscita: ' + friendlyError(e));
+  }
+};
+
+window.suspendUser = async function (uid, nome) {
+  const motivo = prompt(`Sospendere «${nome}»?\nPotrà vedere gli annunci ma non pubblicare né scrivere in chat.\n\nMotivo (facoltativo, lo vedi solo tu):`, '');
+  if (motivo === null) return;
+  try {
+    await setDoc(doc(db, 'sospesi', uid), { nome: String(nome).slice(0, 80), motivo: motivo.trim().slice(0, 300), by: auth.currentUser.uid, at: serverTimestamp() });
+    logEvent('user_suspended', { uid, nome }, 'warn');
+    loadControl();
+    $('admin-search-results').innerHTML = `<p class="text-xs text-red-700">⛔ ${esc(nome)} è sospeso.</p>`;
+  } catch (e) {
+    reportError('suspendUser', e, { uid });
+    alert('Impossibile sospenderlo: ' + (e?.code === 'permission-denied' ? 'gli amministratori non si possono sospendere (o le regole non sono aggiornate).' : friendlyError(e)));
+  }
+};
+
+window.unsuspendUser = async function (uid) {
+  if (!confirm('Riattivare questo account?')) return;
+  try {
+    await deleteDoc(doc(db, 'sospesi', uid));
+    logEvent('user_unsuspended', { uid });
+    loadControl();
+  } catch (e) {
+    reportError('unsuspendUser', e, { uid });
+    alert('Operazione non riuscita: ' + friendlyError(e));
+  }
 };

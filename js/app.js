@@ -273,7 +273,20 @@ function renderCatSheet() {
 }
 window.renderCatSheet = renderCatSheet;
 
+// Lunghezze di titolo e descrizione (gli stessi limiti sono in firestore.rules)
+const TITOLO_MIN = 5, TITOLO_MAX = 50, DESCR_MIN = 10, DESCR_MAX = 150;
+
+function aggiornaContatori() {
+  [['title', TITOLO_MIN, TITOLO_MAX], ['description', DESCR_MIN, DESCR_MAX]].forEach(([id, min, max]) => {
+    const n = $(id).value.trim().length, el = $(id + '-count');
+    if (!el) return;
+    el.textContent = n > 0 && n < min ? `${n}/${max} · almeno ${min} caratteri` : `${n}/${max}`;
+    el.classList.toggle('text-count-warn', (n > 0 && n < min) || n >= max);
+  });
+}
+
 window.onOfferTextChange = function () {
+  aggiornaContatori();
   if (currentOfferType === 'bene') renderSottocategorie();
   updateValuePreview();
 };
@@ -343,6 +356,9 @@ function updateFotoLabels() {
   });
 }
 
+// Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
+export const APP_VERSIONE = 'rikeka-v16';
+
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
 const ANNUNCI_MAX_GIORNO = 20;
@@ -409,6 +425,7 @@ function resetPublishForm() {
   if (state.catalog.condizioni.buono) $('bene-condizione').value = 'buono';
   updateFotoLabels();
   updateValuePreview();
+  aggiornaContatori();
 }
 
 // ---------- 6. AUTENTICAZIONE ----------
@@ -817,10 +834,12 @@ window.publishOffer = async function (event) {
   const title = val('title').trim();
   const description = val('description').trim();
   if (!title || !description) return alert('Compila titolo e descrizione.');
+  if (title.length < TITOLO_MIN || title.length > TITOLO_MAX) return alert(`Il titolo deve avere da ${TITOLO_MIN} a ${TITOLO_MAX} caratteri (ora sono ${title.length}).`);
+  if (description.length < DESCR_MIN || description.length > DESCR_MAX) return alert(`La descrizione deve avere da ${DESCR_MIN} a ${DESCR_MAX} caratteri (ora sono ${description.length}).`);
   const vietata = parolaVietata(title, description);
   if (vietata) {
     logEvent('offer_bad_words', { parola: vietata }, 'warn');
-    return alert(`Il testo contiene una parola non ammessa su Rikeka («${vietata}»).\nModifica titolo o descrizione e riprova.`);
+    return alert(`⛔ Annuncio bloccato per l'uso di parole non consentite.\n\nLa parola «${vietata}» non è ammessa su Rikeka: non sono permesse parolacce, bestemmie e insulti.\nModifica il titolo o la descrizione e riprova.`);
   }
 
   const valore = calcolaValore();
@@ -883,8 +902,13 @@ window.publishOffer = async function (event) {
     window.navigate(esito.status === 'in_verifica' ? 'profile-screen' : 'home-screen',
                     $(esito.status === 'in_verifica' ? 'nav-profile' : 'nav-home'));
   } catch (e) {
-    reportError('publishOffer', e, { type: currentOfferType, kp: valore.kp });
-    alert('Errore durante la pubblicazione: ' + friendlyError(e));
+    reportError('publishOffer', e, {
+      type: currentOfferType, kp: valore.kp, foto: fotos.length, admin: !!state.isAdmin,
+      lunghezzaTitolo: title.length, lunghezzaDescrizione: description.length, versione: APP_VERSIONE
+    });
+    alert(e?.code === 'permission-denied'
+      ? "Il server non ha accettato l'annuncio.\n\nSe hai appena aggiornato l'app, chiudila e riaprila (in fondo al Profilo controlla la versione: " + APP_VERSIONE + ") e riprova.\nSe il problema continua, usa 🐞 Segnala un problema dal Profilo."
+      : 'Errore durante la pubblicazione: ' + friendlyError(e));
   } finally {
     btn.disabled = false; btn.textContent = 'Pubblica';
   }
@@ -1812,6 +1836,8 @@ window.confirmDeleteAccount = async function () {
   }
 };
 
+if ($('app-version')) $('app-version').textContent = 'Versione ' + APP_VERSIONE;
+
 // ---------- 13c. SEGNALA UN PROBLEMA ----------
 window.openBugReport = function () {
   if (!auth.currentUser) return;
@@ -1833,7 +1859,7 @@ window.sendBugReport = async function () {
       nome: (me.displayName || 'Utente').slice(0, 80),
       testo,
       pagina: (document.querySelector('.screen.active')?.id || '').slice(0, 40),
-      ua: navigator.userAgent.slice(0, 200),
+      ua: (APP_VERSIONE + ' · ' + navigator.userAgent).slice(0, 200),
       ts: serverTimestamp()
     });
     notify('bug', { problemaId: id });

@@ -17,12 +17,16 @@ export const PAROLE_VIETATE = [
   'coglione', 'coglioni', 'coglionata', 'coglionate',
   'figa', 'pompino', 'pompini', 'sborra', 'sborrare', 'segaiolo',
   'bastardo', 'bastarda', 'bastardi', 'bastarde', 'pirla',
+  'fottere', 'fottuto', 'fottuta', 'fottuti', 'fottiti', 'sticazzi', 'troiona', 'puttanone',
+  // contenuti sessuali espliciti
+  'anal', 'anale', 'porno', 'porn', 'pornografia', 'pornografico', 'tette', 'zinne', 'dildo',
+  'escort', 'milf', 'hentai', 'orgia', 'orge', 'scopata', 'scopate', 'trombare', 'trombata',
   // bestemmie
   'porcodio', 'porco dio', 'dio porco', 'diocane', 'dio cane', 'dio boia', 'porca madonna', 'madonna puttana',
   // insulti discriminatori
   'frocio', 'froci', 'ricchione', 'ricchioni', 'negro', 'negri', 'negra', 'negre', 'mongoloide', 'terrone', 'terroni',
   // inglese
-  'fuck', 'fucking', 'shit', 'bitch', 'cunt', 'asshole', 'nigger', 'faggot'
+  'fuck', 'fucking', 'fucker', 'motherfucker', 'shit', 'bitch', 'cunt', 'asshole', 'nigger', 'faggot', 'pussy', 'cock', 'whore', 'slut'
 ];
 
 // Rende il testo confrontabile: minuscole, senza accenti, numeri al posto di lettere,

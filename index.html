@@ -40,6 +40,7 @@
         <li>Dopo la consegna, chi riceve <b>conferma</b> e i KP passano a te.</li>
       </ol>
       <p class="info-foot">Meno sprechi, più vicinato.</p>
+      <p class="info-bug">Qualcosa non funziona? <button type="button" onclick="toggleInfo(event, false); openBugReport()">🐞 Segnala un problema</button></p>
       <button type="button" class="info-close" onclick="toggleInfo(event, false)">Ho capito</button>
     </div>
     <button onclick="handleLogout()" class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-1 rounded-full shadow-md">Logout</button>
@@ -269,6 +270,7 @@
         <p class="text-center text-xs text-gray-500 pt-2">
           <a href="privacy.html" target="_blank" class="underline">Privacy</a> ·
           <a href="termini.html" target="_blank" class="underline">Termini d'uso</a> ·
+          <button onclick="openBugReport()" class="underline">🐞 Segnala un problema</button> ·
           <button onclick="deleteMyAccount()" class="underline text-red-600">Elimina il mio account</button>
         </p>
       </div>
@@ -287,6 +289,12 @@
             <button onclick="refreshAdmin()" class="px-3 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300">↻ Aggiorna tutto</button>
           </div>
           <div id="admin-stats" class="grid grid-cols-2 gap-2 text-sm"></div>
+        </div>
+
+        <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-1">Problemi segnalati</h3>
+          <p class="text-xs text-gray-500 mb-2">Inviati dagli utenti con "Segnala un problema". Quando l'hai risolto, eliminalo.</p>
+          <div id="admin-bugs" class="space-y-2"></div>
         </div>
 
         <div>
@@ -532,6 +540,32 @@
       <li>Conferma: l'icona di Rikeka comparirà tra le tue app. Aprila da lì e attiva le notifiche dal Profilo.</li>
     </ol>
     <button type="button" onclick="chiudiIstruzioniInstall()" class="w-full mt-4 py-3 rounded-md text-sm font-medium text-white bg-green-600">Ho capito</button>
+  </div>
+</div>
+
+<!-- MODAL: SEGNALA UN PROBLEMA -->
+<div id="bug-modal" class="modal-overlay" style="z-index:260" onclick="closeBugReport()">
+  <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm" onclick="event.stopPropagation()">
+    <h3 class="text-lg font-semibold text-gray-800 mb-2">🐞 Segnala un problema</h3>
+    <p class="text-sm text-gray-600 mb-3">Cosa non ha funzionato? Scrivi cosa stavi facendo e cosa è successo. Gli amministratori lo ricevono subito.</p>
+    <textarea id="bug-text" class="field text-sm" rows="5" maxlength="1000" placeholder="Es.: ho premuto Pubblica con 2 foto e la pagina è rimasta bloccata…" oninput="document.getElementById('bug-send').disabled = this.value.trim().length < 5"></textarea>
+    <p class="text-xs text-gray-500 mt-1 mb-3">Insieme al testo inviamo la schermata in cui eri e il modello di browser, per capire meglio il problema.</p>
+    <button id="bug-send" disabled onclick="sendBugReport()" class="w-full py-3 rounded-md text-sm font-medium text-white bg-green-600 disabled:opacity-50">Invia</button>
+    <button onclick="closeBugReport()" class="w-full text-center py-2 mt-2 text-sm text-gray-500 hover:text-gray-800">Annulla</button>
+  </div>
+</div>
+
+<!-- MODAL: ELIMINAZIONE ACCOUNT -->
+<div id="delete-modal" class="modal-overlay" style="z-index:260" onclick="closeDeleteModal()">
+  <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm" onclick="event.stopPropagation()">
+    <h3 class="text-lg font-semibold text-red-700 mb-2">Eliminare il tuo account?</h3>
+    <p class="text-sm text-gray-700 mb-2">Verranno cancellati profilo, saldo KP, tutti i tuoi annunci con le foto e tutte le tue chat. L'operazione non si può annullare.</p>
+    <p id="delete-warn" class="text-sm font-medium text-amber-700 mb-2"></p>
+    <label for="delete-confirm-input" class="block text-sm text-gray-700 mb-1">Per confermare scrivi <b>ELIMINA</b>:</label>
+    <input id="delete-confirm-input" class="field mb-3" autocomplete="off" autocapitalize="characters" oninput="checkDeleteInput()">
+    <p class="text-xs text-gray-500 mb-3">Si aprirà la finestra di Google per confermare che sei tu.</p>
+    <button id="delete-go" disabled onclick="confirmDeleteAccount()" class="w-full py-3 rounded-md text-sm font-medium text-white bg-red-600 disabled:opacity-50">Elimina definitivamente</button>
+    <button onclick="closeDeleteModal()" class="w-full text-center py-2 mt-2 text-sm text-gray-500 hover:text-gray-800">Annulla</button>
   </div>
 </div>
 

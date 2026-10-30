@@ -118,3 +118,9 @@ foto su Firebase Storage, trasferimento dei KP e log tramite Cloud Functions, Ap
 - **Pulizia notturna** (`api/pulizia.js`, avviata da `vercel.json` ogni notte): cancella le foto grandi degli annunci conclusi da più di 30 giorni; resta la miniatura ("foto archiviata"). Si può avviare a mano aprendo `https://rikeka.vercel.app/api/pulizia` (al massimo un giro ogni 20 ore). Usa la stessa variabile `FIREBASE_SERVICE_ACCOUNT` delle notifiche.
 - **Iscrizioni aperte/chiuse**: Pannello Admin → Iscrizioni. Chiuse = chi è già iscritto continua, i nuovi vedono "Rikeka è al completo" (bloccato anche dalle regole).
 - **Controllo consumi**: Firebase → Firestore Database → scheda **Utilizzo**. Limiti gratuiti: 50.000 letture e 20.000 scritture al giorno, 1 GB di dati, 10 GB scaricati al mese.
+
+## Protezioni sui contenuti
+
+- **Parole non ammesse**: elenco in `js/filtro.js` (controllo nell'app, riconosce anche c4zz0, c a z z o, cazzzzo) e stesso elenco in `firestore.rules` → funzione `testoPulito` (blocco sul server). Se aggiungi una parola, aggiungila in tutti e due.
+- **Anti-flood**: almeno 30 secondi tra due annunci e massimo 20 al giorno per persona (gli amministratori no). Valori in `js/app.js` (`ANNUNCI_INTERVALLO_MS`, `ANNUNCI_MAX_GIORNO`) e in `firestore.rules` → `match /quote`.
+- **Segnala un problema**: Profilo (in fondo) o "?" in testata. Le segnalazioni arrivano nel Pannello Admin → Problemi segnalati, con una notifica agli amministratori.

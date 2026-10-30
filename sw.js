@@ -6,12 +6,12 @@
 // Quando cambi i file dell'app non serve toccare nulla; aumenta VERSIONE
 // solo se aggiungi o rinomini file nell'elenco qui sotto.
 // =====================================================================
-const VERSIONE = 'rikeka-v12';
+const VERSIONE = 'rikeka-v13';
 const FILE_BASE = [
   './', './index.html', './privacy.html', './termini.html', './manifest.webmanifest',
   './css/style.css',
   './js/app.js', './js/admin.js', './js/catalog.js', './js/config.js', './js/firebase.js',
-  './js/logger.js', './js/state.js', './js/utils.js', './js/legal-page.js', './js/push.js', './js/geo.js', './js/install.js',
+  './js/logger.js', './js/state.js', './js/utils.js', './js/legal-page.js', './js/push.js', './js/geo.js', './js/install.js', './js/filtro.js',
   './icons/icon-192.png', './icons/icon-512.png', './favicon.svg'
 ];
 

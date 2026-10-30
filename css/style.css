@@ -291,6 +291,17 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neu
 .camera-flash { animation: camflash .25s; }
 @keyframes camflash { 0% { filter: brightness(2.5); } 100% { filter: none; } }
 
+/* ===== Invito "Installa Rikeka" ===== */
+.install-banner { display: flex; align-items: center; gap: .6rem; margin-top: .75rem; padding: .6rem .7rem; border-radius: 12px;
+  background: #f0fdf4; border: 1px solid #bbf7d0; }
+.install-icon { font-size: 1.3rem; }
+.install-text { flex: 1; text-align: left; font-size: .82rem; color: #166534; line-height: 1.3; background: none; border: 0; padding: 0; }
+.install-x { color: #6b7280; font-size: .9rem; padding: .2rem .4rem; background: none; border: 0; }
+.install-steps { list-style: decimal; margin-left: 1.2rem; font-size: .9rem; color: #374151; }
+.install-steps li { margin-bottom: .7rem; line-height: 1.4; }
+.install-share { display: inline-block; width: 20px; height: 20px; vertical-align: -4px; color: #2563eb; margin-left: 2px; }
+.install-hint { font-size: .78rem; color: #6b7280; }
+
 /* ===== "Come funziona" in testata ===== */
 .info-btn { width: 24px; height: 24px; margin-left: 8px; border-radius: 50%; border: 1.5px solid #cbd5e1; color: #64748b; background: #f8fafc;
   font-weight: 700; font-size: .8rem; line-height: 1; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }

@@ -1,5 +1,5 @@
 // =====================================================================
-// FUNZIONE SERVER SU VERCEL: invia le notifiche push di Ecommuni
+// FUNZIONE SERVER SU VERCEL: invia le notifiche push di Rikeka
 // URL: https://<tuo-sito>/api/notify   (Vercel la pubblica da sola)
 //
 // Sicurezza: il client NON sceglie destinatario ne' testo. Manda solo il
@@ -28,6 +28,8 @@ function admin() {
 }
 
 const clip = (s, n) => String(s || '').slice(0, n);
+// ID dei documenti: solo lettere, numeri, _ e - (niente "/" che cambierebbe il percorso)
+const docId = (s) => (typeof s === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(s)) ? s : null;
 
 /** Decide destinatario e testo partendo dallo stato reale del database. */
 async function buildNotification(db, uid, body) {
@@ -35,11 +37,13 @@ async function buildNotification(db, uid, body) {
 
   // Prova dal pannello admin: la notifica arriva a chi la chiede
   if (type === 'test') {
-    return { to: uid, self: true, key: `test_${uid}`, title: '🔔 Prova riuscita', body: 'Le notifiche di Ecommuni funzionano su questo dispositivo.', tag: 'test' };
+    return { to: uid, self: true, key: `test_${uid}`, title: '🔔 Prova riuscita', body: 'Le notifiche di Rikeka funzionano su questo dispositivo.', tag: 'test' };
   }
 
   if (type === 'message') {
-    const snap = await db.doc(`chats/${clip(body.chatId, 100)}`).get();
+    const chatId = docId(body.chatId);
+    if (!chatId) return null;
+    const snap = await db.doc(`chats/${chatId}`).get();
     if (!snap.exists) return null;
     const c = snap.data();
     if (!Array.isArray(c.users) || !c.users.includes(uid)) return null;
@@ -58,7 +62,8 @@ async function buildNotification(db, uid, body) {
 
   // Annuncio rimosso da un amministratore: l'annuncio non esiste piu', si legge l'avviso
   if (type === 'removed') {
-    const id = clip(body.offerId, 100);
+    const id = docId(body.offerId);
+    if (!id) return null;
     const r = (await db.doc(`rimozioni/${id}`).get()).data();
     if (!r || r.by !== uid || !(await db.doc(`admins/${uid}`).get()).exists) return null;
     const MOTIVI = { valore: 'valore in KP non corretto', offensivo: 'contenuto volgare o offensivo', vietato: 'oggetto vietato o pericoloso', truffa: 'possibile truffa', altro: 'altro' };
@@ -66,7 +71,9 @@ async function buildNotification(db, uid, body) {
       title: '🛡 Annuncio rimosso', body: `«${clip(r.title, 60)}»: ${MOTIVI[r.motivo] || 'violazione dei Termini'}${r.nota ? ' — ' + clip(r.nota, 80) : ''}` };
   }
 
-  const snap = await db.doc(`offerte/${clip(body.offerId, 100)}`).get();
+  const offerId = docId(body.offerId);
+  if (!offerId) return null;
+  const snap = await db.doc(`offerte/${offerId}`).get();
   if (!snap.exists) return null;
   const o = snap.data();
   const t = `«${clip(o.title, 60)}»`;
@@ -145,7 +152,7 @@ export default async function handler(req, res) {
 
     const result = await messaging.sendEachForMulticast({
       tokens,
-      data: { title: n.title, body: n.body, tag: n.tag || 'ecommuni', url: './index.html' },
+      data: { title: n.title, body: n.body, tag: n.tag || 'rikeka', url: './index.html' },
       webpush: { headers: { Urgency: 'high', TTL: '86400' } }
     });
 

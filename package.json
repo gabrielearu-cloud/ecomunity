@@ -1,8 +1,8 @@
 {
-  "name": "ecommuni",
+  "name": "rikeka",
   "private": true,
   "type": "module",
-  "description": "Ecommuni: sito statico + funzione api/notify per le notifiche push (Vercel)",
+  "description": "Rikeka: sito statico + funzione api/notify per le notifiche push (Vercel)",
   "engines": { "node": ">=20" },
   "dependencies": {
     "firebase-admin": "^12.7.0"

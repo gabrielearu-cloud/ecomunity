@@ -1,12 +1,12 @@
 // =====================================================================
-// SERVICE WORKER di Ecommuni
+// SERVICE WORKER di Rikeka
 // Rende l'app installabile e veloce all'avvio. Strategia "prima la rete":
 // gli utenti ricevono sempre l'ultima versione pubblicata; la copia salvata
 // si usa solo se la connessione manca. I dati (Firebase) non passano di qui.
 // Quando cambi i file dell'app non serve toccare nulla; aumenta VERSIONE
 // solo se aggiungi o rinomini file nell'elenco qui sotto.
 // =====================================================================
-const VERSIONE = 'ecommuni-v8';
+const VERSIONE = 'rikeka-v9';
 const FILE_BASE = [
   './', './index.html', './privacy.html', './termini.html', './manifest.webmanifest',
   './css/style.css',
@@ -64,12 +64,12 @@ self.addEventListener('push', (event) => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; } catch (_) { /* testo non JSON */ }
   const d = payload.data || payload.notification || {};
-  const title = d.title || 'Ecommuni';
+  const title = d.title || 'Rikeka';
   const options = {
-    body: d.body || 'Hai una novità su Ecommuni',
+    body: d.body || 'Hai una novità su Rikeka',
     icon: './icons/icon-192.png',
     badge: './icons/icon-192.png',
-    tag: d.tag || 'ecommuni',
+    tag: d.tag || 'rikeka',
     renotify: true,
     data: { url: d.url || './index.html' }
   };

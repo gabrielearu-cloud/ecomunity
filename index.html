@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ecommuni - Scambio Etico e Comunitario</title>
+<title>Rikeka - Scambio Etico e Comunitario</title>
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 <link href="css/style.css" rel="stylesheet">
 <!-- App installabile (PWA) e icone -->
@@ -14,22 +14,22 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Ecommuni">
+<meta name="apple-mobile-web-app-title" content="Rikeka">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 </head>
 
 <body class="bg-gray-50 font-sans">
 <div id="loading-screen">
   <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
-  <p class="mt-4 text-gray-700">Caricamento Ecommuni...</p>
+  <p class="mt-4 text-gray-700">Caricamento Rikeka...</p>
 </div>
 
 <div id="app-container" class="hidden max-w-md mx-auto bg-white min-h-screen shadow-lg">
 
   <header id="app-header" class="bg-white p-4 border-b border-gray-200 flex justify-between items-center relative">
     <div class="flex items-center gap-2">
-      <h1 class="text-xl font-bold text-green-600 flex items-center"><img src="favicon.svg" alt="" width="28" height="28" class="mr-2">Ecommuni</h1>
-      <button type="button" id="info-btn" class="info-btn" onclick="toggleInfo(event)" aria-label="Come funziona Ecommuni" aria-expanded="false">?</button>
+      <h1 class="text-xl font-bold text-green-600 flex items-center"><img src="favicon.svg" alt="" width="28" height="28" class="mr-2">Rikeka</h1>
+      <button type="button" id="info-btn" class="info-btn" onclick="toggleInfo(event)" aria-label="Come funziona Rikeka" aria-expanded="false">?</button>
     </div>
     <div id="info-pop" class="info-pop hidden" role="dialog" aria-label="Come funziona" onclick="event.stopPropagation()">
       <p class="info-title">🌱 Regala, ricevi, ricambia</p>
@@ -227,7 +227,7 @@
     <section id="profile-screen" class="screen items-center">
       <div class="w-full text-center p-4 bg-white border-b border-gray-200">
         <h2 id="profile-name-header" class="text-2xl font-bold text-gray-800 mb-1">Nome Utente</h2>
-        <p id="profile-role" class="text-sm text-gray-500">Membro Ecommuni</p>
+        <p id="profile-role" class="text-sm text-gray-500">Membro Rikeka</p>
       </div>
       <div id="profile-data" class="w-full text-center p-6 mt-4 bg-white rounded-lg shadow-md border border-gray-100"></div>
       <div class="w-full px-4 pt-4">
@@ -407,8 +407,8 @@
   <!-- ===================== LOGIN ===================== -->
   <div id="login-screen">
     <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-xs w-full">
-      <img src="icons/icon-192.png" alt="Logo Ecommuni" width="88" height="88" class="mx-auto mb-3">
-      <h2 class="text-3xl font-bold text-green-600 mb-2">Ecommuni</h2>
+      <img src="icons/icon-192.png" alt="Logo Rikeka" width="88" height="88" class="mx-auto mb-3">
+      <h2 class="text-3xl font-bold text-green-600 mb-2">Rikeka</h2>
       <p class="text-gray-600 mb-8">Scambio Etico e Comunitario</p>
       <button onclick="handleAuth()" class="w-full py-3 px-4 rounded-md shadow-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Accedi con Google</button>
       <p class="text-xs text-gray-500 mt-6">
@@ -470,7 +470,7 @@
 <!-- MODAL: ACCETTAZIONE TERMINI (primo accesso o termini aggiornati) -->
 <div id="consent-modal" class="modal-overlay" style="z-index:250">
   <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
-    <h3 class="text-lg font-semibold text-gray-800 mb-2">Benvenuto su Ecommuni</h3>
+    <h3 class="text-lg font-semibold text-gray-800 mb-2">Benvenuto su Rikeka</h3>
     <p class="text-sm text-gray-600 mb-4">Prima di iniziare, conferma di aver letto le regole della comunità.</p>
     <label class="flex items-start text-sm text-gray-700 mb-3 cursor-pointer">
       <input type="checkbox" id="consent-age" class="mt-1 mr-2" onchange="updateConsentButton()">
@@ -520,19 +520,39 @@
   </div>
 </div>
 
-<!-- LIGHTBOX FOTO -->
+<!-- FOTOCAMERA INTEGRATA: scatto → "Usa foto / Rifai" → "Scatta un'altra / Fine" -->
 <div id="camera-modal" class="camera-modal hidden" role="dialog" aria-label="Fotocamera">
   <video id="camera-video" autoplay playsinline muted></video>
+  <img id="camera-preview" class="camera-preview hidden" alt="Foto appena scattata">
   <p id="camera-msg" class="camera-msg hidden"></p>
   <div class="camera-top">
     <button onclick="closeCamera()" class="camera-round" aria-label="Chiudi">✕</button>
     <span id="camera-count" class="camera-count"></span>
     <button id="camera-switch" onclick="switchCamera()" class="camera-round" aria-label="Cambia fotocamera">⟲</button>
   </div>
-  <div class="camera-bottom">
+  <div id="camera-live" class="camera-bottom">
+    <span class="camera-side"></span>
     <button id="camera-shot" onclick="takeShot()" class="camera-shutter" aria-label="Scatta"></button>
+    <span class="camera-side"><button id="camera-done" onclick="closeCamera()" class="camera-done hidden">Fine</button></span>
+  </div>
+  <div id="camera-review" class="camera-panel hidden" aria-live="polite">
+    <p class="camera-panel-title">Va bene questa foto?</p>
+    <div class="camera-panel-row">
+      <button type="button" onclick="camRetake()" class="camera-btn camera-btn-ghost">↺ Rifai</button>
+      <button type="button" id="camera-use" onclick="camUse()" class="camera-btn camera-btn-ok">✓ Usa questa foto</button>
+    </div>
+  </div>
+  <div id="camera-ask" class="camera-panel hidden" aria-live="polite">
+    <div id="camera-thumbs" class="camera-thumbs"></div>
+    <p id="camera-ask-msg" class="camera-panel-title"></p>
+    <div class="camera-panel-row">
+      <button type="button" id="camera-another" onclick="camAnother()" class="camera-btn camera-btn-ghost">📷 Scatta un'altra</button>
+      <button type="button" onclick="closeCamera()" class="camera-btn camera-btn-ok">✓ Fine</button>
+    </div>
   </div>
 </div>
+
+<!-- LIGHTBOX FOTO -->
 
 <div id="lightbox" class="modal-overlay" onclick="closeLightbox()">
   <img id="lightbox-img" alt="Foto annuncio" onclick="event.stopPropagation()">

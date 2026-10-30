@@ -1,4 +1,4 @@
-# Ecommuni 3.0 — guida rapida
+# Rikeka 3.0 — guida rapida
 
 ## Struttura
 
@@ -75,7 +75,7 @@ non si può pubblicare un valore più alto di quello che risulta dai dati dichia
 La funzione che invia le notifiche è `api/notify.js` (con `package.json`): Vercel la pubblica da sola.
 
 **Se non arrivano**: Pannello Admin → **🔔 Verifica e invia prova**. Dice in quale punto si ferma (browser, permesso, server, chiave).
-Puoi anche aprire `https://ecomunity.vercel.app/api/notify` nel browser: deve comparire `"ok":true`.
+Puoi anche aprire `https://ecommuni.vercel.app/api/notify` nel browser (o il nuovo indirizzo, se rinomini il progetto su Vercel): deve comparire `"ok":true`.
 Con l'app aperta arrivano tutte le notifiche, tranne quelle della chat che stai già guardando.
 
 ## Ricerca e vicinanza

@@ -357,7 +357,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v18';
+export const APP_VERSIONE = 'rikeka-v19';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -1567,12 +1567,13 @@ function renderOffers() {
               ${statusTag(o.status)}
               <span class="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold px-2.5 py-1 rounded-full">💰 ${cp} KP</span>
             </div>
+            ${zonaAnnuncioHtml(o, km, isOwner)}
           </div>
         </div>
         ${thumbHtml(id, o)}
         <p class="text-sm text-gray-600 whitespace-pre-line" style="word-break:break-word">${esc(o.description)}</p>
         <p class="text-xs text-gray-500 mt-2">${valuationLine(o)}</p>
-        <p class="text-xs text-gray-400 mt-1">Offerto da: <span class="font-medium text-gray-500">${esc(o.ownerName)}</span> <span class="rep" data-rep="${esc(o.ownerId)}"></span>${o.zona?.nome ? ` · <span class="offer-place">📍 ${esc(o.zona.nome)}${km !== null && !isOwner ? ' · ' + etichettaDistanza(km) : ''}</span>` : ''}</p>
+        <p class="text-xs text-gray-400 mt-1">Offerto da: <span class="font-medium text-gray-500">${esc(o.ownerName)}</span> <span class="rep" data-rep="${esc(o.ownerId)}"></span></p>
         ${buttons}
         ${state.isAdmin && !isOwner ? `<button onclick="adminRemoveOffer('${sid(id)}')" class="admin-remove">🛡 Rimuovi (amministratore)${hidden ? ' · nascosto per segnalazioni' : ''}</button>` : ''}
       </div>`;
@@ -1891,7 +1892,38 @@ let zoneAbort = null;
 let zoneTimer = null;
 let zoneResults = [];
 
+// Nome usato quando la zona e' stata presa dal GPS: agli altri non dice nulla,
+// quindi negli annunci si mostra solo la distanza
+const ZONA_GPS = 'Vicino a me';
+
+/** Etichetta "dove si trova" sotto il titolo dell'annuncio. */
+function zonaAnnuncioHtml(o, km, isOwner) {
+  const z = zonaValida(o.zona) ? o.zona : null;
+  if (!z) return '<p class="offer-zone offer-zone-none">📍 Zona non indicata</p>';
+  const dist = !isOwner && km !== null && km !== undefined ? etichettaDistanza(km) : '';
+  if (z.nome === ZONA_GPS) {
+    if (isOwner) return '<p class="offer-zone">📍 La tua posizione</p>';
+    return dist
+      ? `<p class="offer-zone">📍 a ${esc(dist)} da te</p>`
+      : '<p class="offer-zone"><button type="button" class="offer-zone-link" onclick="openZoneModal(false)">📍 Imposta la tua zona per vedere la distanza</button></p>';
+  }
+  return `<p class="offer-zone">📍 ${esc(z.nome)}${dist ? ` <span class="offer-zone-km">· ${esc(dist)}</span>` : ''}</p>`;
+}
+
+/** Nel modulo Pubblica: in quale zona uscira' l'annuncio. */
+function renderPublishZone() {
+  const el = $('publish-zone');
+  if (!el) return;
+  el.classList.toggle('publish-zone-missing', !state.zona);
+  el.innerHTML = state.zona
+    ? `<span>📍 Il tuo annuncio sarà visibile in: <b>${esc(state.zona.nome === ZONA_GPS ? 'la tua posizione attuale (circa 1 km)' : state.zona.nome)}</b></span>
+       <button type="button" onclick="openZoneModal(false)">Cambia</button>`
+    : `<span>📍 <b>Non hai impostato la tua zona</b>: chi vede l'annuncio non saprà dove si trova.</span>
+       <button type="button" onclick="openZoneModal(false)">Imposta</button>`;
+}
+
 function renderZoneProfile() {
+  renderPublishZone();
   const el = $('zone-current');
   if (!el) return;
   el.innerHTML = state.zona
@@ -1966,7 +1998,7 @@ window.useMyPosition = async function () {
   $('zone-msg').textContent = 'Rilevo la posizione…';
   try {
     const p = await posizioneAttuale();
-    await saveZone({ nome: 'Vicino a me', lat: p.lat, lng: p.lng });
+    await saveZone({ nome: ZONA_GPS, lat: p.lat, lng: p.lng });
   } catch (e) {
     $('zone-msg').textContent = e.message + ' Puoi cercare il tuo Comune qui sopra.';
   }

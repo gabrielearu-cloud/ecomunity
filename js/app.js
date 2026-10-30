@@ -10,7 +10,8 @@
 import { signInWithPopup, onAuthStateChanged, signOut, reauthenticateWithPopup, deleteUser } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection, addDoc, query, where, onSnapshot, doc, updateDoc, getDoc, setDoc, orderBy,
-  getDocs, limit, runTransaction, serverTimestamp, writeBatch, increment, deleteField, deleteDoc
+  getDocs, limit, runTransaction, serverTimestamp, writeBatch, increment, deleteField, deleteDoc,
+  terminate, clearIndexedDbPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, googleProvider } from './firebase.js';
 import { PAGE_SIZE, FOTO_MAX_CHARS, THUMB_MAX_CHARS, LEGAL } from './config.js';
@@ -340,6 +341,10 @@ function updateFotoLabels() {
   });
 }
 
+// Miniatura in elenco: ~12 KB. Si scarica a ogni apertura della home, quindi e' il dato
+// che pesa di piu' sui limiti gratuiti di Firebase. La foto grande si scarica solo se la tocchi.
+const THUMB_LEGGERA = 16000;
+
 // Elabora una foto (ridimensiona + miniatura) e la mette nello spazio indicato
 async function setFoto(index, file) {
   if (!file.type.startsWith('image/')) { alert('Seleziona un file immagine.'); return; }
@@ -348,7 +353,7 @@ async function setFoto(index, file) {
   try {
     const [full, thumb] = await Promise.all([
       compressImage(file, { maxSide: 900, quality: 0.72, maxChars: FOTO_MAX_CHARS }),
-      compressImage(file, { maxSide: 360, quality: 0.6, maxChars: THUMB_MAX_CHARS })
+      compressImage(file, { maxSide: 360, quality: 0.55, maxChars: Math.min(THUMB_MAX_CHARS, THUMB_LEGGERA) })
     ]);
     pendingFotos[index] = { full, thumb };
     label.innerHTML = `<img src="${thumb}" alt="Anteprima foto ${index + 1}">`;
@@ -411,8 +416,15 @@ window.handleAuth = async function () {
   }
 };
 
+// All'uscita si svuota la memoria locale: chi usa lo stesso telefono dopo non vede dati altrui
+async function svuotaMemoriaLocale() {
+  try { await terminate(db); await clearIndexedDbPersistence(db); } catch (e) { console.warn('Pulizia memoria locale:', e); }
+}
+
 window.handleLogout = async function () {
   await signOut(auth);
+  await svuotaMemoriaLocale();
+  location.reload();
 };
 
 function stopListeners() {
@@ -1403,6 +1415,8 @@ window.openLightbox = async function (offerId) {
   } catch (e) {
     reportError('openLightbox', e, { offerId });
   }
+  // Foto grandi archiviate (scambi conclusi da tempo): si mostra la miniatura
+  if (!images.length && safeImg(o.thumb)) images = [safeImg(o.thumb)];
   if (!images.length) { window.closeLightbox(); return; }
   lightboxState = { images, index: 0 };
   paintLightbox();
@@ -1444,7 +1458,7 @@ export function thumbHtml(id, o) {
   const count = o.fotoCount || legacy.length;
   if (!src) return '';
   return `<img src="${src}" loading="lazy" alt="Foto annuncio" class="offer-thumb" onclick="openLightbox('${sid(id)}')">
-          <p class="text-xs text-gray-400 mb-3">📷 ${count} foto · tocca per ingrandire</p>`;
+          <p class="text-xs text-gray-400 mb-3">📷 ${count ? `${count} foto · tocca per ingrandire` : 'foto archiviata'}</p>`;
 }
 
 function statusTag(status) {
@@ -1568,8 +1582,9 @@ function loadProfileData(uid) {
   const userRef = doc(db, 'users', uid);
   unsub.profile = onSnapshot(userRef, (snap) => {
     if (!snap.exists()) {
-      // Nuovo utente: il profilo si crea solo dopo l'accettazione dei Termini
-      if (!deletingAccount) showConsent({ newProfile: true });
+      // Nuovo utente: il profilo si crea solo dopo l'accettazione dei Termini,
+      // e solo se le iscrizioni sono aperte (gli admin entrano sempre)
+      if (!deletingAccount) iscrizioniPerNuovo().then((ok) => { if (ok) showConsent({ newProfile: true }); });
       return;
     }
     const data = snap.data();
@@ -1626,6 +1641,21 @@ function loadProfileData(uid) {
     renderOffers();
     updateValuePreview();
   }, (e) => reportError('loadProfileData', e));
+}
+
+// Iscrizioni chiuse? Mostra "Rikeka è al completo" e restituisce false
+async function iscrizioniPerNuovo() {
+  try {
+    const c = (await getDoc(doc(db, 'config', 'iscrizioni'))).data();
+    if (!c || c.aperte !== false || state.isAdmin) return true;
+    if (typeof c.messaggio === 'string' && c.messaggio.trim()) $('closed-msg').textContent = c.messaggio.trim();
+    $('closed-modal').style.display = 'flex';
+    logEvent('signup_closed_seen', {});
+    return false;
+  } catch (e) {
+    reportError('iscrizioniPerNuovo', e);
+    return true;   // nel dubbio si prosegue: decidono comunque le regole del server
+  }
 }
 
 // ---------- 13b. ACCETTAZIONE TERMINI ----------
@@ -1730,6 +1760,8 @@ window.deleteMyAccount = async function () {
     // 5. Account di accesso
     await deleteUser(me);
     alert('Il tuo account è stato eliminato. Grazie per aver fatto parte di Rikeka.');
+    await svuotaMemoriaLocale();
+    location.reload();
   } catch (e) {
     deletingAccount = false;
     if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') return;

@@ -36,8 +36,46 @@ window.openAdmin = async function () {
 
 window.refreshAdmin = async function () {
   if (!state.isAdmin) return;
-  await Promise.all([loadStats(), loadAdmins(), loadControl(), loadReviewQueue(), loadReported(), loadLogs()]);
+  await Promise.all([loadStats(), loadIscrizioni(), loadAdmins(), loadControl(), loadReviewQueue(), loadReported(), loadLogs()]);
   fillCatalogEditor();
+};
+
+// ---------- Iscrizioni aperte / chiuse ----------
+let iscrizioniAperte = true;
+function paintIscrizioni() {
+  $('iscr-stato').textContent = iscrizioniAperte ? '🟢 Iscrizioni aperte' : '🔴 Iscrizioni chiuse';
+  $('iscr-btn').textContent = iscrizioniAperte ? 'Chiudi iscrizioni' : 'Riapri iscrizioni';
+}
+async function loadIscrizioni() {
+  try {
+    const c = (await getDoc(doc(db, 'config', 'iscrizioni'))).data();
+    iscrizioniAperte = c?.aperte !== false;
+    $('iscr-msg').value = typeof c?.messaggio === 'string' ? c.messaggio : '';
+  } catch (e) {
+    reportError('admin.loadIscrizioni', e);
+  }
+  paintIscrizioni();
+}
+window.toggleIscrizioni = async function () {
+  const nuovo = !iscrizioniAperte;
+  if (!confirm(nuovo ? 'Riaprire le iscrizioni ai nuovi utenti?' : 'Chiudere le iscrizioni? Chi è già iscritto continuerà a usare Rikeka.')) return;
+  const btn = $('iscr-btn'); btn.disabled = true;
+  try {
+    await setDoc(doc(db, 'config', 'iscrizioni'), {
+      aperte: nuovo,
+      messaggio: String($('iscr-msg').value || '').trim().slice(0, 300),
+      by: auth.currentUser.uid,
+      at: serverTimestamp()
+    });
+    iscrizioniAperte = nuovo;
+    paintIscrizioni();
+    logEvent(nuovo ? 'signup_opened' : 'signup_closed', {}, 'warn');
+  } catch (e) {
+    reportError('admin.toggleIscrizioni', e);
+    alert('Non salvato: ' + regoleVecchie(e));
+  } finally {
+    btn.disabled = false;
+  }
 };
 
 // ---------- Statistiche (aggregazioni: costano pochissime letture) ----------

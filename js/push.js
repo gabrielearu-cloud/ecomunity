@@ -32,6 +32,7 @@ function paint(stato, testo, mostraPulsante) {
     profilo.classList.toggle('hidden', stato === 'off');
     $('push-info').textContent = testo;
     $('push-btn').classList.toggle('hidden', !mostraPulsante);
+    $('push-test-btn')?.classList.toggle('hidden', stato !== 'attive');
   }
   if (chat) {
     // in Chat non disturbiamo se sono gia' attive o se il dispositivo non le supporta
@@ -85,6 +86,27 @@ window.enablePush = async function () {
   } catch (e) {
     reportError('enablePush', e);
     alert('Non è stato possibile attivare le notifiche: ' + (e?.message || e));
+  }
+};
+
+// Prova dal Profilo: registra di nuovo questo dispositivo e si manda una notifica
+window.testPushProfilo = async function () {
+  const btn = $('push-test-btn'), out = $('push-test-out');
+  btn.disabled = true; btn.textContent = 'Verifica in corso…';
+  out.classList.remove('hidden'); out.replaceChildren();
+  try {
+    const righe = await testPushDiagnostics();
+    out.replaceChildren(...righe.map(([ok, testo]) => {
+      const li = document.createElement('li');
+      li.textContent = (ok === true ? '✓ ' : ok === false ? '✗ ' : 'ℹ ') + testo;
+      li.className = ok === false ? 'text-red-700' : ok === true ? 'text-green-800' : 'text-gray-600';
+      return li;
+    }));
+    logEvent('push_test_profile', { ok: righe.every(([ok]) => ok !== false) });
+  } catch (e) {
+    reportError('testPushProfilo', e);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Mandami una notifica di prova';
   }
 };
 

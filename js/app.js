@@ -22,6 +22,7 @@ import { logEvent, reportError, friendlyError } from './logger.js';
 import { $, val, esc, sid, safeImg, tsToDate, compressImage } from './utils.js';
 import { checkAdmin } from './admin.js';
 import { notify, initPushUi, removePushTokens } from './push.js';
+import './install.js';
 
 // ---------- 2. STATO LOCALE ----------
 let currentOfferType = 'bene';

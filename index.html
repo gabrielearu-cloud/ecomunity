@@ -280,6 +280,16 @@
         </div>
 
         <div>
+          <h3 class="text-sm font-semibold text-gray-700 mb-1">Iscrizioni</h3>
+          <p class="text-xs text-gray-500 mb-2">Se le chiudi, chi è già iscritto continua a usare Rikeka; chi entra per la prima volta vede il messaggio qui sotto e non può creare il profilo.</p>
+          <div class="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <span id="iscr-stato" class="text-sm font-semibold text-gray-700">…</span>
+            <button id="iscr-btn" onclick="toggleIscrizioni()" class="px-3 py-1.5 text-xs font-medium rounded bg-gray-800 text-white hover:bg-gray-900">…</button>
+          </div>
+          <textarea id="iscr-msg" class="field mt-2 text-sm" rows="2" maxlength="300" placeholder="Messaggio per chi trova le iscrizioni chiuse (facoltativo)"></textarea>
+        </div>
+
+        <div>
           <h3 class="text-sm font-semibold text-gray-700 mb-1">Amministratori</h3>
           <p class="text-xs text-gray-500 mb-2">Gli amministratori non hanno limiti di KP, fasce di prezzo né verifica, e vedono questo pannello.</p>
           <div id="admin-list" class="space-y-2 mb-3"></div>
@@ -482,6 +492,16 @@
     </label>
     <button id="consent-btn" disabled onclick="acceptTerms()" class="w-full py-3 rounded-md text-sm font-medium text-white bg-green-600 disabled:opacity-50">Continua</button>
     <button onclick="declineTerms()" class="w-full text-center py-2 mt-3 text-sm text-gray-500 hover:text-gray-800">Non accetto, esci</button>
+  </div>
+</div>
+
+<!-- MODAL: ISCRIZIONI CHIUSE (nuovi utenti quando l'admin ha chiuso le iscrizioni) -->
+<div id="closed-modal" class="modal-overlay" style="z-index:250">
+  <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
+    <p class="text-4xl mb-2">🌱</p>
+    <h3 class="text-lg font-semibold text-gray-800 mb-2">Rikeka è al completo</h3>
+    <p id="closed-msg" class="text-sm text-gray-600 mb-5">Per far crescere la comunità con calma, al momento le nuove iscrizioni sono chiuse. Riprova tra qualche tempo!</p>
+    <button onclick="handleLogout()" class="w-full py-3 rounded-md text-sm font-medium text-white bg-green-600">Ho capito, esci</button>
   </div>
 </div>
 

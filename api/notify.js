@@ -60,6 +60,17 @@ async function buildNotification(db, uid, body) {
     };
   }
 
+  // Problema segnalato da un utente: avviso a tutti gli amministratori
+  if (type === 'bug') {
+    const id = docId(body.problemaId);
+    if (!id) return null;
+    const p = (await db.doc(`problemi/${id}`).get()).data();
+    if (!p || p.uid !== uid) return null;
+    const admins = (await db.collection('admins').get()).docs.map((d) => d.id).filter((a) => a !== uid);
+    return { toList: admins, key: `bug_${uid}`, tag: 'bug', title: '🐞 Nuovo problema segnalato',
+      body: `${clip(p.nome, 40)}: ${clip(p.testo, 100)}` };
+  }
+
   // Annuncio rimosso da un amministratore: l'annuncio non esiste piu', si legge l'avviso
   if (type === 'removed') {
     const id = docId(body.offerId);

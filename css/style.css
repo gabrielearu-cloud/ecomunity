@@ -291,6 +291,10 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neu
 .camera-flash { animation: camflash .25s; }
 @keyframes camflash { 0% { filter: brightness(2.5); } 100% { filter: none; } }
 
+/* ===== Contatori caratteri (titolo / descrizione) ===== */
+.text-count { text-align: right; font-size: .72rem; color: #9ca3af; margin-top: .2rem; }
+.text-count.text-count-warn { color: #b45309; font-weight: 600; }
+
 /* ===== Invito "Installa Rikeka" ===== */
 .install-banner { display: flex; align-items: center; gap: .6rem; margin-top: .75rem; padding: .6rem .7rem; border-radius: 12px;
   background: #f0fdf4; border: 1px solid #bbf7d0; }

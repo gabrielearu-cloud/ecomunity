@@ -47,7 +47,7 @@ export async function initPushUi() {
   if (!VAPID_KEY) return paint('off', '', false);
 
   if (isIos && !isStandalone) {
-    return paint('ios-browser', "Su iPhone le notifiche funzionano solo dall'app installata: Safari → Condividi □↑ → Aggiungi alla schermata Home, poi apri Ecommuni dall'icona.", false);
+    return paint('ios-browser', "Su iPhone le notifiche funzionano solo dall'app installata: Safari → Condividi □↑ → Aggiungi alla schermata Home, poi apri Rikeka dall'icona.", false);
   }
   if (!(await supported())) return paint('non-supportate', 'Questo browser non supporta le notifiche.', false);
   if (Notification.permission === 'denied') {

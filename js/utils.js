@@ -7,6 +7,10 @@ export const val = (id) => $(id)?.value;
 // Ogni testo scritto dagli utenti DEVE passare da esc() prima di finire in innerHTML
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// Gli ID (annunci, chat, utenti) che finiscono dentro onclick="...('ID')" devono passare da sid():
+// accetta solo lettere, numeri, _ e -; qualsiasi altra cosa diventa vuota e il pulsante non fa nulla.
+export const sid = (s) => (typeof s === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(s)) ? s : '';
+
 export const safeImg = (s) => (typeof s === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(s)) ? s : '';
 export const tsToDate = (t) => (t && typeof t.toDate === 'function') ? t.toDate() : null;
 

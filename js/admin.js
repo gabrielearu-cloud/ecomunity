@@ -12,7 +12,7 @@ import { LOG_RETENTION_DAYS } from './config.js';
 import { DEFAULT_CATALOG, validaCatalogo, unisciNovita, paroleChiaveAnnuncio } from './catalog.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
-import { $, val, esc, tsToDate } from './utils.js';
+import { $, val, esc, sid, tsToDate } from './utils.js';
 import { switchScreen, deleteOfferWithFotos, valuationLine, thumbHtml } from './app.js';
 import { notify, testPushDiagnostics } from './push.js';
 
@@ -94,8 +94,8 @@ async function loadReviewQueue() {
     box.innerHTML = snap.empty
       ? '<p class="text-gray-400 text-xs">Nessun annuncio da verificare.</p>'
       : snap.docs.map((d) => adminOfferCard(d.id, d.data(), `
-          <button onclick="approveOffer('${d.id}')" class="px-3 py-1 text-xs rounded bg-green-600 text-white">✓ Approva</button>
-          <button onclick="rejectOffer('${d.id}')" class="px-3 py-1 text-xs rounded bg-red-600 text-white">✕ Rifiuta</button>`)).join('');
+          <button onclick="approveOffer('${sid(d.id)}')" class="px-3 py-1 text-xs rounded bg-green-600 text-white">✓ Approva</button>
+          <button onclick="rejectOffer('${sid(d.id)}')" class="px-3 py-1 text-xs rounded bg-red-600 text-white">✕ Rifiuta</button>`)).join('');
   } catch (e) {
     reportError('admin.loadReviewQueue', e);
     box.innerHTML = `<p class="text-red-600 text-xs">${esc(friendlyError(e))}</p>`;
@@ -149,8 +149,8 @@ async function loadReported() {
       return adminOfferCard(d.id, o, `
         <p class="w-full text-xs text-red-700"><b>${o.reportCount} ${o.reportCount === 1 ? 'segnalazione' : 'segnalazioni'}</b>${o.nascosto || o.reportCount >= state.catalog.sogliaSegnalazioni ? ' (nascosto)' : ''}</p>
         <ul class="w-full text-xs text-gray-600 list-disc ml-4">${reasons}</ul>
-        <button onclick="clearReports('${d.id}')" class="px-3 py-1 text-xs rounded bg-gray-200">Va bene così: azzera e rendi visibile</button>
-        <button onclick="adminRemoveOffer('${d.id}')" class="px-3 py-1 text-xs rounded bg-red-600 text-white">🛡 Rimuovi annuncio</button>`);
+        <button onclick="clearReports('${sid(d.id)}')" class="px-3 py-1 text-xs rounded bg-gray-200">Va bene così: azzera e rendi visibile</button>
+        <button onclick="adminRemoveOffer('${sid(d.id)}')" class="px-3 py-1 text-xs rounded bg-red-600 text-white">🛡 Rimuovi annuncio</button>`);
     }));
     box.innerHTML = cards.join('');
   } catch (e) {
@@ -304,14 +304,14 @@ window.downloadLogs = function (format) {
       .concat(rows.map((l) => [iso(l), l.level, l.type, l.uid, l.userName, l.details, l.app].map(q).join(','))).join('\n');
     mime = 'text/csv';
   } else {
-    content = `ECOMMUNI LOG — esportato il ${new Date().toISOString()} — ${rows.length} eventi\n` +
+    content = `RIKEKA LOG — esportato il ${new Date().toISOString()} — ${rows.length} eventi\n` +
       rows.map((l) => `${iso(l)} | ${String(l.level).toUpperCase()} | ${l.type} | ${l.uid} | ${l.userName} | ${l.details}`).join('\n');
     mime = 'text/plain';
   }
   const url = URL.createObjectURL(new Blob(['﻿' + content], { type: mime + ';charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ecommuni-log-${new Date().toISOString().slice(0, 10)}.${format === 'csv' ? 'csv' : 'txt'}`;
+  a.download = `rikeka-log-${new Date().toISOString().slice(0, 10)}.${format === 'csv' ? 'csv' : 'txt'}`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 };
@@ -357,7 +357,7 @@ async function loadAdmins() {
       <div class="flex items-center justify-between gap-2 p-2 rounded-lg border border-gray-200 bg-white">
         <span class="text-sm"><b>${esc(r.nome)}</b>
           <span class="text-xs text-gray-500">${r.fondatore ? '· fondatore' : ''}${r.io ? ' · tu' : ''}</span></span>
-        ${r.fondatore || r.io ? '' : `<button onclick="revokeAdmin('${esc(r.uid)}', this.dataset.nome)" data-nome="${esc(r.nome)}"
+        ${r.fondatore || r.io ? '' : `<button onclick="revokeAdmin('${sid(r.uid)}', this.dataset.nome)" data-nome="${esc(r.nome)}"
             class="px-2 py-1 text-xs rounded bg-red-50 text-red-700 border border-red-200 hover:bg-red-100">Rimuovi</button>`}
       </div>`).join('') || '<p class="text-xs text-gray-500">Nessuno.</p>';
   } catch (e) {
@@ -393,9 +393,9 @@ window.searchUsersForAdmin = async function () {
         <span class="text-sm">${esc(nome)} <span class="text-[10px] text-gray-400">${esc(uid.slice(0, 6))}…</span></span>
         ${admins.has(uid) ? '<span class="text-xs text-green-700">già amministratore</span>'
           : `<span class="flex gap-1">
-               <button data-nome="${esc(nome)}" onclick="grantAdmin('${esc(uid)}', this.dataset.nome)"
+               <button data-nome="${esc(nome)}" onclick="grantAdmin('${sid(uid)}', this.dataset.nome)"
                  class="px-2 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700">Rendi admin</button>
-               <button data-nome="${esc(nome)}" onclick="suspendUser('${esc(uid)}', this.dataset.nome)"
+               <button data-nome="${esc(nome)}" onclick="suspendUser('${sid(uid)}', this.dataset.nome)"
                  class="px-2 py-1 text-xs rounded bg-red-50 text-red-700 border border-red-200">Sospendi</button>
              </span>`}
       </div>`).join('');
@@ -474,8 +474,8 @@ async function loadControl() {
       return `<div class="adm-card"><b>${esc(o.title)}</b> · ${o.cpValue} KP<br>
         <span class="text-xs text-gray-500">${esc(o.ownerName || '?')} dice di averlo consegnato a ${esc(o.reservedByName || '?')} ${giorni(o.deliveredAt)} giorni fa; nessuna conferma.</span>
         <div class="adm-actions">
-          <button class="adm-btn ok" onclick="adminCloseDeal('${d.id}')">Concludi: KP a chi ha regalato</button>
-          <button class="adm-btn" onclick="adminCancelDeal('${d.id}')">Annulla lo scambio</button>
+          <button class="adm-btn ok" onclick="adminCloseDeal('${sid(d.id)}')">Concludi: KP a chi ha regalato</button>
+          <button class="adm-btn" onclick="adminCancelDeal('${sid(d.id)}')">Annulla lo scambio</button>
         </div></div>`;
     }).join('') || '<p class="text-xs text-gray-400">Nessuno.</p>';
 
@@ -485,8 +485,8 @@ async function loadControl() {
       return `<div class="adm-card"><b>${esc(u.displayName || 'Utente')}</b>
         <span class="text-xs text-gray-500">· ${u.completedSwaps ?? 0} scambi · 👍 ${pos} · 👎 ${neg}${idSospesi.has(d.id) ? ' · <b class="text-red-700">sospeso</b>' : ''}</span>
         <div class="adm-actions">${idSospesi.has(d.id)
-          ? `<button class="adm-btn" onclick="unsuspendUser('${d.id}')">Riattiva</button>`
-          : `<button class="adm-btn warn" data-nome="${esc(u.displayName || 'Utente')}" onclick="suspendUser('${d.id}', this.dataset.nome)">Sospendi</button>`}</div></div>`;
+          ? `<button class="adm-btn" onclick="unsuspendUser('${sid(d.id)}')">Riattiva</button>`
+          : `<button class="adm-btn warn" data-nome="${esc(u.displayName || 'Utente')}" onclick="suspendUser('${sid(d.id)}', this.dataset.nome)">Sospendi</button>`}</div></div>`;
     }).join('') || '<p class="text-xs text-gray-400">Nessuno.</p>';
 
     html += `<p class="text-xs font-semibold text-gray-600 pt-2">⛔ Account sospesi (${sospesi.size})</p>`;
@@ -494,7 +494,7 @@ async function loadControl() {
       const x = d.data();
       return `<div class="adm-card"><b>${esc(x.nome || 'Utente')}</b>
         <span class="text-xs text-gray-500">${x.motivo ? '· ' + esc(x.motivo) : ''}</span>
-        <div class="adm-actions"><button class="adm-btn" onclick="unsuspendUser('${d.id}')">Riattiva</button></div></div>`;
+        <div class="adm-actions"><button class="adm-btn" onclick="unsuspendUser('${sid(d.id)}')">Riattiva</button></div></div>`;
     }).join('') || '<p class="text-xs text-gray-400">Nessuno.</p>';
 
     box.innerHTML = html;

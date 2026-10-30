@@ -1,5 +1,5 @@
 // =====================================================================
-// ECOMMUNI - LOGICA PRINCIPALE
+// RIKEKA - LOGICA PRINCIPALE
 // Sezioni: 1 Import · 2 Stato locale · 3 Navigazione · 4 Catalogo
 //          5 Form pubblicazione · 6 Auth · 7 Chat · 8 Annunci
 //          9 Scambio e KP · 10 Segnalazioni · 11 Foto/lightbox
@@ -18,7 +18,7 @@ import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategori
 import { distanzaKm, etichettaDistanza, cercaComuni, posizioneAttuale, zonaValida } from './geo.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
-import { $, val, esc, safeImg, tsToDate, compressImage } from './utils.js';
+import { $, val, esc, sid, safeImg, tsToDate, compressImage } from './utils.js';
 import { checkAdmin } from './admin.js';
 import { notify, initPushUi, removePushTokens } from './push.js';
 
@@ -201,7 +201,7 @@ function renderCatChips() {
     box.innerHTML = `<p class="cat-hint">${lista.length === 1 ? 'Categoria riconosciuta dal titolo:' : 'Suggerite dal titolo, scegli quella giusta:'}</p>
       <div class="cat-chips">${lista.map((k) => {
         const s = c.sottocategorie[k];
-        return `<button type="button" class="cat-chip${k === sel ? ' cat-chip-on' : ''}" onclick="pickCat('${k}')">${iconaGruppo(s.gruppo)} ${esc(s.label)}</button>`;
+        return `<button type="button" class="cat-chip${k === sel ? ' cat-chip-on' : ''}" onclick="pickCat('${sid(k)}')">${iconaGruppo(s.gruppo)} ${esc(s.label)}</button>`;
       }).join('')}</div>`;
   }
 }
@@ -243,7 +243,7 @@ function renderCatSheet() {
   const sel = val('bene-sottocategoria');
   const filtro = cercaSottocategorie(c, val('cat-search'));
   const riga = ([k, s]) => `
-    <button type="button" class="cat-row${k === sel ? ' cat-row-on' : ''}" onclick="pickCat('${k}')">
+    <button type="button" class="cat-row${k === sel ? ' cat-row-on' : ''}" onclick="pickCat('${sid(k)}')">
       <span class="cat-row-label">${esc(s.label)}</span>
       <span class="cat-row-range">${fascia(s)}</span>
       <span class="cat-row-check">${k === sel ? '✓' : ''}</span>
@@ -428,7 +428,7 @@ onAuthStateChanged(auth, (user) => {
   if (user) {
     $('app-header').style.display = 'flex';
     $('tab-bar').style.display = 'flex';
-    $('profile-name-header').textContent = user.displayName || 'Utente Ecommuni';
+    $('profile-name-header').textContent = user.displayName || 'Utente Rikeka';
     homePages = 1;
     resetCatalogReady();
     subscribeCatalog();
@@ -454,7 +454,7 @@ onAuthStateChanged(auth, (user) => {
     homeOffers = []; myOffers = []; allChatsData = []; unreadChatIds = [];
     state.karma = null; state.completedSwaps = 0; state.isAdmin = false; state.sospeso = false; lastKnownKarma = null;
     repCache.clear();
-    $('profile-role').textContent = 'Membro Ecommuni';
+    $('profile-role').textContent = 'Membro Rikeka';
     myOfferStatus = new Map();
     toReceive = []; toReceiveStatus = new Map();
     state.zona = null; zonePromptShown = false;
@@ -546,8 +546,8 @@ function renderChatDeal() {
       else {
         testo += ` Com'è andata con ${esc(altro)}?`;
         cls = 'deal-action';
-        azioni = `<button class="deal-btn deal-primary" onclick="rateReceiver('${offerId}', 'positivo')">👍 Positivo</button>
-                  <button class="deal-btn deal-danger" onclick="rateReceiver('${offerId}', 'negativo')">👎 Negativo</button>`;
+        azioni = `<button class="deal-btn deal-primary" onclick="rateReceiver('${sid(offerId)}', 'positivo')">👍 Positivo</button>
+                  <button class="deal-btn deal-danger" onclick="rateReceiver('${sid(offerId)}', 'negativo')">👎 Negativo</button>`;
       }
     }
   } else if (o.status === 'consegnato' && perQuesto) {
@@ -558,19 +558,19 @@ function renderChatDeal() {
       if (o.aiutoRichiesto) testo += ' Hai chiesto aiuto: un amministratore se ne sta occupando.';
       else if (consegnatoMs && Date.now() - consegnatoMs > 7 * 864e5) {
         testo += ' Sono passati più di 7 giorni senza conferma.';
-        azioni = `<button class="deal-btn deal-ghost" onclick="askAdminHelp('${offerId}')">🆘 Chiedi aiuto a un amministratore</button>`;
+        azioni = `<button class="deal-btn deal-ghost" onclick="askAdminHelp('${sid(offerId)}')">🆘 Chiedi aiuto a un amministratore</button>`;
       } else testo += ' Se non conferma entro 7 giorni potrai chiedere aiuto a un amministratore.';
     } else {
       testo = `${esc(altro)} ha segnato la consegna. L'hai ricevuto?`;
-      azioni = `<button class="deal-btn deal-primary" onclick="confirmReceived('${offerId}')">✓ Sì, l'ho ricevuto</button>
-                <button class="deal-btn deal-danger" onclick="notReceived('${offerId}')">Non l'ho ricevuto</button>`;
+      azioni = `<button class="deal-btn deal-primary" onclick="confirmReceived('${sid(offerId)}')">✓ Sì, l'ho ricevuto</button>
+                <button class="deal-btn deal-danger" onclick="notReceived('${sid(offerId)}')">Non l'ho ricevuto</button>`;
     }
   } else if (o.status === 'in_trattativa' && perQuesto) {
     stato = '🤝 In trattativa'; cls = 'deal-action';
     if (isOwner) {
       testo = `Hai scelto ${esc(altro)}. Dopo la consegna premi "Ho consegnato".`;
-      azioni = `<button class="deal-btn deal-primary" onclick="markDelivered('${offerId}')">📦 Ho consegnato</button>
-                <button class="deal-btn deal-ghost" onclick="setDisponibile('${offerId}')">Annulla trattativa</button>`;
+      azioni = `<button class="deal-btn deal-primary" onclick="markDelivered('${sid(offerId)}')">📦 Ho consegnato</button>
+                <button class="deal-btn deal-ghost" onclick="setDisponibile('${sid(offerId)}')">Annulla trattativa</button>`;
     } else testo = `Sei stato scelto! Accordatevi qui su quando e dove fare lo scambio (${kp}).`;
   } else if (o.status === 'in_trattativa' || o.status === 'consegnato') {
     stato = '🤝 In trattativa con un\'altra persona'; cls = 'deal-off';
@@ -609,7 +609,7 @@ window.reserveFromChat = async function () {
 async function postChatEventTo(chatId, testo) {
   try {
     const me = auth.currentUser;
-    await addDoc(collection(db, 'chats', chatId, 'messages'), { senderId: me.uid, senderName: me.displayName || 'Utente', text: testo, system: true, timestamp: serverTimestamp() });
+    await addDoc(collection(db, 'chats', chatId, 'messages'), { senderId: me.uid, senderName: (me.displayName || 'Utente').slice(0, 80), text: testo, system: true, timestamp: serverTimestamp() });
     await updateDoc(doc(db, 'chats', chatId), { lastMessage: testo.slice(0, 50), lastMessageTimestamp: serverTimestamp(), lastMessageSenderId: me.uid });
   } catch (e) { console.warn('Evento chat non scritto', e); }
 }
@@ -621,7 +621,7 @@ async function postChatEvent(offerId, testo) {
     const chat = allChatsData.find((c) => c.data.offerId === offerId && (c.data.users || []).includes(state.offers.get(offerId)?.reservedBy || chatCtx?.chat?.buyerId))
       || (chatCtx?.offerId === offerId ? { id: currentChatId } : null);
     if (!chat?.id || !me) return;
-    await addDoc(collection(db, 'chats', chat.id, 'messages'), { senderId: me.uid, senderName: me.displayName || 'Utente', text: testo, system: true, timestamp: serverTimestamp() });
+    await addDoc(collection(db, 'chats', chat.id, 'messages'), { senderId: me.uid, senderName: (me.displayName || 'Utente').slice(0, 80), text: testo, system: true, timestamp: serverTimestamp() });
     await updateDoc(doc(db, 'chats', chat.id), { lastMessage: testo.slice(0, 50), lastMessageTimestamp: serverTimestamp(), lastMessageSenderId: me.uid });
   } catch (e) { console.warn('Evento chat non scritto', e); }
 }
@@ -643,7 +643,7 @@ window.sendMessage = async function (event) {
   try {
     await addDoc(collection(db, 'chats', chatId, 'messages'), {
       senderId: me.uid,
-      senderName: me.displayName || 'Utente',
+      senderName: (me.displayName || 'Utente').slice(0, 80),
       text,
       timestamp: serverTimestamp()
     });
@@ -754,7 +754,7 @@ function renderChatList() {
     const isOwner = chat.ownerId === me.uid;
     const d = tsToDate(chat.lastMessageTimestamp);
     return `
-      <div onclick="openChat('${id}')" class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${i % 2 ? 'bg-green-50' : 'bg-white'}">
+      <div onclick="openChat('${sid(id)}')" class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${i % 2 ? 'bg-green-50' : 'bg-white'}">
         <span class="block h-2.5 w-2.5 rounded-full ${unread ? 'bg-blue-500' : ''} mr-3 flex-shrink-0"></span>
         <div class="flex-1 min-w-0">
           <p class="text-sm ${unread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'} truncate">${esc(chat.offerTitle || 'Chat')}</p>
@@ -763,7 +763,7 @@ function renderChatList() {
         <div class="ml-4 flex flex-col items-end">
           <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${isOwner ? 'Tuo Annuncio' : 'Tua Richiesta'}</span>
           <span class="text-xs text-gray-400 mt-1">${d ? d.toLocaleDateString('it-IT') : ''}</span>
-          <button onclick="deleteChat(event, '${id}')" title="Elimina chat" class="mt-2 text-red-500 hover:text-red-700 text-xs">Elimina</button>
+          <button onclick="deleteChat(event, '${sid(id)}')" title="Elimina chat" class="mt-2 text-red-500 hover:text-red-700 text-xs">Elimina</button>
         </div>
       </div>`;
   }).join('');
@@ -826,7 +826,7 @@ window.publishOffer = async function (event) {
       thumb: fotos.length ? fotos[0].thumb : null,
       reportCount: 0,
       ownerId: me.uid,
-      ownerName: (me.displayName || 'Utente Ecommuni').slice(0, 80),
+      ownerName: (me.displayName || 'Utente Rikeka').slice(0, 80),
       timestamp: serverTimestamp(),
       status: esito.status,
       keywords: paroleChiaveAnnuncio(state.catalog, { title, description, type: currentOfferType, ...valore.dati }),
@@ -1084,7 +1084,7 @@ window.setInTrattativa = async function (docId) {
     $('buyer-offer-info').textContent = `"${offer.title}" — valore ${cost} KP. Scegli a chi assegnarlo:`;
     $('buyer-list').innerHTML = buyers.map((b) => {
       const ok = b.admin || b.karma >= cost;
-      return `<button ${ok ? '' : 'disabled'} data-uid="${esc(b.uid)}" data-name="${esc(b.name)}" onclick="confirmReserve('${docId}', this.dataset.uid, this.dataset.name)"
+      return `<button ${ok ? '' : 'disabled'} data-uid="${esc(b.uid)}" data-name="${esc(b.name)}" onclick="confirmReserve('${sid(docId)}', this.dataset.uid, this.dataset.name)"
                 class="w-full text-left p-3 rounded-lg border ${ok ? 'border-green-300 bg-green-50 hover:bg-green-100' : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'}">
                 <span class="font-medium">${esc(b.name)}</span>
                 <span class="block text-xs">${b.karma} KP ${ok ? '' : `(ne servono ${cost})`} ${b.rep ? '· ' + b.rep : ''}</span>
@@ -1254,8 +1254,8 @@ function renderToReceive() {
   box.innerHTML = toReceive.map(({ id, data: o }) => {
     const action = o.status === 'consegnato'
       ? `<p class="text-xs text-blue-700 mt-1">${esc(o.ownerName)} ha segnato la consegna. L'hai ricevuto?</p>
-         <button onclick="confirmReceived('${id}')" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-sm font-medium rounded-lg">✓ Sì, l'ho ricevuto</button>
-         <button onclick="notReceived('${id}')" class="mt-1 w-full text-xs text-red-600 hover:underline">Non l'ho ricevuto</button>`
+         <button onclick="confirmReceived('${sid(id)}')" class="mt-2 w-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 text-sm font-medium rounded-lg">✓ Sì, l'ho ricevuto</button>
+         <button onclick="notReceived('${sid(id)}')" class="mt-1 w-full text-xs text-red-600 hover:underline">Non l'ho ricevuto</button>`
       : `<p class="text-xs text-gray-500 mt-1">Riservato per te: accordati in chat con ${esc(o.ownerName)} per la consegna.</p>`;
     return `
       <div class="p-3 border border-gray-200 rounded-lg text-left">
@@ -1443,7 +1443,7 @@ export function thumbHtml(id, o) {
   const src = safeImg(o.thumb) || legacy[0];
   const count = o.fotoCount || legacy.length;
   if (!src) return '';
-  return `<img src="${src}" loading="lazy" alt="Foto annuncio" class="offer-thumb" onclick="openLightbox('${id}')">
+  return `<img src="${src}" loading="lazy" alt="Foto annuncio" class="offer-thumb" onclick="openLightbox('${sid(id)}')">
           <p class="text-xs text-gray-400 mb-3">📷 ${count} foto · tocca per ingrandire</p>`;
 }
 
@@ -1477,21 +1477,21 @@ function renderOffers() {
       } else if (isTrattativa) {
         buttons = `
           <p class="text-xs text-gray-500 mt-2">Assegnato a: <b>${esc(o.reservedByName || 'acquirente')}</b></p>
-          <button onclick="markDelivered('${id}')" class="mt-3 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">📦 Ho consegnato</button>
+          <button onclick="markDelivered('${sid(id)}')" class="mt-3 w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">📦 Ho consegnato</button>
           <p class="text-xs text-gray-500 mt-1">Riceverai ${cp} KP quando ${esc(o.reservedByName || 'l\'altra persona')} confermerà di averlo ricevuto.</p>
-          <button onclick="setDisponibile('${id}')" class="mt-2 w-full bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 px-4 py-2 text-sm font-medium rounded-lg">Rendi di nuovo disponibile</button>`;
+          <button onclick="setDisponibile('${sid(id)}')" class="mt-2 w-full bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 px-4 py-2 text-sm font-medium rounded-lg">Rendi di nuovo disponibile</button>`;
       } else {
         buttons = `
-          <button onclick="setInTrattativa('${id}')" class="mt-3 w-full bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Metti in Trattativa</button>
-          <button onclick="deleteOffer('${id}')" class="mt-2 w-full bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-4 py-2 text-sm font-medium rounded-lg">Elimina Annuncio</button>`;
+          <button onclick="setInTrattativa('${sid(id)}')" class="mt-3 w-full bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Metti in Trattativa</button>
+          <button onclick="deleteOffer('${sid(id)}')" class="mt-2 w-full bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-4 py-2 text-sm font-medium rounded-lg">Elimina Annuncio</button>`;
       }
     } else if (isTrattativa) {
       buttons = `<button disabled class="mt-3 w-full px-4 py-2 text-sm font-medium rounded-lg ${o.reservedBy === me.uid ? 'text-green-800 bg-green-100' : 'text-gray-500 bg-gray-200'} cursor-not-allowed">${o.reservedBy === me.uid ? `Riservato per te: conferma la ricezione dal Profilo` : 'In Trattativa'}</button>`;
     } else {
       buttons = affordable
-        ? `<button onclick="startChat('${id}')" class="mt-3 w-full ${o.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Avvia Chat</button>`
+        ? `<button onclick="startChat('${sid(id)}')" class="mt-3 w-full ${o.type === 'bene' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4 py-2 text-sm font-medium rounded-lg shadow-md">Avvia Chat</button>`
         : `<button disabled class="mt-3 w-full px-4 py-2 text-sm font-medium rounded-lg text-gray-500 bg-gray-200 cursor-not-allowed">KP insufficienti (servono ${cp}, hai ${state.karma})</button>`;
-      buttons += `<button onclick="reportOffer('${id}')" class="mt-2 w-full text-xs text-gray-400 hover:text-red-600">⚑ Segnala</button>`;
+      buttons += `<button onclick="reportOffer('${sid(id)}')" class="mt-2 w-full text-xs text-gray-400 hover:text-red-600">⚑ Segnala</button>`;
     }
 
     const html = `
@@ -1511,7 +1511,7 @@ function renderOffers() {
         <p class="text-xs text-gray-500 mt-2">${valuationLine(o)}</p>
         <p class="text-xs text-gray-400 mt-1">Offerto da: <span class="font-medium text-gray-500">${esc(o.ownerName)}</span> <span class="rep" data-rep="${esc(o.ownerId)}"></span>${o.zona?.nome ? ` · <span class="offer-place">📍 ${esc(o.zona.nome)}${km !== null && !isOwner ? ' · ' + etichettaDistanza(km) : ''}</span>` : ''}</p>
         ${buttons}
-        ${state.isAdmin && !isOwner ? `<button onclick="adminRemoveOffer('${id}')" class="admin-remove">🛡 Rimuovi (amministratore)${hidden ? ' · nascosto per segnalazioni' : ''}</button>` : ''}
+        ${state.isAdmin && !isOwner ? `<button onclick="adminRemoveOffer('${sid(id)}')" class="admin-remove">🛡 Rimuovi (amministratore)${hidden ? ' · nascosto per segnalazioni' : ''}</button>` : ''}
       </div>`;
     if (o.type === 'bene') beni += html; else servizi += html;
   });
@@ -1558,7 +1558,7 @@ function renderMyOffers() {
         </div>
         <div class="mt-1">${statusTag(o.status)}</div>
         ${note}
-        ${canDelete ? `<button onclick="deleteOffer('${id}')" class="mt-2 text-xs text-red-600 hover:underline">Elimina</button>` : ''}
+        ${canDelete ? `<button onclick="deleteOffer('${sid(id)}')" class="mt-2 text-xs text-red-600 hover:underline">Elimina</button>` : ''}
       </div>`;
   }).join('');
 }
@@ -1622,7 +1622,7 @@ function loadProfileData(uid) {
       <p id="kp-hint" class="text-xs text-gray-500 mb-4">${state.isAdmin ? 'Puoi richiedere e pubblicare senza limiti di KP.' : `Puoi richiedere beni e servizi fino a ${karma} KP. Regala per guadagnarne altri.`}</p>
       <p class="text-xl font-semibold text-gray-700">${state.completedSwaps}</p>
       <p class="text-xs text-gray-500">Scambi completati</p>`;
-    $('profile-name-header').textContent = data.displayName || auth.currentUser?.displayName || 'Utente Ecommuni';
+    $('profile-name-header').textContent = data.displayName || auth.currentUser?.displayName || 'Utente Rikeka';
     renderOffers();
     updateValuePreview();
   }, (e) => reportError('loadProfileData', e));
@@ -1654,7 +1654,7 @@ window.acceptTerms = async function () {
     if (consentMode.newProfile) {
       await catalogReady;
       await setDoc(userRef, {
-        displayName: (u.displayName || 'Utente Ecommuni').slice(0, 80),
+        displayName: (u.displayName || 'Utente Rikeka').slice(0, 80),
         karmaPoints: state.catalogOnServer ? state.catalog.kpIniziali : 100,
         completedSwaps: 0,
         termsVersion: LEGAL.versioneTermini,
@@ -1729,7 +1729,7 @@ window.deleteMyAccount = async function () {
     await b.commit();
     // 5. Account di accesso
     await deleteUser(me);
-    alert('Il tuo account è stato eliminato. Grazie per aver fatto parte di Ecommuni.');
+    alert('Il tuo account è stato eliminato. Grazie per aver fatto parte di Rikeka.');
   } catch (e) {
     deletingAccount = false;
     if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') return;
@@ -1843,20 +1843,38 @@ document.addEventListener('admin-changed', () => {
   updateFotoLabels();
   updateValuePreview();
   // Il ruolo si vede solo qui, sotto il nome nel Profilo
-  $('profile-role').textContent = state.isAdmin ? '🛡️ Amministratore Ecommuni' : 'Membro Ecommuni';
+  $('profile-role').textContent = state.isAdmin ? '🛡️ Amministratore Rikeka' : 'Membro Rikeka';
   if (state.isAdmin && $('kp-hint')) $('kp-hint').textContent = 'Puoi richiedere e pubblicare senza limiti di KP.';
 });
 
 // ---------- FOTOCAMERA INTEGRATA ----------
 // Apre la fotocamera dentro l'app: il browser chiede il permesso la prima volta.
 // Se non è disponibile (o il permesso è negato) si usa l'app fotocamera del telefono.
+// Dopo ogni scatto: anteprima con "Rifai" / "Usa questa foto"; poi
+// "Scatta un'altra" / "Fine". Con 3 foto la fotocamera si chiude da sola.
 let camStream = null, camFacing = 'environment';
+let camScatto = null;       // { file, url } foto appena scattata, in attesa di conferma
+let camOccupata = false;    // evita doppi tocchi mentre si elabora
 
 function camLiberi() { return [0, 1, 2].filter((i) => !pendingFotos[i]); }
 function camAggiornaContatore() {
   const n = 3 - camLiberi().length;
   $('camera-count').textContent = `${n}/3 foto`;
-  $('camera-shot').disabled = camLiberi().length === 0;
+  $('camera-shot').disabled = camLiberi().length === 0 || !camStream;
+  $('camera-done').classList.toggle('hidden', n === 0);
+}
+// Mostra una sola "fase" della fotocamera: live (mirino), review (anteprima), ask (altra o fine)
+function camFase(fase) {
+  $('camera-live').classList.toggle('hidden', fase !== 'live');
+  $('camera-review').classList.toggle('hidden', fase !== 'review');
+  $('camera-ask').classList.toggle('hidden', fase !== 'ask');
+  $('camera-preview').classList.toggle('hidden', fase !== 'review');
+  $('camera-switch').style.visibility = fase === 'live' ? '' : 'hidden';
+}
+function camScartaScatto() {
+  if (camScatto?.url) URL.revokeObjectURL(camScatto.url);
+  camScatto = null;
+  $('camera-preview').removeAttribute('src');
 }
 function camStop() {
   camStream?.getTracks().forEach((t) => t.stop());
@@ -1877,10 +1895,14 @@ async function camStart() {
 window.openCamera = async function () {
   if (!camLiberi().length) return alert('Hai già 3 foto: toccane una con la ✕ per sostituirla.');
   if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) { $('camera-fallback').click(); return; }
+  camScartaScatto();
+  camOccupata = false;
+  camFase('live');
   $('camera-modal').classList.remove('hidden');
   camAggiornaContatore();
   try {
     await camStart();
+    camAggiornaContatore();
     const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
     $('camera-switch').classList.toggle('hidden', cams.length < 2);
   } catch (e) {
@@ -1900,27 +1922,89 @@ window.switchCamera = async function () {
   try { await camStart(); } catch (e) { reportError('switchCamera', e); }
 };
 
+// 1) Scatto: blocca l'immagine e chiede conferma
 window.takeShot = async function () {
   const video = $('camera-video');
+  if (camOccupata || !camStream || !video.videoWidth || !camLiberi().length) return;
+  camOccupata = true;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    video.classList.remove('camera-flash'); void video.offsetWidth; video.classList.add('camera-flash');
+    const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.9));
+    if (!blob) throw new Error('Scatto non riuscito');
+    camScartaScatto();
+    const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    camScatto = { file, url: URL.createObjectURL(blob) };
+    $('camera-preview').src = camScatto.url;
+    $('camera-use').disabled = false;
+    camFase('review');
+  } catch (e) {
+    reportError('takeShot', e);
+    alert('Non sono riuscito a scattare la foto, riprova.');
+  } finally {
+    camOccupata = false;
+  }
+};
+
+// 2a) "Rifai": scarta e torna al mirino
+window.camRetake = function () {
+  camScartaScatto();
+  camFase('live');
+  camAggiornaContatore();
+};
+
+// 2b) "Usa questa foto": la mette nel primo spazio libero, poi chiede se continuare
+window.camUse = async function () {
+  if (!camScatto || camOccupata) return;
   const liberi = camLiberi();
-  if (!camStream || !video.videoWidth || !liberi.length) return;
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  video.classList.remove('camera-flash'); void video.offsetWidth; video.classList.add('camera-flash');
-  const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.9));
-  if (!blob) return;
-  const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' });
+  if (!liberi.length) { camScartaScatto(); return window.closeCamera(); }
+  camOccupata = true;
+  $('camera-use').disabled = true;
   const slot = liberi[0];
-  pendingFotos[slot] = { loading: true };
+  const file = camScatto.file;
+  pendingFotos[slot] = { loading: true };   // prenota lo spazio
+  try {
+    await setFoto(slot, file);
+  } finally {
+    camOccupata = false;
+    camScartaScatto();
+  }
   camAggiornaContatore();
-  await setFoto(slot, file);
+  if (!pendingFotos[slot]) { camFase('live'); return; }   // elaborazione fallita: setFoto ha già avvisato
+  const n = 3 - camLiberi().length;
+  if (!camLiberi().length) {
+    camMostraDomanda(`✓ Foto ${n} di 3 aggiunta. Hai raggiunto il massimo di 3 foto.`, false);
+    setTimeout(() => { if (!$('camera-modal').classList.contains('hidden')) window.closeCamera(); }, 1200);
+    return;
+  }
+  camMostraDomanda(`✓ Foto ${n} di 3 aggiunta. Vuoi scattarne un'altra?`, true);
+};
+
+function camMostraDomanda(testo, altra) {
+  $('camera-ask-msg').textContent = testo;
+  $('camera-another').classList.toggle('hidden', !altra);
+  // miniature delle foto già aggiunte (le immagini vengono da setFoto, non da testo dell'utente)
+  const box = $('camera-thumbs');
+  box.replaceChildren(...[0, 1, 2].map((i) => {
+    const f = pendingFotos[i];
+    if (f?.thumb) { const img = document.createElement('img'); img.src = f.thumb; img.alt = `Foto ${i + 1}`; return img; }
+    return document.createElement('span');
+  }));
+  camFase('ask');
+}
+
+// 3) "Scatta un'altra": torna al mirino
+window.camAnother = function () {
+  camFase('live');
   camAggiornaContatore();
-  if (!camLiberi().length) setTimeout(() => window.closeCamera(), 400);
 };
 
 window.closeCamera = function () {
   camStop();
+  camScartaScatto();
+  camFase('live');
   $('camera-modal').classList.add('hidden');
 };
 
@@ -1928,7 +2012,8 @@ window.closeCamera = function () {
 // ---------- REPUTAZIONE: scambi conclusi e % di giudizi positivi ----------
 
 export function testoReputazione(u) {
-  const scambi = u?.completedSwaps ?? 0, pos = u?.fbPos ?? 0, neg = u?.fbNeg ?? 0, tot = pos + neg;
+  const num = (x) => (Number.isFinite(Number(x)) ? Math.max(0, Math.floor(Number(x))) : 0);
+  const scambi = num(u?.completedSwaps), pos = num(u?.fbPos), neg = num(u?.fbNeg), tot = pos + neg;
   if (!scambi && !tot) return '<span class="rep-new">🌱 nuovo</span>';
   const pct = tot ? Math.round((pos / tot) * 100) : null;
   return `${scambi} ${scambi === 1 ? 'scambio' : 'scambi'}${pct === null ? '' : ` · <span class="${pct < 70 ? 'rep-low' : 'rep-ok'}">👍 ${pct}%</span>`}`;

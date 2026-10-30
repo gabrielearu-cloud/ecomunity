@@ -1,0 +1,13 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": ["firebase.json", "firestore.rules", "firestore.indexes.json", "LEGGIMI.md", "test/**", "**/.*", "**/node_modules/**"]
+  },
+  "emulators": {
+    "firestore": { "host": "127.0.0.1", "port": 8080 }
+  }
+}

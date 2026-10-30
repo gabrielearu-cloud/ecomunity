@@ -1,0 +1,709 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =================================================================
+    // HELPER
+    // =================================================================
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Admin = esiste /admins/{uid} (documento creato A MANO dalla console)
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Un utente qualsiasi (es. chi riceve) e' amministratore?
+    function isAdminUid(uid) {
+      return exists(/databases/$(database)/documents/admins/$(uid));
+    }
+
+    // Account sospeso da un amministratore: puo' leggere ma non pubblicare ne' scrivere
+    function notSuspended() {
+      return !exists(/databases/$(database)/documents/sospesi/$(request.auth.uid));
+    }
+
+    function cfgPath() {
+      return /databases/$(database)/documents/config/catalogo;
+    }
+
+    // Catalogo valori: lo stesso letto dall'app (js/catalog.js)
+    function cfg() {
+      return get(cfgPath()).data;
+    }
+
+    // Iscrizioni: aperte se il documento non esiste o se "aperte" e' true
+    function iscrizioniAperte() {
+      let p = /databases/$(database)/documents/config/iscrizioni;
+      return !exists(p) || get(p).data.get('aperte', true) == true;
+    }
+
+    // Zona (Comune o posizione arrotondata): solo nome e coordinate
+    function zonaOk(z) {
+      return z is map
+        && z.keys().hasOnly(['nome', 'lat', 'lng'])
+        && z.nome is string && z.nome.size() > 0 && z.nome.size() <= 80
+        && z.lat is number && z.lat >= -90 && z.lat <= 90
+        && z.lng is number && z.lng >= -180 && z.lng <= 180;
+    }
+
+    // Testo senza parole non ammesse (stesso elenco di js/filtro.js, a parole intere).
+    // Tutto cio' che non e' una lettera diventa uno spazio, cosi' anche gli a-capo.
+    function testoPulito(t) {
+      return !(' ' + t.lower().replace('[^a-z]+', ' ') + ' ').matches('.* (cazzo|cazzi|cazzata|cazzate|cazzone|cazzoni|cazzuto|minchia|minchiata|minchiate|minchione|merda|merde|merdoso|merdosa|merdaccia|stronzo|stronza|stronzi|stronze|stronzata|stronzate|vaffanculo|fanculo|affanculo|culo|inculare|inculato|inculata|puttana|puttane|puttanata|puttanate|puttaniere|troia|troie|troione|zoccola|zoccole|mignotta|mignotte|coglione|coglioni|coglionata|coglionate|figa|pompino|pompini|sborra|sborrare|segaiolo|bastardo|bastarda|bastardi|bastarde|pirla|porcodio|porco dio|dio porco|diocane|dio cane|dio boia|porca madonna|madonna puttana|frocio|froci|ricchione|ricchioni|negro|negri|negra|negre|mongoloide|terrone|terroni|fuck|fucking|shit|bitch|cunt|asshole|nigger|faggot) .*');
+    }
+
+    // Oggi come numero AAAAMMGG (ora UTC), per il limite giornaliero di annunci
+    function oggi() {
+      return request.time.year() * 10000 + request.time.month() * 100 + request.time.day();
+    }
+
+    // Parole chiave per la ricerca
+    function keywordsOk(k) {
+      return k is list && k.size() <= 300;
+    }
+
+    // =================================================================
+    // ADMINS: ognuno puo' solo sapere se e' admin
+    // =================================================================
+    // Gli admin possono nominarne altri dal pannello. Il documento creato a mano
+    // dalla console (senza "addedBy") e' il fondatore: dall'app non si puo' rimuovere.
+    match /admins/{uid} {
+      allow get: if signedIn();
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['nome', 'addedBy', 'addedAt'])
+        && request.resource.data.nome is string && request.resource.data.nome.size() <= 80
+        && request.resource.data.addedBy == request.auth.uid
+        && request.resource.data.addedAt == request.time
+        && exists(/databases/$(database)/documents/users/$(uid));
+      allow delete: if isAdmin()
+        && uid != request.auth.uid
+        && ('addedBy' in resource.data);
+      allow update: if false;
+    }
+
+    // Account sospesi (solo gli amministratori li gestiscono; gli admin non si possono sospendere)
+    match /sospesi/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && !isAdminUid(uid)
+        && request.resource.data.keys().hasOnly(['nome', 'motivo', 'by', 'at'])
+        && request.resource.data.nome is string && request.resource.data.nome.size() <= 80
+        && request.resource.data.motivo is string && request.resource.data.motivo.size() <= 300
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time;
+      allow delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // =================================================================
+    // CONFIG: catalogo con fasce di prezzo e parametri (scrive solo l'admin)
+    // =================================================================
+    match /config/{docId} {
+      allow get: if signedIn();
+      allow list: if false;
+      // Interruttore "iscrizioni aperte/chiuse" (Pannello Admin)
+      allow write: if isAdmin()
+        && docId == 'iscrizioni'
+        && request.resource.data.keys().hasOnly(['aperte', 'messaggio', 'by', 'at'])
+        && request.resource.data.aperte is bool
+        && (!('messaggio' in request.resource.data)
+            || (request.resource.data.messaggio is string && request.resource.data.messaggio.size() <= 300))
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time;
+      allow write: if isAdmin()
+        && docId == 'catalogo'
+        && request.resource.data.kpEuro is number
+        && request.resource.data.kpEuro > 0
+        && request.resource.data.svalutazioneAnnua is number
+        && request.resource.data.svalutazioneAnnua >= 0
+        && request.resource.data.svalutazioneAnnua < 1
+        && request.resource.data.residuoMinimo is number
+        && request.resource.data.sogliaVerifica is int
+        && request.resource.data.maxKpNuovoUtente is int
+        && request.resource.data.kpIniziali is int
+        && request.resource.data.maxOre is number
+        && request.resource.data.sogliaSegnalazioni is int
+        && request.resource.data.condizioni is map
+        && request.resource.data.sottocategorie is map
+        && request.resource.data.servizi is map;
+    }
+
+    // =================================================================
+    // LOGS: ognuno scrive i propri eventi, solo l'admin legge e pulisce
+    // =================================================================
+    match /logs/{logId} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['type', 'level', 'uid', 'userName', 'ts', 'details', 'app', 'ua'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.ts == request.time
+        && request.resource.data.type is string
+        && request.resource.data.type.size() > 0
+        && request.resource.data.type.size() <= 40
+        && request.resource.data.level in ['info', 'warn', 'error']
+        && request.resource.data.details is string
+        && request.resource.data.details.size() <= 2000;
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // =================================================================
+    // USERS: profilo pubblico SENZA email
+    // =================================================================
+    match /users/{userId} {
+
+      function offerBefore() {
+        return get(/databases/$(database)/documents/offerte/$(request.resource.data.lastOfferId)).data;
+      }
+      function offerAfter() {
+        return getAfter(/databases/$(database)/documents/offerte/$(request.resource.data.lastOfferId)).data;
+      }
+      function transferKeysOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['karmaPoints', 'completedSwaps', 'lastOfferId', 'fbPos', 'fbNeg']);
+      }
+      // Giudizi ricevuti: +1 esatto al contatore giusto (giudizio null = nessuna variazione)
+      function fbInc(giudizio) {
+        let p = resource.data.get('fbPos', 0);
+        let n = resource.data.get('fbNeg', 0);
+        let np = request.resource.data.get('fbPos', 0);
+        let nn = request.resource.data.get('fbNeg', 0);
+        return (giudizio == 'positivo' && np == p + 1 && nn == n)
+          || (giudizio == 'negativo' && np == p && nn == n + 1)
+          || (giudizio == null && np == p && nn == n);
+      }
+      // I KP si muovono solo quando CHI RICEVE conferma: l'annuncio passa da consegnato a concluso
+      function exchangeConcluding() {
+        return request.resource.data.lastOfferId is string
+          && offerBefore().status == 'consegnato'
+          && offerAfter().status == 'concluso'
+          && offerBefore().reservedBy == request.auth.uid
+          && request.resource.data.completedSwaps == resource.data.get('completedSwaps', 0) + 1;
+      }
+      // Chi regala incassa esattamente il valore dell'annuncio (scritto da chi riceve, nella stessa transazione)
+      function giverGains() {
+        return request.auth.uid != userId
+          && transferKeysOnly()
+          && exchangeConcluding()
+          && offerBefore().ownerId == userId
+          && fbInc(offerAfter().get('feedback', null))
+          && request.resource.data.karmaPoints
+               == resource.data.get('karmaPoints', 0) + offerBefore().cpValue;
+      }
+      // Chi riceve paga esattamente il valore dell'annuncio, mai sotto zero
+      function buyerPays() {
+        return request.auth.uid == userId
+          && transferKeysOnly()
+          && exchangeConcluding()
+          && fbInc(null)
+          && request.resource.data.karmaPoints
+               == resource.data.get('karmaPoints', 0) - offerBefore().cpValue
+          && request.resource.data.karmaPoints >= 0;
+      }
+      // Chi ha regalato giudica chi ha ricevuto (una volta, dopo lo scambio concluso)
+      function giverRates() {
+        return request.auth.uid != userId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fbPos', 'fbNeg', 'lastOfferId'])
+          && request.resource.data.lastOfferId is string
+          && offerBefore().status == 'concluso'
+          && offerBefore().ownerId == request.auth.uid
+          && offerBefore().get('reservedBy', null) == userId
+          && !('feedbackGiver' in offerBefore())
+          && offerAfter().get('feedbackGiver', null) in ['positivo', 'negativo']
+          && fbInc(offerAfter().feedbackGiver);
+      }
+      // Scambio bloccato chiuso da un amministratore: KP a chi ha regalato,
+      // tolti a chi ha ricevuto (mai sotto zero; un admin non paga)
+      function adminCloses() {
+        let o = offerBefore();
+        let k = resource.data.get('karmaPoints', 0);
+        let nk = request.resource.data.karmaPoints;
+        return isAdmin()
+          && transferKeysOnly()
+          && fbInc(null)
+          && request.resource.data.lastOfferId is string
+          && o.status == 'consegnato'
+          && offerAfter().status == 'concluso'
+          && offerAfter().get('chiusoDaAdmin', false) == true
+          && request.resource.data.completedSwaps == resource.data.get('completedSwaps', 0) + 1
+          && ((o.ownerId == userId && nk == k + o.cpValue)
+              || (o.get('reservedBy', null) == userId
+                  && (nk == k - o.cpValue
+                      || (k < o.cpValue && nk == 0)
+                      || (isAdminUid(userId) && nk == k))));
+      }
+      // Modifica del proprio nome, accettazione dei Termini, rimozione della vecchia email
+      function profileEdit() {
+        let changed = request.resource.data.diff(resource.data).affectedKeys();
+        return request.auth.uid == userId
+          && changed.hasOnly(['displayName', 'email', 'termsVersion', 'termsAcceptedAt', 'zona'])
+          && (!changed.hasAny(['zona']) || zonaOk(request.resource.data.zona))
+          && (!changed.hasAny(['email']) || !('email' in request.resource.data))
+          && (!changed.hasAny(['termsAcceptedAt']) || request.resource.data.termsAcceptedAt == request.time)
+          && (!changed.hasAny(['termsVersion']) || request.resource.data.termsVersion is string)
+          && (!changed.hasAny(['displayName'])
+              || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80));
+      }
+
+      // Un amministratore che riceve non paga KP (nessun limite per gli admin)
+      function adminReceives() {
+        return request.auth.uid == userId
+          && isAdmin()
+          && transferKeysOnly()
+          && exchangeConcluding()
+          && fbInc(null)
+          && request.resource.data.karmaPoints == resource.data.get('karmaPoints', 0);
+      }
+
+      allow get: if signedIn();
+      allow list: if isAdmin();
+
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && (iscrizioniAperte() || isAdmin())
+        && request.resource.data.keys().hasOnly(['displayName', 'karmaPoints', 'completedSwaps', 'termsVersion', 'termsAcceptedAt'])
+        && request.resource.data.termsVersion is string
+        && request.resource.data.termsAcceptedAt == request.time
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.completedSwaps == 0
+        && (
+          (exists(cfgPath()) && request.resource.data.karmaPoints == cfg().kpIniziali)
+          || (!exists(cfgPath()) && request.resource.data.karmaPoints == 100)
+        );
+
+      allow update: if signedIn() && (profileEdit() || giverGains() || buyerPays() || adminReceives()
+                                       || giverRates() || adminCloses());
+      // Diritto alla cancellazione: ognuno puo' eliminare il proprio profilo
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // =================================================================
+    // OFFERTE
+    // =================================================================
+    match /offerte/{offerId} {
+
+      function offerPath() {
+        return /databases/$(database)/documents/offerte/$(offerId);
+      }
+      function fotoPath(n) {
+        return /databases/$(database)/documents/offerte/$(offerId)/foto/$(n);
+      }
+
+      // ---- Valutazione oggettiva: stessa formula di js/catalog.js ----
+      // KP <= prezzo nuovo x coeff condizione x max(residuoMinimo, (1-sval)^anni) / kpEuro  (+1 di tolleranza arrotondamenti)
+      function beneOk(d, c) {
+        let sub = c.sottocategorie[d.sottocategoria];
+        let cond = c.condizioni[d.condizione];
+        let dep = math.pow(1 - c.svalutazioneAnnua, request.time.year() - d.annoAcquisto);
+        return d.marca is string && d.marca.size() > 0 && d.marca.size() <= 60
+          && d.modello is string && d.modello.size() > 0 && d.modello.size() <= 60
+          && d.annoAcquisto is int
+          && d.annoAcquisto >= 1950
+          && d.annoAcquisto <= request.time.year() + 1
+          && d.prezzoNuovo is number
+          && d.prezzoNuovo > 0
+          && ((d.prezzoNuovo >= sub.min && d.prezzoNuovo <= sub.max) || isAdmin())
+          && (
+            (dep >= c.residuoMinimo
+              && d.cpValue <= math.round(d.prezzoNuovo * cond.coeff * dep / c.kpEuro) + 1)
+            ||
+            (dep < c.residuoMinimo
+              && d.cpValue <= math.round(d.prezzoNuovo * cond.coeff * c.residuoMinimo / c.kpEuro) + 1)
+          )
+          && (d.fotoCount >= c.get('minFotoBeni', 1) || isAdmin());
+      }
+
+      function servizioOk(d, c) {
+        return d.ore is number
+          && d.ore > 0
+          && (d.ore <= c.maxOre || isAdmin())
+          && d.cpValue <= math.round(d.ore * c.servizi[d.livello].kpOra) + 1;
+      }
+
+      // Le foto vengono scritte nello stesso batch dell'annuncio
+      function fotoOk(d) {
+        return d.fotoCount is int
+          && d.fotoCount >= 0
+          && d.fotoCount <= 3
+          && ((d.fotoCount == 0 && d.thumb == null) || (d.thumb is string && d.thumb.size() < 60000))
+          && (d.fotoCount < 1 || existsAfter(fotoPath('0')))
+          && (d.fotoCount < 2 || existsAfter(fotoPath('1')))
+          && (d.fotoCount < 3 || existsAfter(fotoPath('2')));
+      }
+
+      function createOk(d, c) {
+        return d.keys().hasOnly(['title', 'description', 'type', 'cpValue', 'ownerId', 'ownerName', 'timestamp',
+                                 'status', 'fotoCount', 'thumb', 'reportCount',
+                                 'sottocategoria', 'condizione', 'prezzoNuovo', 'annoAcquisto', 'marca', 'modello',
+                                 'livello', 'ore', 'keywords', 'zona'])
+          && (!('keywords' in d) || keywordsOk(d.keywords))
+          && (!('zona' in d) || d.zona == null || zonaOk(d.zona))
+          && d.ownerId == request.auth.uid
+          && d.ownerName is string && d.ownerName.size() <= 80
+          && d.timestamp == request.time
+          && d.reportCount == 0
+          && d.title is string && d.title.size() >= 5 && d.title.size() <= 50
+          && d.description is string && d.description.size() >= 10 && d.description.size() <= 150
+          && testoPulito(d.title) && testoPulito(d.description)
+          // anti-flood: nello stesso invio va aggiornato /quote/{uid} (vedi sotto)
+          && (isAdmin() || getAfter(/databases/$(database)/documents/quote/$(request.auth.uid)).data.lastOfferAt == request.time)
+          && d.cpValue is int && d.cpValue >= 1
+          // sopra soglia -> deve passare dalla verifica admin
+          && ((d.status == 'disponibile' && (d.cpValue <= c.sogliaVerifica || isAdmin())) || d.status == 'in_verifica')
+          // limite per chi non ha ancora concluso scambi
+          && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('completedSwaps', 0) > 0
+              || d.cpValue <= c.maxKpNuovoUtente
+              || isAdmin())
+          && ((d.type == 'bene' && beneOk(d, c)) || (d.type == 'servizio' && servizioOk(d, c)))
+          && fotoOk(d);
+      }
+
+      function buyerHasEnoughKp() {
+        return isAdminUid(request.resource.data.reservedBy)
+          || get(/databases/$(database)/documents/users/$(request.resource.data.reservedBy))
+               .data.get('karmaPoints', 0) >= resource.data.cpValue;
+      }
+
+      function changed() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      function ownerUpdate() {
+        return resource.data.ownerId == request.auth.uid
+          && (
+            // disponibile -> in trattativa (acquirente con KP sufficienti)
+            (resource.data.status == 'disponibile'
+              && request.resource.data.status == 'in_trattativa'
+              && changed().hasOnly(['status', 'reservedBy', 'reservedByName'])
+              && request.resource.data.reservedBy is string
+              && request.resource.data.reservedBy != request.auth.uid
+              && request.resource.data.reservedByName is string
+              && request.resource.data.reservedByName.size() <= 80
+              && buyerHasEnoughKp())
+            ||
+            // in trattativa -> disponibile
+            (resource.data.status == 'in_trattativa'
+              && request.resource.data.status == 'disponibile'
+              && changed().hasOnly(['status', 'reservedBy', 'reservedByName'])
+              && request.resource.data.reservedBy == null
+              && request.resource.data.reservedByName == null)
+            ||
+            // in trattativa -> consegnato (nessun KP si muove: serve la conferma di chi riceve)
+            (resource.data.status == 'in_trattativa'
+              && request.resource.data.status == 'consegnato'
+              && changed().hasOnly(['status', 'deliveredAt', 'aiutoRichiesto'])
+              && request.resource.data.deliveredAt == request.time
+              && request.resource.data.get('aiutoRichiesto', false) == false)
+            ||
+            // dopo 7 giorni senza conferma: chiede aiuto a un amministratore
+            (resource.data.status == 'consegnato'
+              && changed().hasOnly(['aiutoRichiesto'])
+              && request.resource.data.aiutoRichiesto == true
+              && request.time > resource.data.deliveredAt + duration.value(7, 'd'))
+            ||
+            // a scambio concluso giudica chi ha ricevuto (una sola volta)
+            (resource.data.status == 'concluso'
+              && !('feedbackGiver' in resource.data)
+              && changed().hasOnly(['feedbackGiver'])
+              && request.resource.data.feedbackGiver in ['positivo', 'negativo'])
+          );
+      }
+
+      // Chi riceve: conferma (e i KP si spostano) oppure segnala di non aver ricevuto
+      function buyerUpdate() {
+        return resource.data.get('reservedBy', null) == request.auth.uid
+          && resource.data.status == 'consegnato'
+          && (
+            (request.resource.data.status == 'concluso'
+              && changed().hasOnly(['status', 'feedback', 'completionDate'])
+              && request.resource.data.feedback in ['positivo', 'negativo']
+              && request.resource.data.completionDate == request.time)
+            ||
+            (request.resource.data.status == 'in_trattativa'
+              && changed().hasOnly(['status', 'deliveredAt'])
+              && request.resource.data.deliveredAt == null)
+          );
+      }
+
+      // Segnalazione: +1 al contatore, una sola volta per utente
+      function reporterUpdate() {
+        return resource.data.ownerId != request.auth.uid
+          && resource.data.status in ['disponibile', 'in_trattativa']
+          && changed().hasOnly(['reportCount', 'nascosto'])
+          // contenuto volgare/offensivo o vietato: basta una segnalazione per nasconderlo subito
+          && (!changed().hasAny(['nascosto'])
+              || (request.resource.data.nascosto == true
+                  && getAfter(/databases/$(database)/documents/offerte/$(offerId)/segnalazioni/$(request.auth.uid)).data.tipo
+                       in ['offensivo', 'vietato']))
+          && request.resource.data.reportCount == resource.data.get('reportCount', 0) + 1
+          && !exists(/databases/$(database)/documents/offerte/$(offerId)/segnalazioni/$(request.auth.uid))
+          && existsAfter(/databases/$(database)/documents/offerte/$(offerId)/segnalazioni/$(request.auth.uid));
+      }
+
+      function adminUpdate() {
+        return isAdmin() && (
+          // verifica: approva o rifiuta
+          (resource.data.status == 'in_verifica'
+            && request.resource.data.status in ['disponibile', 'rifiutato']
+            && changed().hasOnly(['status', 'motivoRifiuto', 'verifiedBy', 'verifiedAt'])
+            && request.resource.data.verifiedBy == request.auth.uid
+            && request.resource.data.verifiedAt == request.time
+            && (request.resource.data.status == 'disponibile'
+                || (request.resource.data.motivoRifiuto is string
+                    && request.resource.data.motivoRifiuto.size() > 0
+                    && request.resource.data.motivoRifiuto.size() <= 300)))
+          ||
+          // segnalazioni infondate: azzera il contatore e rende di nuovo visibile
+          (changed().hasOnly(['reportCount', 'nascosto'])
+            && request.resource.data.reportCount == 0
+            && request.resource.data.get('nascosto', false) == false)
+          ||
+          // preparazione della ricerca per gli annunci pubblicati prima della funzione
+          (changed().hasOnly(['keywords']) && keywordsOk(request.resource.data.keywords))
+          ||
+          // scambio bloccato: lo chiude l'amministratore (i KP si spostano nella stessa operazione)
+          (resource.data.status == 'consegnato'
+            && request.resource.data.status == 'concluso'
+            && changed().hasOnly(['status', 'chiusoDaAdmin', 'completionDate'])
+            && request.resource.data.chiusoDaAdmin == true
+            && request.resource.data.completionDate == request.time)
+          ||
+          // scambio bloccato: lo annulla (l'annuncio torna disponibile, nessun KP si muove)
+          (resource.data.status == 'consegnato'
+            && request.resource.data.status == 'disponibile'
+            && changed().hasOnly(['status', 'reservedBy', 'reservedByName', 'deliveredAt', 'aiutoRichiesto'])
+            && request.resource.data.reservedBy == null
+            && request.resource.data.reservedByName == null
+            && request.resource.data.deliveredAt == null
+            && request.resource.data.aiutoRichiesto == false)
+        );
+      }
+
+      allow get: if signedIn();
+
+      // Le query devono filtrare per stato pubblico, per proprietario, oppure essere dell'admin
+      allow list: if signedIn() && (
+        resource.data.status in ['disponibile', 'in_trattativa']
+        || resource.data.ownerId == request.auth.uid
+        || resource.data.get('reservedBy', null) == request.auth.uid
+        || isAdmin()
+      );
+
+      // Solo ID automatici (20 lettere/numeri): un ID scelto a mano potrebbe contenere codice
+      allow create: if signedIn() && notSuspended() && exists(cfgPath())
+        && offerId.matches('^[A-Za-z0-9]{20}$')
+        && createOk(request.resource.data, cfg());
+
+      allow update: if signedIn() && (ownerUpdate() || buyerUpdate() || reporterUpdate() || adminUpdate());
+
+      // Il proprietario puo' sempre eliminare i propri annunci (anche per cancellare l'account);
+      // l'admin quelli non ancora conclusi
+      allow delete: if signedIn() && (
+        resource.data.ownerId == request.auth.uid
+        || (isAdmin() && resource.data.status != 'concluso')
+      );
+
+      // ---- Foto a piena risoluzione (scaricate solo quando si apre la galleria) ----
+      match /foto/{fotoId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && fotoId in ['0', '1', '2']
+          && !exists(offerPath())
+          && getAfter(offerPath()).data.ownerId == request.auth.uid
+          && int(fotoId) < getAfter(offerPath()).data.fotoCount
+          && request.resource.data.keys().hasOnly(['src'])
+          && request.resource.data.src is string
+          && request.resource.data.src.size() < 250000;
+        allow delete: if signedIn()
+          && (get(offerPath()).data.ownerId == request.auth.uid || isAdmin());
+        allow update: if false;
+      }
+
+      // ---- Segnalazioni sulla valutazione (una per utente) ----
+      match /segnalazioni/{reporterId} {
+        allow get: if signedIn() && (reporterId == request.auth.uid || isAdmin());
+        allow list: if isAdmin();
+        allow create: if signedIn()
+          && reporterId == request.auth.uid
+          && get(offerPath()).data.ownerId != request.auth.uid
+          && request.resource.data.keys().hasOnly(['motivo', 'ts', 'tipo'])
+          && request.resource.data.tipo in ['valore', 'offensivo', 'vietato', 'truffa', 'altro']
+          && request.resource.data.motivo is string
+          && request.resource.data.motivo.size() <= 300
+          && (request.resource.data.tipo != 'altro' || request.resource.data.motivo.size() > 0)
+          && request.resource.data.ts == request.time
+          && getAfter(offerPath()).data.get('reportCount', 0) == get(offerPath()).data.get('reportCount', 0) + 1;
+        allow update, delete: if false;
+      }
+    }
+
+    // =================================================================
+    // PROBLEMI SEGNALATI DAGLI UTENTI ("Segnala un problema")
+    // ID = uid_minuto: al massimo una segnalazione al minuto per persona
+    // =================================================================
+    match /problemi/{id} {
+      function minuto() {
+        return math.floor(request.time.toMillis() / 60000);
+      }
+      allow create: if signedIn()
+        && (id == request.auth.uid + '_' + string(minuto())
+            || id == request.auth.uid + '_' + string(minuto() - 1)
+            || id == request.auth.uid + '_' + string(minuto() + 1))
+        && request.resource.data.keys().hasOnly(['uid', 'nome', 'testo', 'pagina', 'ua', 'ts'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.nome is string && request.resource.data.nome.size() <= 80
+        && request.resource.data.testo is string && request.resource.data.testo.size() >= 5 && request.resource.data.testo.size() <= 1000
+        && request.resource.data.pagina is string && request.resource.data.pagina.size() <= 40
+        && request.resource.data.ua is string && request.resource.data.ua.size() <= 200
+        && request.resource.data.ts == request.time;
+      allow get, list, delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // =================================================================
+    // QUOTE ANTI-FLOOD: almeno 30 secondi tra due annunci e massimo 20 al giorno.
+    // Ogni nuovo annuncio deve aggiornare questo documento nello stesso invio.
+    // =================================================================
+    match /quote/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['lastOfferAt', 'offerDay', 'offerCount'])
+        && request.resource.data.lastOfferAt == request.time
+        && request.resource.data.offerDay == oggi()
+        && request.resource.data.offerCount is int
+        && request.resource.data.offerCount <= 20
+        && (
+          (resource == null && request.resource.data.offerCount == 1)
+          || (resource != null
+              && request.time > resource.data.lastOfferAt + duration.value(30, 's')
+              && ((resource.data.offerDay == oggi() && request.resource.data.offerCount == resource.data.offerCount + 1)
+                  || (resource.data.offerDay != oggi() && request.resource.data.offerCount == 1)))
+        );
+      // si puo' cancellare (es. eliminazione account) solo dopo un giorno di inattivita'
+      allow delete: if signedIn() && request.auth.uid == uid
+        && request.time > resource.data.lastOfferAt + duration.value(1, 'd');
+    }
+
+    // =================================================================
+    // RIMOZIONI: avviso all'autore di un annuncio tolto da un amministratore
+    // =================================================================
+    match /rimozioni/{offerId} {
+      allow get, list: if signedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['ownerId', 'title', 'motivo', 'nota', 'by', 'at', 'visto'])
+        && request.resource.data.ownerId == get(/databases/$(database)/documents/offerte/$(offerId)).data.ownerId
+        && request.resource.data.title is string && request.resource.data.title.size() <= 100
+        && request.resource.data.motivo in ['valore', 'offensivo', 'vietato', 'truffa', 'altro']
+        && request.resource.data.nota is string && request.resource.data.nota.size() <= 300
+        && request.resource.data.by == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.visto == false;
+      // l'autore segna di averlo letto
+      allow update: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visto'])
+        && request.resource.data.visto == true;
+      allow delete: if signedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    // =================================================================
+    // PUSH TOKENS: indirizzi per le notifiche, visibili solo al proprietario
+    // (il server su Vercel li legge con credenziali di amministrazione)
+    // =================================================================
+    match /pushTokens/{uid} {
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['tokens', 'updatedAt'])
+        && request.resource.data.tokens is list
+        && request.resource.data.tokens.size() <= 5
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // Stato interno delle notifiche (solo server)
+    match /notifyState/{id} {
+      allow read, write: if false;
+    }
+
+    // =================================================================
+    // CHATS
+    // =================================================================
+    match /chats/{chatId} {
+
+      function chatUsers() {
+        return get(/databases/$(database)/documents/chats/$(chatId)).data.users;
+      }
+      function offerOf(id) {
+        return get(/databases/$(database)/documents/offerte/$(id)).data;
+      }
+      // Chat solo per annunci disponibili, non segnalati, e se i KP bastano
+      function canOpenChat() {
+        return request.resource.data.offerId is string
+          && offerOf(request.resource.data.offerId).status == 'disponibile'
+          && offerOf(request.resource.data.offerId).ownerId != request.auth.uid
+          && offerOf(request.resource.data.offerId).ownerId == request.resource.data.ownerId
+          && offerOf(request.resource.data.offerId).get('reportCount', 0) < cfg().sogliaSegnalazioni
+          && offerOf(request.resource.data.offerId).get('nascosto', false) == false
+          && (isAdmin()
+              || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('karmaPoints', 0)
+                   >= offerOf(request.resource.data.offerId).cpValue);
+      }
+
+      allow create: if signedIn()
+        && notSuspended()
+        && chatId.matches('^[A-Za-z0-9]{20}$')
+        && request.resource.data.keys().hasOnly(['offerId', 'offerTitle', 'ownerId', 'buyerId', 'buyerName', 'users',
+                                                 'createdAt', 'lastMessage', 'lastMessageTimestamp', 'lastMessageSenderId'])
+        && request.resource.data.offerTitle is string && request.resource.data.offerTitle.size() <= 100
+        && request.resource.data.buyerName is string && request.resource.data.buyerName.size() <= 80
+        && request.resource.data.lastMessage is string && request.resource.data.lastMessage.size() <= 60
+        && request.resource.data.lastMessageSenderId == request.auth.uid
+        && request.resource.data.users is list
+        && request.resource.data.users.size() == 2
+        && request.auth.uid in request.resource.data.users
+        && request.resource.data.buyerId == request.auth.uid
+        && request.resource.data.ownerId in request.resource.data.users
+        && canOpenChat();
+
+      allow get: if signedIn() && request.auth.uid in resource.data.users;
+      // Il client DEVE filtrare con where("users", "array-contains", uid)
+      allow list: if signedIn() && request.auth.uid in resource.data.users;
+
+      // Si aggiorna solo l'anteprima dell'ultimo messaggio, scritta da chi l'ha mandato
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.users
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['lastMessage', 'lastMessageTimestamp', 'lastMessageSenderId'])
+        && request.resource.data.lastMessage is string
+        && request.resource.data.lastMessage.size() <= 60
+        && request.resource.data.lastMessageSenderId == request.auth.uid
+        && request.resource.data.lastMessageTimestamp == request.time;
+
+      allow delete: if signedIn() && request.auth.uid in resource.data.users;
+
+      match /messages/{messageId} {
+        allow read: if signedIn() && request.auth.uid in chatUsers();
+        allow create: if signedIn()
+          && notSuspended()
+          && request.auth.uid in chatUsers()
+          && request.resource.data.keys().hasOnly(['senderId', 'senderName', 'text', 'system', 'timestamp'])
+          && request.resource.data.senderId == request.auth.uid
+          && (!('senderName' in request.resource.data)
+              || (request.resource.data.senderName is string && request.resource.data.senderName.size() <= 80))
+          && (!('system' in request.resource.data) || request.resource.data.system is bool)
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000
+          && request.resource.data.timestamp == request.time;
+        allow delete: if signedIn() && request.auth.uid in chatUsers();
+        allow update: if false;
+      }
+    }
+  }
+}

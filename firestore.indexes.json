@@ -1,0 +1,30 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "offerte",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "offerte",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "cpValue", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "offerte",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "keywords", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -116,11 +116,13 @@
 
           <div class="mb-4">
             <label for="title" class="block text-sm font-medium text-gray-700">Titolo</label>
-            <input type="text" id="title" required maxlength="100" oninput="onOfferTextChange()" class="field" placeholder="Es. Bicicletta da città 28 pollici">
+            <input type="text" id="title" required minlength="5" maxlength="50" oninput="onOfferTextChange()" class="field" placeholder="Es. Bicicletta da città 28 pollici">
+            <p id="title-count" class="text-count">0/50</p>
           </div>
           <div class="mb-4">
             <label for="description" class="block text-sm font-medium text-gray-700">Descrizione</label>
-            <textarea id="description" rows="3" required maxlength="1000" oninput="onOfferTextChange()" class="field" placeholder="Descrivi cosa offri, eventuali difetti, dove si ritira."></textarea>
+            <textarea id="description" rows="3" required minlength="10" maxlength="150" oninput="onOfferTextChange()" class="field" placeholder="Descrivi cosa offri, eventuali difetti, dove si ritira."></textarea>
+            <p id="description-count" class="text-count">0/150</p>
           </div>
 
           <!-- FOTO -->
@@ -273,6 +275,7 @@
           <button onclick="openBugReport()" class="underline">🐞 Segnala un problema</button> ·
           <button onclick="deleteMyAccount()" class="underline text-red-600">Elimina il mio account</button>
         </p>
+        <p id="app-version" class="text-center text-xs text-gray-400"></p>
       </div>
     </section>
 

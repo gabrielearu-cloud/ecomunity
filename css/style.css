@@ -291,6 +291,17 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neu
 .camera-flash { animation: camflash .25s; }
 @keyframes camflash { 0% { filter: brightness(2.5); } 100% { filter: none; } }
 
+/* ===== Zona dell'annuncio ===== */
+.offer-zone { margin-top: .4rem; font-size: .8rem; font-weight: 600; color: #166534; }
+.offer-zone-km { font-weight: 500; color: #4b5563; }
+.offer-zone-none { color: #9ca3af; font-weight: 500; }
+.offer-zone-link { color: #6b7280; font-weight: 500; text-decoration: underline; background: none; border: 0; padding: 0; font-size: inherit; text-align: left; }
+.publish-zone { display: flex; align-items: center; justify-content: space-between; gap: .6rem; margin-bottom: 1rem; padding: .6rem .75rem;
+  border-radius: .5rem; background: #f0fdf4; border: 1px solid #bbf7d0; font-size: .82rem; color: #166534; }
+.publish-zone button { flex-shrink: 0; font-weight: 600; text-decoration: underline; color: #15803d; background: none; border: 0; }
+.publish-zone.publish-zone-missing { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.publish-zone.publish-zone-missing button { color: #b45309; }
+
 /* ===== Contatori caratteri (titolo / descrizione) ===== */
 .text-count { text-align: right; font-size: .72rem; color: #9ca3af; margin-top: .2rem; }
 .text-count.text-count-warn { color: #b45309; font-weight: 600; }

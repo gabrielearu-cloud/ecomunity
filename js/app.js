@@ -357,7 +357,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v17';
+export const APP_VERSIONE = 'rikeka-v18';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -1852,9 +1852,17 @@ window.sendBugReport = async function () {
   const testo = $('bug-text').value.trim().slice(0, 1000);
   if (!me || testo.length < 5) return;
   const btn = $('bug-send'); btn.disabled = true; btn.textContent = 'Invio…';
-  const id = `${me.uid}_${Math.floor(Date.now() / 60000)}`;
   try {
-    await setDoc(doc(db, 'problemi', id), {
+    // Al massimo una segnalazione al minuto (controllato anche dalle regole)
+    const qRef = doc(db, 'problemiQuota', me.uid);
+    const ultimo = tsToDate((await getDoc(qRef)).data()?.ultimo)?.getTime() || 0;
+    const attesa = Math.ceil((ultimo + 61000 - Date.now()) / 1000);
+    if (attesa > 0) { alert(`Hai appena inviato una segnalazione: aspetta ${attesa} secondi e riprova.`); return; }
+
+    const ref = doc(collection(db, 'problemi'));
+    const batch = writeBatch(db);
+    batch.set(qRef, { ultimo: serverTimestamp() });
+    batch.set(ref, {
       uid: me.uid,
       nome: (me.displayName || 'Utente').slice(0, 80),
       testo,
@@ -1862,13 +1870,14 @@ window.sendBugReport = async function () {
       ua: (APP_VERSIONE + ' · ' + navigator.userAgent).slice(0, 200),
       ts: serverTimestamp()
     });
-    notify('bug', { problemaId: id });
+    await batch.commit();
+    notify('bug', { problemaId: ref.id });
     window.closeBugReport();
     alert('Grazie! La segnalazione è arrivata agli amministratori.');
   } catch (e) {
-    reportError('sendBugReport', e);
+    reportError('sendBugReport', e, { versione: APP_VERSIONE });
     alert(e?.code === 'permission-denied'
-      ? 'Hai già inviato una segnalazione meno di un minuto fa: aspetta un attimo e riprova.'
+      ? "Il server non ha accettato la segnalazione. Se hai appena aggiornato l'app, chiudila e riaprila (versione in fondo al Profilo: " + APP_VERSIONE + ') e riprova.'
       : 'Invio non riuscito: ' + friendlyError(e));
   } finally {
     btn.textContent = 'Invia';

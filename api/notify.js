@@ -132,15 +132,16 @@ export default async function handler(req, res) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const n = await buildNotification(db, uid, body);
     const destinatari = n ? (n.toList || [n.to]).filter((d) => d && (d !== uid || n.self)) : [];
-    if (!destinatari.length) return res.status(200).json({ sent: 0, reason: 'not-applicable' });
+    const traccia = (esito, extra = {}) => console.log('[notify]', JSON.stringify({ tipo: String(body.type || '').slice(0, 20), esito, ...extra }));
+    if (!destinatari.length) { traccia('non-applicabile'); return res.status(200).json({ sent: 0, reason: 'not-applicable' }); }
 
     // Anti-spam: una notifica al minuto per chiave; per gli annunci una sola per stato
     const stateRef = db.doc(`notifyState/${n.key}`);
     const prev = (await stateRef.get()).data();
     if (prev) {
-      if (n.status && prev.status === n.status) return res.status(200).json({ sent: 0, reason: 'already-sent' });
+      if (n.status && prev.status === n.status) { traccia('gia-inviata'); return res.status(200).json({ sent: 0, reason: 'already-sent' }); }
       const intervallo = n.key.startsWith('msg_') ? MSG_INTERVAL_MS : MIN_INTERVAL_MS;
-      if (Date.now() - (prev.at?.toMillis?.() || 0) < intervallo) return res.status(200).json({ sent: 0, reason: 'throttled' });
+      if (Date.now() - (prev.at?.toMillis?.() || 0) < intervallo) { traccia('troppo-ravvicinata'); return res.status(200).json({ sent: 0, reason: 'throttled' }); }
     }
 
     const tokens = [], refDi = new Map();   // token -> documento da cui viene
@@ -148,7 +149,7 @@ export default async function handler(req, res) {
       const snap = await db.doc(`pushTokens/${d}`).get();
       (snap.exists ? (snap.data().tokens || []) : []).forEach((t) => { tokens.push(t); refDi.set(t, snap.ref); });
     }
-    if (!tokens.length) return res.status(200).json({ sent: 0, reason: 'no-tokens' });
+    if (!tokens.length) { traccia('destinatario-senza-dispositivi'); return res.status(200).json({ sent: 0, reason: 'no-tokens' }); }
 
     const result = await messaging.sendEachForMulticast({
       tokens,
@@ -166,6 +167,7 @@ export default async function handler(req, res) {
 
     await stateRef.set({ at: FieldValue.serverTimestamp(), status: n.status || null });
     const errors = result.responses.map((r) => r.error?.code).filter(Boolean);
+    traccia('inviata', { dispositivi: tokens.length, consegnate: result.successCount, errori: [...new Set(errors)], tokenRimossi: dead.length });
     return res.status(200).json({ sent: result.successCount, tokens: tokens.length, errors: [...new Set(errors)] });
   } catch (e) {
     console.error('notify error', e);

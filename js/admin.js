@@ -36,8 +36,35 @@ window.openAdmin = async function () {
 
 window.refreshAdmin = async function () {
   if (!state.isAdmin) return;
-  await Promise.all([loadStats(), loadIscrizioni(), loadAdmins(), loadControl(), loadReviewQueue(), loadReported(), loadLogs()]);
+  await Promise.all([loadStats(), loadBugs(), loadIscrizioni(), loadAdmins(), loadControl(), loadReviewQueue(), loadReported(), loadLogs()]);
   fillCatalogEditor();
+};
+
+// ---------- Problemi segnalati dagli utenti ----------
+async function loadBugs() {
+  const box = $('admin-bugs');
+  box.innerHTML = '<p class="text-xs text-gray-500">Caricamento...</p>';
+  try {
+    const snap = await getDocs(query(collection(db, 'problemi'), orderBy('ts', 'desc'), limit(30)));
+    if (snap.empty) { box.innerHTML = '<p class="text-xs text-gray-400">Nessun problema segnalato. 🎉</p>'; return; }
+    box.innerHTML = snap.docs.map((d) => {
+      const p = d.data(), t = tsToDate(p.ts);
+      return `<div class="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs">
+        <div class="flex justify-between gap-2"><b>${esc(p.nome)}</b><span class="text-gray-500">${t ? esc(t.toLocaleString('it-IT')) : ''}</span></div>
+        <p class="mt-1 text-sm text-gray-800" style="white-space:pre-wrap">${esc(p.testo)}</p>
+        <p class="mt-1 text-gray-500" style="word-break:break-all">Schermata: ${esc(p.pagina || '-')} · ${esc(p.ua)}</p>
+        <button onclick="deleteBug('${sid(d.id)}')" class="mt-2 px-3 py-1 rounded bg-white border border-gray-300">✓ Risolto, elimina</button>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    reportError('admin.loadBugs', e);
+    box.innerHTML = `<p class="text-xs text-red-600">${regoleVecchie(e)}</p>`;
+  }
+}
+window.deleteBug = async function (id) {
+  if (!id) return;
+  try { await deleteDoc(doc(db, 'problemi', id)); await loadBugs(); }
+  catch (e) { reportError('admin.deleteBug', e); alert('Non eliminato: ' + regoleVecchie(e)); }
 };
 
 // ---------- Iscrizioni aperte / chiuse ----------

@@ -23,6 +23,7 @@ import { $, val, esc, sid, safeImg, tsToDate, compressImage } from './utils.js';
 import { checkAdmin } from './admin.js';
 import { notify, initPushUi, removePushTokens } from './push.js';
 import './install.js';
+import { parolaVietata } from './filtro.js';
 
 // ---------- 2. STATO LOCALE ----------
 let currentOfferType = 'bene';
@@ -341,6 +342,10 @@ function updateFotoLabels() {
     $('slot-label-' + i).innerHTML = `<span style="font-size:1.5rem">＋</span><small>Foto ${i + 1}${star}</small>`;
   });
 }
+
+// Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
+const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
+const ANNUNCI_MAX_GIORNO = 20;
 
 // Miniatura in elenco: ~12 KB. Si scarica a ogni apertura della home, quindi e' il dato
 // che pesa di piu' sui limiti gratuiti di Firebase. La foto grande si scarica solo se la tocchi.
@@ -812,6 +817,11 @@ window.publishOffer = async function (event) {
   const title = val('title').trim();
   const description = val('description').trim();
   if (!title || !description) return alert('Compila titolo e descrizione.');
+  const vietata = parolaVietata(title, description);
+  if (vietata) {
+    logEvent('offer_bad_words', { parola: vietata }, 'warn');
+    return alert(`Il testo contiene una parola non ammessa su Rikeka («${vietata}»).\nModifica titolo o descrizione e riprova.`);
+  }
 
   const valore = calcolaValore();
   if (valore.incomplete) return alert('Compila tutti i campi di valutazione.');
@@ -827,8 +837,22 @@ window.publishOffer = async function (event) {
   const btn = $('publish-btn');
   btn.disabled = true; btn.textContent = 'Pubblicazione...';
   try {
+    // Anti-flood (controllato anche dalle regole): 30 secondi tra due annunci, 20 al giorno
+    let quota = null;
+    if (!state.isAdmin) {
+      const qRef = doc(db, 'quote', me.uid);
+      const q = (await getDoc(qRef)).data();
+      const d = new Date(), giorno = d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+      const ultimo = tsToDate(q?.lastOfferAt)?.getTime() || 0;
+      const attesa = Math.ceil((ultimo + ANNUNCI_INTERVALLO_MS - Date.now()) / 1000);
+      if (attesa > 0) { alert(`Hai appena pubblicato un annuncio: aspetta ${attesa} secondi prima del prossimo.`); return; }
+      const contati = q?.offerDay === giorno ? (q.offerCount || 0) : 0;
+      if (contati >= ANNUNCI_MAX_GIORNO) { alert(`Hai raggiunto il massimo di ${ANNUNCI_MAX_GIORNO} annunci per oggi. Potrai pubblicarne altri domani.`); return; }
+      quota = { ref: qRef, dati: { lastOfferAt: serverTimestamp(), offerDay: giorno, offerCount: contati + 1 } };
+    }
     const offerRef = doc(collection(db, 'offerte'));
     const batch = writeBatch(db);
+    if (quota) batch.set(quota.ref, quota.dati);
     batch.set(offerRef, {
       title,
       description,
@@ -1715,20 +1739,31 @@ window.declineTerms = async function () {
 // ---------- 13c. ELIMINAZIONE ACCOUNT (diritto alla cancellazione) ----------
 let deletingAccount = false;
 
-window.deleteMyAccount = async function () {
-  const me = auth.currentUser;
-  if (!me) return;
+// Passo 1: finestra dell'app (niente prompt del browser: farebbe scadere il "tocco"
+// e Chrome bloccherebbe poi la finestra di Google con auth/popup-blocked)
+window.deleteMyAccount = function () {
+  if (!auth.currentUser) return;
   const inTrattativa = myOffers.filter((o) => o.data.status === 'in_trattativa').length;
-  const msg = 'Vuoi eliminare definitivamente il tuo account?\n\n' +
-    'Verranno cancellati profilo, saldo KP, tutti i tuoi annunci con le foto e tutte le tue chat. ' +
-    'L\'operazione non si può annullare.' +
-    (inTrattativa ? `\n\nAttenzione: hai ${inTrattativa} annunci in trattativa, che verranno annullati.` : '');
-  if (!confirm(msg)) return;
-  if ((prompt('Per confermare scrivi ELIMINA') || '').trim().toUpperCase() !== 'ELIMINA') return;
+  $('delete-warn').textContent = inTrattativa
+    ? `Attenzione: hai ${inTrattativa} ${inTrattativa === 1 ? 'annuncio' : 'annunci'} in trattativa, che verranno annullati.` : '';
+  $('delete-confirm-input').value = '';
+  $('delete-go').disabled = true;
+  $('delete-modal').style.display = 'flex';
+};
+window.closeDeleteModal = function () { $('delete-modal').style.display = 'none'; };
+window.checkDeleteInput = function () {
+  $('delete-go').disabled = $('delete-confirm-input').value.trim().toUpperCase() !== 'ELIMINA';
+};
 
+// Passo 2: il tocco su "Elimina definitivamente" apre SUBITO la finestra di Google
+window.confirmDeleteAccount = async function () {
+  const me = auth.currentUser;
+  if (!me || $('delete-confirm-input').value.trim().toUpperCase() !== 'ELIMINA') return;
+  $('delete-go').disabled = true;
   try {
     // 1. Conferma l'identità con Google (richiesto da Firebase per eliminare un account)
     await reauthenticateWithPopup(me, googleProvider);
+    window.closeDeleteModal();
     deletingAccount = true;
     logEvent('account_deleted', { offers: myOffers.length, chats: allChatsData.length }, 'warn');
 
@@ -1751,6 +1786,7 @@ window.deleteMyAccount = async function () {
     // 4. Profilo e token delle notifiche
     stopListeners();
     await removePushTokens(me.uid);
+    try { await deleteDoc(doc(db, 'quote', me.uid)); } catch (_) { /* annuncio recente: resta solo un orario */ }
     try {
       const rim = await getDocs(query(collection(db, 'rimozioni'), where('ownerId', '==', me.uid)));
       for (const d of rim.docs) await deleteDoc(d.ref);
@@ -1765,9 +1801,52 @@ window.deleteMyAccount = async function () {
     location.reload();
   } catch (e) {
     deletingAccount = false;
+    window.checkDeleteInput();   // riabilita il pulsante per riprovare
     if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') return;
+    if (e?.code === 'auth/popup-blocked') {
+      alert('Il browser ha bloccato la finestra di Google. Premi di nuovo "Elimina definitivamente"; se non basta, consenti i popup per questo sito.');
+      return;
+    }
     reportError('deleteMyAccount', e);
     alert('Eliminazione non completata: ' + friendlyError(e) + '\nRiprova; se il problema continua scrivi al gestore.');
+  }
+};
+
+// ---------- 13c. SEGNALA UN PROBLEMA ----------
+window.openBugReport = function () {
+  if (!auth.currentUser) return;
+  $('bug-text').value = '';
+  $('bug-send').disabled = true;
+  $('bug-modal').style.display = 'flex';
+  setTimeout(() => $('bug-text').focus(), 50);
+};
+window.closeBugReport = function () { $('bug-modal').style.display = 'none'; };
+window.sendBugReport = async function () {
+  const me = auth.currentUser;
+  const testo = $('bug-text').value.trim().slice(0, 1000);
+  if (!me || testo.length < 5) return;
+  const btn = $('bug-send'); btn.disabled = true; btn.textContent = 'Invio…';
+  const id = `${me.uid}_${Math.floor(Date.now() / 60000)}`;
+  try {
+    await setDoc(doc(db, 'problemi', id), {
+      uid: me.uid,
+      nome: (me.displayName || 'Utente').slice(0, 80),
+      testo,
+      pagina: (document.querySelector('.screen.active')?.id || '').slice(0, 40),
+      ua: navigator.userAgent.slice(0, 200),
+      ts: serverTimestamp()
+    });
+    notify('bug', { problemaId: id });
+    window.closeBugReport();
+    alert('Grazie! La segnalazione è arrivata agli amministratori.');
+  } catch (e) {
+    reportError('sendBugReport', e);
+    alert(e?.code === 'permission-denied'
+      ? 'Hai già inviato una segnalazione meno di un minuto fa: aspetta un attimo e riprova.'
+      : 'Invio non riuscito: ' + friendlyError(e));
+  } finally {
+    btn.textContent = 'Invia';
+    btn.disabled = $('bug-text').value.trim().length < 5;
   }
 };
 

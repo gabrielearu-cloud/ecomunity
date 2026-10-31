@@ -1,3 +1,14 @@
+/* L'app occupa sempre esattamente la larghezza del telefono: niente scorrimento laterale */
+html, body { overflow-x: hidden; max-width: 100%; }
+body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+#chat-screen { width: 100%; overflow-x: hidden; }
+.chat-wrap { min-width: 0; }
+/* iPhone: con testo sotto i 16px Safari ingrandisce la pagina quando tocchi un campo
+   e non la rimette a posto (chat "tagliata"). Sui telefoni tutti i campi a 16px. */
+@media (pointer: coarse) {
+  input, textarea, select { font-size: 16px !important; }
+}
+
 .screen:not(.active) { display: none; }
 .screen {
   display: flex; flex-direction: column;
@@ -185,6 +196,8 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neu
   background: #fff; border-top: 1px solid #e5e7eb;
   padding-bottom: calc(.6rem + env(safe-area-inset-bottom));
 }
+/* Con la tastiera aperta la barretta del tasto Home non c'e': niente spazio vuoto */
+#chat-screen.chat-tastiera .chat-composer { padding-bottom: .6rem; }
 .chat-input {
   flex: 1; min-width: 0; padding: .65rem 1rem; border: 1px solid #e5e7eb; border-radius: 9999px;
   background: #f9fafb; font-size: .95rem; font-family: inherit;

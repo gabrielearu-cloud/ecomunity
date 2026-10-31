@@ -126,6 +126,8 @@ service cloud.firestore {
         && request.resource.data.sogliaVerifica is int
         && request.resource.data.maxKpNuovoUtente is int
         && request.resource.data.kpIniziali is int
+        && (!('kpPrimoScambio' in request.resource.data)
+            || (request.resource.data.kpPrimoScambio is int && request.resource.data.kpPrimoScambio >= 0))
         && request.resource.data.maxOre is number
         && request.resource.data.sogliaSegnalazioni is int
         && request.resource.data.condizioni is map
@@ -164,7 +166,15 @@ service cloud.firestore {
       }
       function transferKeysOnly() {
         return request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['karmaPoints', 'completedSwaps', 'lastOfferId', 'fbPos', 'fbNeg']);
+          .hasOnly(['karmaPoints', 'completedSwaps', 'lastOfferId', 'fbPos', 'fbNeg', 'bonusPrimoScambio']);
+      }
+      // Bonus di benvenuto in sospeso: si incassa al primo scambio concluso (regalando o ricevendo)
+      // e nella stessa scrittura torna a zero. I profili creati prima del bonus non lo hanno.
+      function bonus() {
+        return resource.data.get('bonusPrimoScambio', 0);
+      }
+      function bonusIncassato() {
+        return request.resource.data.get('bonusPrimoScambio', 0) == 0;
       }
       // Giudizi ricevuti: +1 esatto al contatore giusto (giudizio null = nessuna variazione)
       function fbInc(giudizio) {
@@ -191,8 +201,9 @@ service cloud.firestore {
           && exchangeConcluding()
           && offerBefore().ownerId == userId
           && fbInc(offerAfter().get('feedback', null))
+          && bonusIncassato()
           && request.resource.data.karmaPoints
-               == resource.data.get('karmaPoints', 0) + offerBefore().cpValue;
+               == resource.data.get('karmaPoints', 0) + offerBefore().cpValue + bonus();
       }
       // Chi riceve paga esattamente il valore dell'annuncio, mai sotto zero
       function buyerPays() {
@@ -200,8 +211,9 @@ service cloud.firestore {
           && transferKeysOnly()
           && exchangeConcluding()
           && fbInc(null)
+          && bonusIncassato()
           && request.resource.data.karmaPoints
-               == resource.data.get('karmaPoints', 0) - offerBefore().cpValue
+               == resource.data.get('karmaPoints', 0) - offerBefore().cpValue + bonus()
           && request.resource.data.karmaPoints >= 0;
       }
       // Chi ha regalato giudica chi ha ricevuto (una volta, dopo lo scambio concluso)
@@ -220,11 +232,12 @@ service cloud.firestore {
       // tolti a chi ha ricevuto (mai sotto zero; un admin non paga)
       function adminCloses() {
         let o = offerBefore();
-        let k = resource.data.get('karmaPoints', 0);
+        let k = resource.data.get('karmaPoints', 0) + bonus();
         let nk = request.resource.data.karmaPoints;
         return isAdmin()
           && transferKeysOnly()
           && fbInc(null)
+          && bonusIncassato()
           && request.resource.data.lastOfferId is string
           && o.status == 'consegnato'
           && offerAfter().status == 'concluso'
@@ -256,7 +269,8 @@ service cloud.firestore {
           && transferKeysOnly()
           && exchangeConcluding()
           && fbInc(null)
-          && request.resource.data.karmaPoints == resource.data.get('karmaPoints', 0);
+          && bonusIncassato()
+          && request.resource.data.karmaPoints == resource.data.get('karmaPoints', 0) + bonus();
       }
 
       allow get: if signedIn();
@@ -265,15 +279,18 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == userId
         && (iscrizioniAperte() || isAdmin())
-        && request.resource.data.keys().hasOnly(['displayName', 'karmaPoints', 'completedSwaps', 'termsVersion', 'termsAcceptedAt'])
+        && request.resource.data.keys().hasOnly(['displayName', 'karmaPoints', 'completedSwaps', 'termsVersion', 'termsAcceptedAt',
+                                                 'bonusPrimoScambio'])
         && request.resource.data.termsVersion is string
         && request.resource.data.termsAcceptedAt == request.time
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() <= 80
         && request.resource.data.completedSwaps == 0
         && (
-          (exists(cfgPath()) && request.resource.data.karmaPoints == cfg().kpIniziali)
-          || (!exists(cfgPath()) && request.resource.data.karmaPoints == 100)
+          (exists(cfgPath()) && request.resource.data.karmaPoints == cfg().kpIniziali
+             && request.resource.data.get('bonusPrimoScambio', 0) == cfg().get('kpPrimoScambio', 0))
+          || (!exists(cfgPath()) && request.resource.data.karmaPoints == 100
+             && request.resource.data.get('bonusPrimoScambio', 0) == 0)
         );
 
       allow update: if signedIn() && (profileEdit() || giverGains() || buyerPays() || adminReceives()

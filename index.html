@@ -39,6 +39,7 @@
         <li>Chi è interessato ti <b>scrive in chat</b> e scegli tu a chi darlo.</li>
         <li>Dopo la consegna, chi riceve <b>conferma</b> e i KP passano a te.</li>
       </ol>
+      <p>All'iscrizione ricevi dei <b>KP di benvenuto</b>: una parte subito, il resto al tuo primo scambio concluso.</p>
       <p class="info-foot">Meno sprechi, più vicinato.</p>
       <p class="info-bug">Qualcosa non funziona? <button type="button" onclick="toggleInfo(event, false); openBugReport()">🐞 Segnala un problema</button></p>
       <button type="button" class="info-close" onclick="toggleInfo(event, false)">Ho capito</button>
@@ -514,6 +515,24 @@
     </label>
     <button id="consent-btn" disabled onclick="acceptTerms()" class="w-full py-3 rounded-md text-sm font-medium text-white bg-green-600 disabled:opacity-50">Continua</button>
     <button onclick="declineTerms()" class="w-full text-center py-2 mt-3 text-sm text-gray-500 hover:text-gray-800">Non accetto, esci</button>
+  </div>
+</div>
+
+<!-- MODAL: BENVENUTO (una sola volta, subito dopo l'iscrizione) -->
+<div id="welcome-modal" class="modal-overlay" style="z-index:250">
+  <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+    <p class="text-4xl mb-2 text-center">🎉</p>
+    <h3 class="text-lg font-semibold text-gray-800 mb-2 text-center">Benvenuto su Rikeka!</h3>
+    <p class="text-sm text-gray-700 mb-1 text-center">Hai ricevuto <b id="welcome-kp" class="text-green-700">50 KP</b> di benvenuto.</p>
+    <p id="welcome-bonus" class="text-sm text-gray-600 mb-4 text-center"></p>
+    <p class="text-sm text-gray-700 mb-2">I <b>Karma Points (KP)</b> sono la moneta di Rikeka: li usi per ricevere oggetti e aiuti dagli altri e li guadagni offrendo i tuoi.</p>
+    <ol class="text-sm text-gray-700 mb-5 list-decimal pl-5 space-y-1">
+      <li><b>Sfoglia</b> gli annunci vicino a te</li>
+      <li><b>Pubblica</b> qualcosa che non usi più o un aiuto che sai dare</li>
+      <li><b>Accordati in chat</b>: dopo la consegna, chi riceve conferma e i KP passano</li>
+    </ol>
+    <button onclick="event.stopPropagation(); chiudiBenvenuto(false)" class="w-full py-3 rounded-md text-sm font-medium text-white bg-green-600">Inizia</button>
+    <button onclick="event.stopPropagation(); chiudiBenvenuto(true)" class="w-full text-center py-2 mt-3 text-sm text-gray-500 hover:text-gray-800">Come funziona? <b>?</b></button>
   </div>
 </div>
 

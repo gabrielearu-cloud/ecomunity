@@ -364,7 +364,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v27';
+export const APP_VERSIONE = 'rikeka-v28';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -920,12 +920,12 @@ window.confermaEliminaChat = async function () {
   try {
     const chat = allChatsData.find((c) => c.id === id)?.data || {};
     const altro = (chat.users || []).find((u) => u !== me.uid);
+    // prima la si nasconde per se'; se l'altra persona l'aveva gia' eliminata,
+    // allora si cancella davvero (le regole lo permettono solo in questo caso)
+    await updateDoc(doc(db, 'chats', id), { [`nascosta.${me.uid}`]: serverTimestamp() });
+    logEvent('chat_hidden', { chatId: id });
     if (altro && nascostaPerMe(chat, altro)) {
-      // l'altra persona l'aveva gia' eliminata: ora si cancella davvero (messaggi compresi)
-      await window.deleteChat(null, id, { senzaConferma: true });
-    } else {
-      await updateDoc(doc(db, 'chats', id), { [`nascosta.${me.uid}`]: serverTimestamp() });
-      logEvent('chat_hidden', { chatId: id });
+      await window.deleteChat(null, id, { senzaConferma: true }).catch((e) => reportError('cancellaChatEntrambi', e, { chatId: id }));
     }
     if (currentChatId === id) currentChatId = null;
   } catch (e) {
@@ -1921,17 +1921,14 @@ window.confirmDeleteAccount = async function () {
     for (const o of myOffers) {
       await deleteOfferWithFotos(o.id);
     }
-    // 3. Chat e messaggi
+    // 3. Chat: spariscono per chi esce; l'altra persona conserva i messaggi.
+    //    Se anche l'altra l'aveva gia' eliminata, si cancellano davvero.
     for (const c of allChatsData) {
-      const msgs = await getDocs(collection(db, 'chats', c.id, 'messages'));
-      for (let i = 0; i < msgs.docs.length; i += 450) {
-        const b = writeBatch(db);
-        msgs.docs.slice(i, i + 450).forEach((m) => b.delete(m.ref));
-        await b.commit();
-      }
-      const b = writeBatch(db);
-      b.delete(doc(db, 'chats', c.id));
-      await b.commit();
+      try {
+        await updateDoc(doc(db, 'chats', c.id), { [`nascosta.${me.uid}`]: serverTimestamp() });
+        const altro = (c.data.users || []).find((u) => u !== me.uid);
+        if (altro && nascostaPerMe(c.data, altro)) await window.deleteChat(null, c.id, { senzaConferma: true });
+      } catch (e) { reportError('deleteAccount.chat', e, { chatId: c.id }); }
     }
     // 4. Profilo e token delle notifiche
     stopListeners();

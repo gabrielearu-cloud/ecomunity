@@ -6,7 +6,7 @@
 // Quando cambi i file dell'app non serve toccare nulla; aumenta VERSIONE
 // solo se aggiungi o rinomini file nell'elenco qui sotto.
 // =====================================================================
-const VERSIONE = 'rikeka-v24';
+const VERSIONE = 'rikeka-v25';
 const FILE_BASE = [
   './', './index.html', './privacy.html', './termini.html', './manifest.webmanifest',
   './css/style.css',
@@ -82,6 +82,8 @@ self.addEventListener('push', (event) => {
       const apple = /iphone|ipad|ipod|macintosh/i.test(self.navigator.userAgent);
       const chatId = (options.tag || '').startsWith('chat-') ? options.tag.slice(5) : null;
       if (!apple && chatId && wins.some((w) => w.visibilityState === 'visible' && w.focused && chatAperta.get(w.id) === chatId)) return;
+      // pallino sull'icona dell'app (iPhone con app installata, computer): si toglie aprendo le chat
+      if (chatId) { try { self.navigator.setAppBadge?.(); } catch (_) {} }
       return self.registration.showNotification(title, options);
     })
   );

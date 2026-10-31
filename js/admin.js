@@ -581,10 +581,13 @@ window.adminCloseDeal = async function (offerId) {
       const g = (await tx.get(gRef)).data(), r = (await tx.get(rRef)).data();
       const rAdmin = (await tx.get(doc(db, 'admins', o.reservedBy))).exists();
       if (!g || !r) throw new Error('Profilo utente non trovato.');
-      const rk = r.karmaPoints ?? 0;
+      const bonusG = g.bonusPrimoScambio ?? 0, bonusR = r.bonusPrimoScambio ?? 0;   // benvenuto al primo scambio
+      const rk = (r.karmaPoints ?? 0) + bonusR;
       tx.update(oRef, { status: 'concluso', chiusoDaAdmin: true, completionDate: serverTimestamp() });
-      tx.update(gRef, { karmaPoints: (g.karmaPoints ?? 0) + cp, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: offerId });
-      tx.update(rRef, { karmaPoints: rAdmin ? rk : Math.max(0, rk - cp), completedSwaps: (r.completedSwaps ?? 0) + 1, lastOfferId: offerId });
+      tx.update(gRef, { karmaPoints: (g.karmaPoints ?? 0) + cp + bonusG, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: offerId,
+        ...(bonusG ? { bonusPrimoScambio: 0 } : {}) });
+      tx.update(rRef, { karmaPoints: rAdmin ? rk : Math.max(0, rk - cp), completedSwaps: (r.completedSwaps ?? 0) + 1, lastOfferId: offerId,
+        ...(bonusR ? { bonusPrimoScambio: 0 } : {}) });
     });
     logEvent('admin_closed_deal', { offerId }, 'warn');
     loadControl();

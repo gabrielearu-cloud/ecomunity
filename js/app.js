@@ -15,7 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db, googleProvider } from './firebase.js';
 import { PAGE_SIZE, FOTO_MAX_CHARS, THUMB_MAX_CHARS, LEGAL } from './config.js';
-import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie, minFotoBeni, gruppiOrdinati, iconaGruppo, cercaSottocategorie, paroleChiaveAnnuncio, terminiRicerca, normalizzaTesto } from './catalog.js';
+import { valutaBene, valutaServizio, esitoPubblicazione, suggerisciSottocategorie, minFotoBeni, kpPrimoScambio, gruppiOrdinati, iconaGruppo, cercaSottocategorie, paroleChiaveAnnuncio, terminiRicerca, normalizzaTesto } from './catalog.js';
 import { distanzaKm, etichettaDistanza, cercaComuni, posizioneAttuale, zonaValida } from './geo.js';
 import { state } from './state.js';
 import { logEvent, reportError, friendlyError } from './logger.js';
@@ -1392,18 +1392,24 @@ window.submitFeedback = async function (feedbackType) {
       if (buyerKarma < paga) throw new Error(`Hai solo ${buyerKarma} KP: ne servono ${cp}.`);
 
       tx.update(offerRef, { status: 'concluso', feedback: feedbackType, completionDate: serverTimestamp() });
-      tx.update(buyerRef, { karmaPoints: buyerKarma - paga, completedSwaps: (b.completedSwaps ?? 0) + 1, lastOfferId: docId });
+      const bonusB = b.bonusPrimoScambio ?? 0, bonusG = g.bonusPrimoScambio ?? 0;   // benvenuto al primo scambio
+      tx.update(buyerRef, { karmaPoints: buyerKarma - paga + bonusB, completedSwaps: (b.completedSwaps ?? 0) + 1, lastOfferId: docId,
+        ...(bonusB ? { bonusPrimoScambio: 0 } : {}) });
       tx.update(giverRef, {
-        karmaPoints: (g.karmaPoints ?? 0) + cp, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: docId,
+        karmaPoints: (g.karmaPoints ?? 0) + cp + bonusG, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: docId,
+        ...(bonusG ? { bonusPrimoScambio: 0 } : {}),
         ...(feedbackType === 'positivo' ? { fbPos: (g.fbPos ?? 0) + 1 } : { fbNeg: (g.fbNeg ?? 0) + 1 })
       });
-      summary = { offerId: docId, title: o.title, type: o.type, kp: cp, giverId: o.ownerId, buyerId: me.uid, feedback: feedbackType };
+      summary = { offerId: docId, title: o.title, type: o.type, kp: cp, giverId: o.ownerId, buyerId: me.uid, feedback: feedbackType,
+                  bonusBuyer: bonusB, bonusGiver: bonusG };
     });
     logEvent('exchange_completed', summary, feedbackType === 'negativo' ? 'warn' : 'info');
     repCache.delete(summary.giverId);
     notify('concluded', { offerId: docId });
     postChatEvent(docId, `✅ Scambio concluso: ${summary.kp} KP trasferiti. Grazie!`);
-    alert(`Scambio concluso! Grazie: ${summary.kp} KP sono passati a chi ti ha aiutato.`);
+    alert(`Scambio concluso! Grazie: ${summary.kp} KP sono passati a chi ti ha aiutato.`
+      + (summary.bonusBuyer ? `\n\n🎉 Era il tuo primo scambio: hai ricevuto ${summary.bonusBuyer} KP di benvenuto!` : ''));
+    if (summary.bonusGiver) postChatEvent(docId, `🎉 Primo scambio di chi ha regalato: ${summary.bonusGiver} KP di benvenuto accreditati.`);
   } catch (e) {
     reportError('submitFeedback', e, { offerId: docId });
     alert('Scambio non concluso: ' + friendlyError(e));
@@ -1835,6 +1841,22 @@ async function iscrizioniPerNuovo() {
 
 // ---------- 13b. ACCETTAZIONE TERMINI ----------
 let consentMode = null;   // { newProfile: bool } mentre il modal e' aperto
+let benvenutoDaMostrare = null;   // { subito, dopo }: KP di benvenuto del profilo appena creato
+
+// Messaggio di benvenuto: compare una sola volta, subito dopo l'iscrizione
+function mostraBenvenuto({ subito, dopo }) {
+  $('welcome-kp').textContent = `${subito} KP`;
+  $('welcome-bonus').textContent = dopo > 0
+    ? `Al tuo primo scambio concluso (regalando o ricevendo) ne arrivano altri ${dopo}.`
+    : '';
+  $('welcome-modal').style.display = 'flex';
+}
+
+window.chiudiBenvenuto = function (apriGuida = false) {
+  $('welcome-modal').style.display = 'none';
+  if (apriGuida) { window.toggleInfo(null, true); return; }
+  if (!state.zona && !zonePromptShown) { zonePromptShown = true; setTimeout(() => window.openZoneModal(true), 300); }
+};
 
 function showConsent(mode) {
   if (consentMode) return;
@@ -1858,20 +1880,25 @@ window.acceptTerms = async function () {
   try {
     if (consentMode.newProfile) {
       await catalogReady;
+      const kpSubito = state.catalogOnServer ? state.catalog.kpIniziali : 100;
+      const kpDopo = state.catalogOnServer ? kpPrimoScambio(state.catalog) : 0;
       await setDoc(userRef, {
         displayName: (u.displayName || 'Utente Rikeka').slice(0, 80),
-        karmaPoints: state.catalogOnServer ? state.catalog.kpIniziali : 100,
+        karmaPoints: kpSubito,
         completedSwaps: 0,
+        ...(kpDopo > 0 ? { bonusPrimoScambio: kpDopo } : {}),
         termsVersion: LEGAL.versioneTermini,
         termsAcceptedAt: serverTimestamp()
       });
       logEvent('user_created', { termsVersion: LEGAL.versioneTermini });
+      benvenutoDaMostrare = { subito: kpSubito, dopo: kpDopo };
     } else {
       await updateDoc(userRef, { termsVersion: LEGAL.versioneTermini, termsAcceptedAt: serverTimestamp() });
       logEvent('terms_accepted', { termsVersion: LEGAL.versioneTermini });
     }
     $('consent-modal').style.display = 'none';
     consentMode = null;
+    if (benvenutoDaMostrare) { mostraBenvenuto(benvenutoDaMostrare); benvenutoDaMostrare = null; return; }
     if (!state.zona && !zonePromptShown) { zonePromptShown = true; setTimeout(() => window.openZoneModal(true), 300); }
   } catch (e) {
     reportError('acceptTerms', e);

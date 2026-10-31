@@ -17,7 +17,8 @@ export const DEFAULT_CATALOG = {
   residuoMinimo: 0.2,        // la svalutazione per eta' non scende sotto il 20%
   sogliaVerifica: 200,       // sopra questi KP l'annuncio va approvato da un admin
   maxKpNuovoUtente: 100,     // chi non ha ancora concluso scambi non puo' superarlo
-  kpIniziali: 100,           // KP assegnati alla registrazione
+  kpIniziali: 50,            // KP assegnati alla registrazione
+  kpPrimoScambio: 50,        // altri KP di benvenuto al primo scambio concluso (regalando o ricevendo)
   maxOre: 8,                 // durata massima di un servizio
   sogliaSegnalazioni: 3,     // segnalazioni oltre le quali l'annuncio si nasconde
   minFotoBeni: 1,            // foto minime per pubblicare un bene (massimo 3)
@@ -379,6 +380,9 @@ export function terminiRicerca(testo) {
   return normalizzaTesto(testo).split(' ').filter((w) => w.length >= 3 && !STOP.has(w)).map((w) => w.slice(0, MAX_PREFISSO));
 }
 
+/** KP di benvenuto che arrivano al primo scambio concluso (0 se il catalogo non li prevede). */
+export const kpPrimoScambio = (catalog) => (Number.isInteger(catalog?.kpPrimoScambio) ? catalog.kpPrimoScambio : 0);
+
 /** Foto minime richieste per un bene. */
 export const minFotoBeni = (catalog) => (Number.isInteger(catalog?.minFotoBeni) ? catalog.minFotoBeni : 1);
 
@@ -421,6 +425,7 @@ export function validaCatalogo(c) {
   int(c.sogliaVerifica, 'sogliaVerifica', 1, 100000);
   int(c.maxKpNuovoUtente, 'maxKpNuovoUtente', 1, 100000);
   int(c.kpIniziali, 'kpIniziali', 0, 10000);
+  if (c.kpPrimoScambio !== undefined) int(c.kpPrimoScambio, 'kpPrimoScambio', 0, 10000);
   num(c.maxOre, 'maxOre', 0.5, 24);
   int(c.sogliaSegnalazioni, 'sogliaSegnalazioni', 1, 100);
   if (c.minFotoBeni !== undefined) int(c.minFotoBeni, 'minFotoBeni', 0, 3);

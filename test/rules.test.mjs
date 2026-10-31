@@ -155,10 +155,62 @@ test('chi riceve non può spostare più KP del valore', async () => {
   await assertFails(b.commit());
 });
 
+// ---------- Bonus di benvenuto: metà subito, metà al primo scambio ----------
+test('il nuovo profilo nasce con i KP iniziali e il bonus in sospeso, non di più', async () => {
+  const db = env.authenticatedContext('benvenuto').firestore();
+  const terms = { termsVersion: '2026-10-31', termsAcceptedAt: serverTimestamp() };
+  const ok = { displayName: 'B', karmaPoints: DEFAULT_CATALOG.kpIniziali, completedSwaps: 0,
+               bonusPrimoScambio: DEFAULT_CATALOG.kpPrimoScambio, ...terms };
+  await assertFails(setDoc(doc(db, 'users/benvenuto'), { ...ok, karmaPoints: 100 }));       // tutto subito: no
+  await assertFails(setDoc(doc(db, 'users/benvenuto'), { ...ok, bonusPrimoScambio: 500 }));  // bonus gonfiato: no
+  await assertFails(setDoc(doc(db, 'users/benvenuto'), { ...ok, bonusPrimoScambio: 0 }));    // il bonus va registrato
+  await assertSucceeds(setDoc(doc(db, 'users/benvenuto'), ok));
+});
+
+async function scambioConBonus() {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'users/nuovo'), { displayName: 'Nuovo', karmaPoints: 50, completedSwaps: 0, bonusPrimoScambio: 50 });
+    await setDoc(doc(db, 'offerte/scambio'), {
+      title: 'Bici', description: 'd', type: 'bene', cpValue: 40, ownerId: 'esperto', ownerName: 'E',
+      status: 'consegnato', reservedBy: 'nuovo', reservedByName: 'N', reportCount: 0
+    });
+  });
+}
+function concludiConBonus(db, kpNuovo, extraNuovo = { bonusPrimoScambio: 0 }) {
+  const b = writeBatch(db);
+  b.update(doc(db, 'offerte/scambio'), { status: 'concluso', feedback: 'positivo', completionDate: serverTimestamp() });
+  b.update(doc(db, 'users/nuovo'), { karmaPoints: kpNuovo, completedSwaps: 1, lastOfferId: 'scambio', ...extraNuovo });
+  b.update(doc(db, 'users/esperto'), { karmaPoints: 540, completedSwaps: 4, lastOfferId: 'scambio', fbPos: 1 });
+  return b.commit();
+}
+
+test('al primo scambio arriva il bonus, una volta sola', async () => {
+  await scambioConBonus();
+  const db = env.authenticatedContext('nuovo').firestore();
+  await assertFails(concludiConBonus(db, 10));                         // senza bonus: no (50 - 40 = 10)
+  await assertFails(concludiConBonus(db, 60, {}));                     // bonus incassato ma non azzerato: no
+  await assertFails(concludiConBonus(db, 110));                        // bonus raddoppiato: no
+  await assertSucceeds(concludiConBonus(db, 60));                      // 50 - 40 + 50 = 60
+  const u = (await getDoc(doc(db, 'users/nuovo'))).data();
+  if (u.karmaPoints !== 60 || u.bonusPrimoScambio !== 0) throw new Error('saldo inatteso');
+});
+
+test('chi ha già il bonus azzerato non lo riceve di nuovo', async () => {
+  await scambioConBonus();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), 'users/nuovo'), { bonusPrimoScambio: 0, karmaPoints: 50 });
+  });
+  const db = env.authenticatedContext('nuovo').firestore();
+  await assertFails(concludiConBonus(db, 60));
+  await assertSucceeds(concludiConBonus(db, 10));
+});
+
 // ---------- Privacy ----------
 test("il profilo richiede l'accettazione dei Termini e non può contenere l'email", async () => {
   const db = env.authenticatedContext('nuovoUtente').firestore();
-  const base = { displayName: 'A', karmaPoints: DEFAULT_CATALOG.kpIniziali, completedSwaps: 0 };
+  const base = { displayName: 'A', karmaPoints: DEFAULT_CATALOG.kpIniziali, completedSwaps: 0,
+                 bonusPrimoScambio: DEFAULT_CATALOG.kpPrimoScambio };
   const terms = { termsVersion: '2026-10-26', termsAcceptedAt: serverTimestamp() };
   await assertFails(setDoc(doc(db, 'users/nuovoUtente'), base));
   await assertFails(setDoc(doc(db, 'users/nuovoUtente'), { ...base, ...terms, email: 'a@b.it' }));

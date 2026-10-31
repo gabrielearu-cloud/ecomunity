@@ -5,7 +5,7 @@ export const APP_VERSION = '3.0.0';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyCTwU75eJLGpuz5jw_gkhHdgYrHUkN__AY",
-  authDomain: "ecomunity-app.firebaseapp.com",
+  authDomain: "rikeka.it",
   projectId: "ecomunity-app",
   storageBucket: "ecomunity-app.firebasestorage.app",
   messagingSenderId: "788175207861",

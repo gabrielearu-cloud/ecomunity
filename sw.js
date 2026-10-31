@@ -6,7 +6,7 @@
 // Quando cambi i file dell'app non serve toccare nulla; aumenta VERSIONE
 // solo se aggiungi o rinomini file nell'elenco qui sotto.
 // =====================================================================
-const VERSIONE = 'rikeka-v23';
+const VERSIONE = 'rikeka-v24';
 const FILE_BASE = [
   './', './index.html', './privacy.html', './termini.html', './manifest.webmanifest',
   './css/style.css',
@@ -56,8 +56,10 @@ self.addEventListener('fetch', (event) => {
 // =====================================================================
 // Chat aperta in ciascuna finestra (comunicata dall'app)
 const chatAperta = new Map();
+const appInstallata = new Map();   // finestra -> true se e' l'app installata (non una scheda del browser)
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'open-chat' && event.source) chatAperta.set(event.source.id, event.data.chatId || null);
+  if (event.data?.type === 'app-mode' && event.source) appInstallata.set(event.source.id, !!event.data.standalone);
 });
 
 self.addEventListener('push', (event) => {
@@ -85,14 +87,27 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// Tocco sulla notifica: apre l'APP INSTALLATA (non una scheda del browser) e, per i
+// messaggi, direttamente la chat giusta.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = new URL(event.notification.data?.url || './index.html', self.registration.scope).href;
+  const tag = event.notification.tag || '';
+  const chatId = tag.startsWith('chat-') ? tag.slice(5) : null;
+  const url = chatId ? './index.html?chat=' + encodeURIComponent(chatId) : (event.notification.data?.url || './index.html');
+  const target = new URL(url, self.registration.scope).href;
+  const telefono = /android|iphone|ipad|ipod/i.test(self.navigator.userAgent);
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
-      const w = wins.find((c) => c.url.startsWith(self.registration.scope));
-      if (w) { w.navigate(target).catch(() => {}); return w.focus(); }
-      return self.clients.openWindow(target);
+      const nostre = wins.filter((c) => c.url.startsWith(self.registration.scope));
+      // 1) l'app installata e' gia' aperta: la porta in primo piano e apre la chat
+      const app = nostre.find((c) => appInstallata.get(c.id) === true || new URL(c.url).searchParams.get('app') === '1');
+      if (app) { if (chatId) app.postMessage({ type: 'apri-chat', chatId }); return app.focus(); }
+      // 2) sul telefono: avvia l'app installata (il sistema la apre al posto del browser)
+      if (telefono || !nostre.length) return self.clients.openWindow(target);
+      // 3) sul computer: usa la scheda gia' aperta
+      const w = nostre[0];
+      if (chatId) w.postMessage({ type: 'apri-chat', chatId });
+      return w.focus();
     })
   );
 });

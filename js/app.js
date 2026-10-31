@@ -357,7 +357,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v22';
+export const APP_VERSIONE = 'rikeka-v23';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -1846,8 +1846,8 @@ if ($('app-version')) $('app-version').textContent = 'Versione ' + APP_VERSIONE;
 // e la barra di navigazione (fissata in basso) finisce fuori schermo. La riallineiamo.
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
   const riallinea = () => {
-    const vv = window.visualViewport;
-    if (vv && vv.height < window.innerHeight - 80) return;   // tastiera ancora aperta: non toccare
+    // mentre si sta scrivendo in un campo la tastiera e' aperta: non spostare nulla
+    if (document.activeElement?.matches?.('input, textarea, select')) return;
     if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0);
   };
   document.addEventListener('focusout', (e) => {
@@ -1857,23 +1857,22 @@ if (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'Ma
   window.addEventListener('orientationchange', () => setTimeout(riallinea, 300));
 }
 
-// ---------- Chat e tastiera: la chat occupa solo lo spazio SOPRA la tastiera,
-// cosi' la striscia "Scrivi un messaggio" e gli ultimi messaggi restano visibili.
+// ---------- Chat e tastiera: mentre scrivi, la chat occupa solo lo spazio visibile
+// SOPRA la tastiera (e la barra dei suggerimenti), cosi' la striscia di scrittura
+// e gli ultimi messaggi restano in vista. Non si "indovina" la tastiera dalle altezze
+// (su iPhone cambiano entrambe): conta solo se il campo della chat e' attivo.
 function chatAperta() { return $('chat-screen')?.style.display === 'flex'; }
+function staiScrivendo() { return document.activeElement?.id === 'message-input'; }
 function adattaChatAllaTastiera() {
   const vv = window.visualViewport, cs = $('chat-screen');
   if (!vv || !cs || !chatAperta()) return;
-  const tastiera = vv.height < window.innerHeight - 80;
-  if (tastiera) {
-    cs.style.top = vv.offsetTop + 'px';
-    cs.style.height = vv.height + 'px';
-    cs.style.bottom = 'auto';
-    cs.classList.add('chat-tastiera');
-  } else {
-    liberaChatDallaTastiera();
-  }
+  if (!staiScrivendo()) { liberaChatDallaTastiera(); return; }
+  cs.style.top = Math.max(0, vv.offsetTop) + 'px';
+  cs.style.height = vv.height + 'px';
+  cs.style.bottom = 'auto';
+  cs.classList.add('chat-tastiera');
   const box = $('messages-container');
-  if (box && document.activeElement === $('message-input')) box.scrollTop = box.scrollHeight;
+  if (box) box.scrollTop = box.scrollHeight;
 }
 function liberaChatDallaTastiera() {
   const cs = $('chat-screen');
@@ -1883,14 +1882,14 @@ function liberaChatDallaTastiera() {
 }
 window.visualViewport?.addEventListener('resize', adattaChatAllaTastiera);
 window.visualViewport?.addEventListener('scroll', adattaChatAllaTastiera);
-// Quando tocchi il campo, dopo l'apertura della tastiera porta in vista il fondo della chat
 document.addEventListener('focusin', (e) => {
   if (e.target?.id !== 'message-input') return;
-  [150, 400].forEach((ms) => setTimeout(() => {
-    adattaChatAllaTastiera();
-    const box = $('messages-container');
-    if (box) box.scrollTop = box.scrollHeight;
-  }, ms));
+  // la tastiera dell'iPhone si apre con un'animazione: si riadatta piu' volte
+  [0, 120, 300, 600, 900].forEach((ms) => setTimeout(adattaChatAllaTastiera, ms));
+});
+document.addEventListener('focusout', (e) => {
+  if (e.target?.id !== 'message-input') return;
+  setTimeout(() => { if (!staiScrivendo()) liberaChatDallaTastiera(); }, 150);
 });
 
 // ---------- 13c. SEGNALA UN PROBLEMA ----------

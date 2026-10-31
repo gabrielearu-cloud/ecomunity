@@ -357,7 +357,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v19';
+export const APP_VERSIONE = 'rikeka-v20';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -1838,6 +1838,17 @@ window.confirmDeleteAccount = async function () {
 };
 
 if ($('app-version')) $('app-version').textContent = 'Versione ' + APP_VERSIONE;
+
+// ---------- iPhone: dopo la chiusura della tastiera la pagina puo' restare spostata
+// e la barra di navigazione (fissata in basso) finisce fuori schermo. La riallineiamo.
+if (/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+  const riallinea = () => { if (window.scrollY !== 0 || window.scrollX !== 0) window.scrollTo(0, 0); };
+  document.addEventListener('focusout', (e) => {
+    if (e.target?.matches?.('input, textarea, select')) setTimeout(riallinea, 80);
+  });
+  window.visualViewport?.addEventListener('resize', () => setTimeout(riallinea, 80));
+  window.addEventListener('orientationchange', () => setTimeout(riallinea, 300));
+}
 
 // ---------- 13c. SEGNALA UN PROBLEMA ----------
 window.openBugReport = function () {

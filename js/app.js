@@ -364,7 +364,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v28';
+export const APP_VERSIONE = 'rikeka-v30';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -1389,27 +1389,29 @@ window.submitFeedback = async function (feedbackType) {
       const g = giverSnap.data(), b = buyerSnap.data();
       const buyerKarma = b.karmaPoints ?? 0;
       const paga = state.isAdmin ? 0 : cp;   // gli amministratori non pagano KP
-      if (buyerKarma < paga) throw new Error(`Hai solo ${buyerKarma} KP: ne servono ${cp}.`);
+      // bonus di benvenuto: si incassa al primo scambio concluso (e torna a zero)
+      const bonusB = Number.isInteger(b.bonusPrimoScambio) ? b.bonusPrimoScambio : 0;
+      const bonusG = Number.isInteger(g.bonusPrimoScambio) ? g.bonusPrimoScambio : 0;
+      if (buyerKarma + bonusB < paga) throw new Error(`Hai solo ${buyerKarma} KP: ne servono ${cp}.`);
 
       tx.update(offerRef, { status: 'concluso', feedback: feedbackType, completionDate: serverTimestamp() });
-      const bonusB = b.bonusPrimoScambio ?? 0, bonusG = g.bonusPrimoScambio ?? 0;   // benvenuto al primo scambio
-      tx.update(buyerRef, { karmaPoints: buyerKarma - paga + bonusB, completedSwaps: (b.completedSwaps ?? 0) + 1, lastOfferId: docId,
-        ...(bonusB ? { bonusPrimoScambio: 0 } : {}) });
+      tx.update(buyerRef, {
+        karmaPoints: buyerKarma - paga + bonusB, completedSwaps: (b.completedSwaps ?? 0) + 1, lastOfferId: docId,
+        ...('bonusPrimoScambio' in b ? { bonusPrimoScambio: 0 } : {})
+      });
       tx.update(giverRef, {
         karmaPoints: (g.karmaPoints ?? 0) + cp + bonusG, completedSwaps: (g.completedSwaps ?? 0) + 1, lastOfferId: docId,
-        ...(bonusG ? { bonusPrimoScambio: 0 } : {}),
+        ...('bonusPrimoScambio' in g ? { bonusPrimoScambio: 0 } : {}),
         ...(feedbackType === 'positivo' ? { fbPos: (g.fbPos ?? 0) + 1 } : { fbNeg: (g.fbNeg ?? 0) + 1 })
       });
-      summary = { offerId: docId, title: o.title, type: o.type, kp: cp, giverId: o.ownerId, buyerId: me.uid, feedback: feedbackType,
-                  bonusBuyer: bonusB, bonusGiver: bonusG };
+      summary = { offerId: docId, title: o.title, type: o.type, kp: cp, giverId: o.ownerId, buyerId: me.uid, feedback: feedbackType, bonusB, bonusG };
     });
     logEvent('exchange_completed', summary, feedbackType === 'negativo' ? 'warn' : 'info');
     repCache.delete(summary.giverId);
     notify('concluded', { offerId: docId });
     postChatEvent(docId, `✅ Scambio concluso: ${summary.kp} KP trasferiti. Grazie!`);
-    alert(`Scambio concluso! Grazie: ${summary.kp} KP sono passati a chi ti ha aiutato.`
-      + (summary.bonusBuyer ? `\n\n🎉 Era il tuo primo scambio: hai ricevuto ${summary.bonusBuyer} KP di benvenuto!` : ''));
-    if (summary.bonusGiver) postChatEvent(docId, `🎉 Primo scambio di chi ha regalato: ${summary.bonusGiver} KP di benvenuto accreditati.`);
+    alert(`Scambio concluso! Grazie: ${summary.kp} KP sono passati a chi ti ha aiutato.` +
+      (summary.bonusB > 0 ? `\n\n🎁 Era il tuo primo scambio: hai ricevuto anche il bonus di benvenuto di ${summary.bonusB} KP!` : ''));
   } catch (e) {
     reportError('submitFeedback', e, { offerId: docId });
     alert('Scambio non concluso: ' + friendlyError(e));
@@ -1815,6 +1817,7 @@ function loadProfileData(uid) {
       </div>
       <p class="text-3xl font-bold text-gray-900 flex items-center justify-center">${karma} ${badge}</p>
       <p class="text-sm text-gray-500 mb-1">Punti Karma (KP)</p>
+      ${Number.isInteger(data.bonusPrimoScambio) && data.bonusPrimoScambio > 0 ? `<p class="bonus-attesa">🎁 +${data.bonusPrimoScambio} KP in arrivo al tuo primo scambio concluso</p>` : ''}
       <p id="kp-hint" class="text-xs text-gray-500 mb-4">${state.isAdmin ? 'Puoi richiedere e pubblicare senza limiti di KP.' : `Puoi richiedere beni e servizi fino a ${karma} KP. Regala per guadagnarne altri.`}</p>
       <p class="text-xl font-semibold text-gray-700">${state.completedSwaps}</p>
       <p class="text-xs text-gray-500">Scambi completati</p>`;
@@ -1839,24 +1842,32 @@ async function iscrizioniPerNuovo() {
   }
 }
 
-// ---------- 13b. ACCETTAZIONE TERMINI ----------
-let consentMode = null;   // { newProfile: bool } mentre il modal e' aperto
-let benvenutoDaMostrare = null;   // { subito, dopo }: KP di benvenuto del profilo appena creato
-
-// Messaggio di benvenuto: compare una sola volta, subito dopo l'iscrizione
-function mostraBenvenuto({ subito, dopo }) {
-  $('welcome-kp').textContent = `${subito} KP`;
-  $('welcome-bonus').textContent = dopo > 0
-    ? `Al tuo primo scambio concluso (regalando o ricevendo) ne arrivano altri ${dopo}.`
-    : '';
+// ---------- Benvenuto: KP subito + bonus al primo scambio ----------
+let benvenutoDopo = null;
+function mostraBenvenuto(kp, bonus) {
+  $('welcome-kp').textContent = String(kp);
+  $('welcome-bonus-row').classList.toggle('hidden', !(bonus > 0));
+  $('welcome-bonus').textContent = String(bonus);
   $('welcome-modal').style.display = 'flex';
 }
-
-window.chiudiBenvenuto = function (apriGuida = false) {
+window.chiudiBenvenuto = function () {
   $('welcome-modal').style.display = 'none';
-  if (apriGuida) { window.toggleInfo(null, true); return; }
-  if (!state.zona && !zonePromptShown) { zonePromptShown = true; setTimeout(() => window.openZoneModal(true), 300); }
+  if (benvenutoDopo) { const f = benvenutoDopo; benvenutoDopo = null; f(); }
 };
+// Riga nel "?" con i valori del catalogo
+function aggiornaInfoBonus() {
+  const el = $('info-bonus');
+  if (!el) return;
+  const c = state.catalog || {}, b = kpPrimoScambio(c);
+  const subito = Number.isInteger(c.kpIniziali) ? c.kpIniziali : 50;
+  el.textContent = b > 0
+    ? `🎁 Chi si iscrive riceve ${subito} KP subito e altri ${b} KP al primo scambio concluso.`
+    : `🎁 Chi si iscrive riceve ${subito} KP per iniziare.`;
+}
+document.addEventListener('catalog-changed', aggiornaInfoBonus);
+
+// ---------- 13b. ACCETTAZIONE TERMINI ----------
+let consentMode = null;   // { newProfile: bool } mentre il modal e' aperto
 
 function showConsent(mode) {
   if (consentMode) return;
@@ -1881,25 +1892,28 @@ window.acceptTerms = async function () {
     if (consentMode.newProfile) {
       await catalogReady;
       const kpSubito = state.catalogOnServer ? state.catalog.kpIniziali : 100;
-      const kpDopo = state.catalogOnServer ? kpPrimoScambio(state.catalog) : 0;
+      const bonus = state.catalogOnServer ? kpPrimoScambio(state.catalog) : 0;
       await setDoc(userRef, {
         displayName: (u.displayName || 'Utente Rikeka').slice(0, 80),
         karmaPoints: kpSubito,
         completedSwaps: 0,
-        ...(kpDopo > 0 ? { bonusPrimoScambio: kpDopo } : {}),
         termsVersion: LEGAL.versioneTermini,
-        termsAcceptedAt: serverTimestamp()
+        termsAcceptedAt: serverTimestamp(),
+        ...(bonus > 0 ? { bonusPrimoScambio: bonus } : {})
       });
-      logEvent('user_created', { termsVersion: LEGAL.versioneTermini });
-      benvenutoDaMostrare = { subito: kpSubito, dopo: kpDopo };
+      logEvent('user_created', { termsVersion: LEGAL.versioneTermini, kp: kpSubito, bonus });
+      mostraBenvenuto(kpSubito, bonus);
     } else {
       await updateDoc(userRef, { termsVersion: LEGAL.versioneTermini, termsAcceptedAt: serverTimestamp() });
       logEvent('terms_accepted', { termsVersion: LEGAL.versioneTermini });
     }
     $('consent-modal').style.display = 'none';
     consentMode = null;
-    if (benvenutoDaMostrare) { mostraBenvenuto(benvenutoDaMostrare); benvenutoDaMostrare = null; return; }
-    if (!state.zona && !zonePromptShown) { zonePromptShown = true; setTimeout(() => window.openZoneModal(true), 300); }
+    if (!state.zona && !zonePromptShown) {
+      zonePromptShown = true;
+      const apriZona = () => setTimeout(() => window.openZoneModal(true), 300);
+      if ($('welcome-modal').style.display === 'flex') benvenutoDopo = apriZona; else apriZona();
+    }
   } catch (e) {
     reportError('acceptTerms', e);
     alert('Non è stato possibile salvare la tua scelta: ' + friendlyError(e));

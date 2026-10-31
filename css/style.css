@@ -1,8 +1,12 @@
 .screen:not(.active) { display: none; }
 .screen {
   display: flex; flex-direction: column;
-  height: calc(100vh - 56px - 64px);
+  height: calc(100vh - 56px - 64px - env(safe-area-inset-bottom));
   overflow-y: auto; padding-bottom: 20px;
+}
+/* Altezza reale dello schermo sui telefoni (le barre del browser non la falsano) */
+@supports (height: 100dvh) {
+  .screen { height: calc(100dvh - 56px - 64px - env(safe-area-inset-bottom)); }
 }
 #chat-screen {
   display: none; position: fixed; inset: 0; background-color: white;
@@ -16,7 +20,9 @@
   position: fixed; inset: 0; background-color: white; z-index: 200;
   display: flex; justify-content: center; align-items: center; flex-direction: column;
 }
-#tab-bar { position: fixed; bottom: 0; left: 0; right: 0; border-top: 1px solid #e5e7eb; z-index: 10; }
+/* Barra di navigazione: sopra la "barretta" del tasto Home degli iPhone */
+#tab-bar { position: fixed; bottom: 0; left: 0; right: 0; border-top: 1px solid #e5e7eb; z-index: 10;
+  padding-bottom: env(safe-area-inset-bottom); }
 /* La testata (con il riquadro "Come funziona") sta sopra la barra del Saldo Karma (z-20) */
 #app-header { position: sticky; top: 0; z-index: 30; }
 #tab-bar .tab-item > div { position: relative; }

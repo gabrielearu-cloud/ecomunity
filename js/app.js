@@ -364,7 +364,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v25';
+export const APP_VERSIONE = 'rikeka-v26';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -760,9 +760,9 @@ window.navigateFromChat = function (screenId, element) {
   window.navigate(screenId, element);
 };
 
-window.deleteChat = async function (event, chatId) {
+window.deleteChat = async function (event, chatId, opzioni = {}) {
   event?.stopPropagation();
-  if (!confirm('Sei sicuro di voler eliminare questa chat?')) return;
+  if (!opzioni.senzaConferma) return window.chiediEliminaChat(null, chatId);
   try {
     const msgs = await getDocs(collection(db, 'chats', chatId, 'messages'));
     // batch da max 450 operazioni (limite Firestore: 500)
@@ -815,34 +815,97 @@ function calcolaNonLette() {
   updateChatTabIndicator();
 }
 
+// Orario compatto per l'elenco chat: oggi "08:30", ieri "Ieri", poi "12/10"
+function quandoChat(d) {
+  if (!d) return '';
+  const oggi = new Date(), ieri = new Date(); ieri.setDate(oggi.getDate() - 1);
+  if (d.toDateString() === oggi.toDateString()) return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === ieri.toDateString()) return 'Ieri';
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
+}
+
+// Nome dell'altra persona della chat (subito un nome provvisorio, poi quello vero dal profilo)
+function nomeProvvisorio(chat, me) {
+  if (chat.ownerId === me.uid) return chat.buyerName || 'Utente';
+  return state.offers.get(chat.offerId)?.ownerName || 'Chi regala';
+}
+
+const ICONA_CESTINO = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+
 function renderChatList() {
   const box = $('chat-list');
   const me = auth.currentUser;
   if (!box || !me) return;
   if (!allChatsData.length) {
-    box.innerHTML = '<p class="text-center text-gray-500 mt-8">Nessuna chat attiva.</p>';
+    box.innerHTML = `<div class="chat-list-empty"><div class="chat-list-empty-icon">💬</div>
+      <p class="chat-list-empty-title">Nessuna chat per ora</p>
+      <p>Apri un annuncio che ti interessa e premi <b>Avvia chat</b> per scrivere a chi lo regala.</p></div>`;
     return;
   }
   const ms = (c) => c.data.lastMessageTimestamp?.toMillis?.() ?? Date.now();
-  box.innerHTML = [...allChatsData].sort((a, b) => ms(b) - ms(a)).map(({ id, data: chat }, i) => {
+  box.innerHTML = [...allChatsData].sort((a, b) => ms(b) - ms(a)).map(({ id, data: chat }) => {
     const unread = unreadChatIds.includes(id);
     const isOwner = chat.ownerId === me.uid;
-    const d = tsToDate(chat.lastMessageTimestamp);
+    const otherId = (chat.users || []).find((u) => u !== me.uid) || '';
+    const cache = repCache.get(otherId);
+    const nome = (cache && !(cache instanceof Promise) && cache.displayName) || nomeProvvisorio(chat, me);
+    const mio = chat.lastMessageSenderId === me.uid;
     return `
-      <div onclick="openChat('${sid(id)}')" class="flex items-center p-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer ${i % 2 ? 'bg-green-50' : 'bg-white'}">
-        <span class="block h-2.5 w-2.5 rounded-full ${unread ? 'bg-blue-500' : ''} mr-3 flex-shrink-0"></span>
-        <div class="flex-1 min-w-0">
-          <p class="text-sm ${unread ? 'font-bold text-gray-900' : 'font-semibold text-gray-800'} truncate">${esc(chat.offerTitle || 'Chat')}</p>
-          <p class="text-xs ${unread ? 'text-gray-700' : 'text-gray-500'} truncate mt-0.5">${esc(chat.lastMessage || '')}</p>
+      <div class="chat-row${unread ? ' chat-row-unread' : ''}" role="button" tabindex="0" onclick="openChat('${sid(id)}')">
+        <div class="chat-row-avatar ${isOwner ? 'chat-row-avatar-own' : ''}" data-chat-initial="${esc(otherId)}">${esc((String(nome).trim()[0] || '?').toUpperCase())}</div>
+        <div class="chat-row-main">
+          <div class="chat-row-top">
+            <span class="chat-row-name" data-chat-name="${esc(otherId)}">${esc(nome)}</span>
+            <span class="chat-row-time">${esc(quandoChat(tsToDate(chat.lastMessageTimestamp)))}</span>
+          </div>
+          <div class="chat-row-offer">
+            <span class="chat-row-tag ${isOwner ? 'chat-row-tag-own' : ''}">${isOwner ? 'Regali' : 'Ricevi'}</span>
+            <span class="chat-row-title">${esc(chat.offerTitle || 'Annuncio')}</span>
+          </div>
+          <div class="chat-row-bottom">
+            <span class="chat-row-last">${mio ? '<span class="chat-row-you">Tu:</span> ' : ''}${esc(chat.lastMessage || '')}</span>
+            ${unread ? '<span class="chat-row-dot" aria-label="Da leggere"></span>' : ''}
+          </div>
         </div>
-        <div class="ml-4 flex flex-col items-end">
-          <span class="text-xs font-medium ${isOwner ? 'text-green-600' : 'text-blue-600'}">${isOwner ? 'Tuo Annuncio' : 'Tua Richiesta'}</span>
-          <span class="text-xs text-gray-400 mt-1">${d ? d.toLocaleDateString('it-IT') : ''}</span>
-          <button onclick="deleteChat(event, '${sid(id)}')" title="Elimina chat" class="mt-2 text-red-500 hover:text-red-700 text-xs">Elimina</button>
-        </div>
+        <button type="button" class="chat-row-del" onclick="chiediEliminaChat(event, '${sid(id)}')" aria-label="Elimina chat" title="Elimina chat">${ICONA_CESTINO}</button>
       </div>`;
   }).join('');
+  // nomi veri dai profili (una lettura per persona, poi restano in memoria)
+  allChatsData.forEach(({ data: chat }) => {
+    const otherId = (chat.users || []).find((u) => u !== me.uid);
+    if (!otherId) return;
+    datiUtente(otherId).then((d) => {
+      if (!d?.displayName) return;
+      document.querySelectorAll(`[data-chat-name="${CSS.escape(otherId)}"]`).forEach((el) => { el.textContent = d.displayName; });
+      document.querySelectorAll(`[data-chat-initial="${CSS.escape(otherId)}"]`).forEach((el) => { el.textContent = (d.displayName.trim()[0] || '?').toUpperCase(); });
+    });
+  });
 }
+
+// Eliminazione chat: finestra dell'app invece del riquadro del browser
+let chatDaEliminare = null;
+window.chiediEliminaChat = function (event, chatId) {
+  event?.stopPropagation();
+  if (!chatId) return;
+  chatDaEliminare = chatId;
+  const me = auth.currentUser;
+  const chat = allChatsData.find((c) => c.id === chatId)?.data || {};
+  const otherId = (chat.users || []).find((u) => u !== me?.uid);
+  const cache = repCache.get(otherId);
+  const nome = (cache && !(cache instanceof Promise) && cache.displayName) || nomeProvvisorio(chat, me);
+  $('chatdel-title').textContent = `Eliminare la chat con ${nome}?`;
+  $('chatdel-offer').textContent = chat.offerTitle ? `«${chat.offerTitle}»` : '';
+  $('chatdel-modal').style.display = 'flex';
+};
+window.chiudiEliminaChat = function () { $('chatdel-modal').style.display = 'none'; chatDaEliminare = null; };
+window.confermaEliminaChat = async function () {
+  const id = chatDaEliminare;
+  if (!id) return;
+  const btn = $('chatdel-go'); btn.disabled = true; btn.textContent = 'Eliminazione…';
+  await window.deleteChat(null, id, { senzaConferma: true });
+  btn.disabled = false; btn.textContent = 'Elimina chat';
+  window.chiudiEliminaChat();
+};
 
 function loadChatList() {
   const me = auth.currentUser;

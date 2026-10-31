@@ -75,7 +75,7 @@ non si può pubblicare un valore più alto di quello che risulta dai dati dichia
 La funzione che invia le notifiche è `api/notify.js` (con `package.json`): Vercel la pubblica da sola.
 
 **Se non arrivano**: Pannello Admin → **🔔 Verifica e invia prova**. Dice in quale punto si ferma (browser, permesso, server, chiave).
-Puoi anche aprire `https://rikeka.vercel.app/api/notify` nel browser: deve comparire `"ok":true`.
+Puoi anche aprire `https://rikeka.it/api/notify` nel browser: deve comparire `"ok":true`.
 Con l'app aperta arrivano tutte le notifiche, tranne quelle della chat che stai già guardando.
 
 ## Ricerca e vicinanza
@@ -115,7 +115,7 @@ foto su Firebase Storage, trasferimento dei KP e log tramite Cloud Functions, Ap
 
 - **Miniature leggere** (~12 KB): sono il dato scaricato più spesso, a ogni apertura della home.
 - **Memoria locale**: il telefono ricorda gli annunci già visti; all'uscita (Logout) la memoria si svuota.
-- **Pulizia notturna** (`api/pulizia.js`, avviata da `vercel.json` ogni notte): cancella le foto grandi degli annunci conclusi da più di 30 giorni; resta la miniatura ("foto archiviata"). Si può avviare a mano aprendo `https://rikeka.vercel.app/api/pulizia` (al massimo un giro ogni 20 ore). Usa la stessa variabile `FIREBASE_SERVICE_ACCOUNT` delle notifiche.
+- **Pulizia notturna** (`api/pulizia.js`, avviata da `vercel.json` ogni notte): cancella le foto grandi degli annunci conclusi da più di 30 giorni; resta la miniatura ("foto archiviata"). Si può avviare a mano aprendo `https://rikeka.it/api/pulizia` (al massimo un giro ogni 20 ore). Usa la stessa variabile `FIREBASE_SERVICE_ACCOUNT` delle notifiche.
 - **Iscrizioni aperte/chiuse**: Pannello Admin → Iscrizioni. Chiuse = chi è già iscritto continua, i nuovi vedono "Rikeka è al completo" (bloccato anche dalle regole).
 - **Controllo consumi**: Firebase → Firestore Database → scheda **Utilizzo**. Limiti gratuiti: 50.000 letture e 20.000 scritture al giorno, 1 GB di dati, 10 GB scaricati al mese.
 

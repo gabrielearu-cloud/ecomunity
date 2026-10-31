@@ -1,5 +1,25 @@
 {
   "crons": [
     { "path": "/api/pulizia", "schedule": "0 3 * * *" }
+  ],
+  "redirects": [
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [{ "type": "host", "value": "rikeka.vercel.app" }],
+      "destination": "https://rikeka.it/:path",
+      "permanent": true
+    },
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [{ "type": "host", "value": "ecommuni.vercel.app" }],
+      "destination": "https://rikeka.it/:path",
+      "permanent": true
+    },
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [{ "type": "host", "value": "ecomunity.vercel.app" }],
+      "destination": "https://rikeka.it/:path",
+      "permanent": true
+    }
   ]
 }

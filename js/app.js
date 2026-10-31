@@ -98,7 +98,14 @@ function setIndicator(tabId, show) {
   }
   if (indicator) indicator.style.display = show ? 'block' : 'none';
 }
-const updateChatTabIndicator = () => setIndicator('nav-chat', hasUnreadMessages);
+// Scheda Chat: pallino rosso con il numero di chat da leggere (+ pallino sull'icona dell'app, dove supportato)
+const updateChatTabIndicator = () => {
+  const n = unreadChatIds.length;
+  setIndicator('nav-chat', n > 0);
+  const dot = $('nav-chat')?.querySelector('.unread-indicator');
+  if (dot) { dot.textContent = n > 9 ? '9+' : String(n); dot.classList.add('unread-count'); }
+  try { if (n > 0) navigator.setAppBadge?.(n); else navigator.clearAppBadge?.(); } catch (_) {}
+};
 const updateProfileTabIndicator = () => setIndicator('nav-profile', hasNewProfileUpdate);
 
 window.switchHomeTab = function (type, element) {
@@ -357,7 +364,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v24';
+export const APP_VERSIONE = 'rikeka-v25';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -532,9 +539,8 @@ window.openChat = function (chatId, offerTitle) {
   adattaChatAllaTastiera();
   $('app-header').style.display = 'none';
   $('tab-bar').style.display = 'none';
-  unreadChatIds = unreadChatIds.filter((id) => id !== chatId);
-  hasUnreadMessages = unreadChatIds.length > 0;
-  updateChatTabIndicator();
+  segnaLetta(chatId);
+  calcolaNonLette();
   loadChatMessages(chatId);
   watchChatOffer(chat);
   setTimeout(() => $('message-input').focus({ preventScroll: true }), 50);
@@ -778,6 +784,37 @@ window.deleteChat = async function (event, chatId) {
   }
 };
 
+// ---------- Chat lette / da leggere (ricordate su questo dispositivo) ----------
+const msChat = (c) => c?.lastMessageTimestamp?.toMillis?.() || 0;
+function chiaveLetti() { return 'rk_letti_' + (auth.currentUser?.uid || ''); }
+function leggiLetti() {
+  try { return JSON.parse(localStorage.getItem(chiaveLetti()) || 'null'); } catch (_) { return null; }
+}
+function salvaLetti(l) { try { localStorage.setItem(chiaveLetti(), JSON.stringify(l)); } catch (_) {} }
+function segnaLetta(chatId) {
+  const c = allChatsData.find((x) => x.id === chatId)?.data;
+  const l = leggiLetti() || {};
+  l[chatId] = Math.max(l[chatId] || 0, msChat(c), 1);
+  salvaLetti(l);
+}
+function calcolaNonLette() {
+  const me = auth.currentUser;
+  if (!me) return;
+  let l = leggiLetti();
+  if (!l) {   // primo avvio su questo dispositivo: tutto cio' che c'e' gia' conta come letto
+    l = {}; allChatsData.forEach((c) => { l[c.id] = msChat(c.data) || 1; }); salvaLetti(l);
+  }
+  const vista = $('chat-screen').style.display === 'flex' ? currentChatId : null;
+  if (vista) segnaLetta(vista);
+  const letti = leggiLetti() || {};
+  unreadChatIds = allChatsData
+    .filter(({ id, data }) => id !== vista && data.lastMessageSenderId && data.lastMessageSenderId !== me.uid
+      && msChat(data) > (letti[id] || 0))
+    .map((c) => c.id);
+  hasUnreadMessages = unreadChatIds.length > 0;
+  updateChatTabIndicator();
+}
+
 function renderChatList() {
   const box = $('chat-list');
   const me = auth.currentUser;
@@ -812,16 +849,7 @@ function loadChatList() {
   const q = query(collection(db, 'chats'), where('users', 'array-contains', me.uid));
   unsub.chats = onSnapshot(q, (snap) => {
     allChatsData = snap.docs.map((d) => ({ id: d.id, data: d.data({ serverTimestamps: 'estimate' }) }));
-    snap.docChanges().forEach((ch) => {
-      if (ch.type !== 'modified') return;
-      const data = ch.doc.data();
-      const fromOther = data.lastMessageSenderId && data.lastMessageSenderId !== me.uid;
-      const viewing = $('chat-screen').style.display === 'flex' && currentChatId === ch.doc.id;
-      if (fromOther && !viewing && !unreadChatIds.includes(ch.doc.id)) unreadChatIds.push(ch.doc.id);
-    });
-    unreadChatIds = unreadChatIds.filter((id) => allChatsData.some((c) => c.id === id));
-    hasUnreadMessages = unreadChatIds.length > 0;
-    updateChatTabIndicator();
+    calcolaNonLette();
     renderChatList();
     apriChatInAttesa();
   }, (e) => reportError('loadChatList', e));

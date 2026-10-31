@@ -1,25 +1,105 @@
 {
   "crons": [
-    { "path": "/api/pulizia", "schedule": "0 3 * * *" }
+    {
+      "path": "/api/pulizia",
+      "schedule": "0 3 * * *"
+    }
   ],
   "redirects": [
     {
       "source": "/:path((?!api/).*)",
-      "has": [{ "type": "host", "value": "rikeka.vercel.app" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "rikeka.vercel.app"
+        }
+      ],
       "destination": "https://rikeka.it/:path",
       "permanent": true
     },
     {
       "source": "/:path((?!api/).*)",
-      "has": [{ "type": "host", "value": "ecommuni.vercel.app" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "ecommuni.vercel.app"
+        }
+      ],
       "destination": "https://rikeka.it/:path",
       "permanent": true
     },
     {
       "source": "/:path((?!api/).*)",
-      "has": [{ "type": "host", "value": "ecomunity.vercel.app" }],
+      "has": [
+        {
+          "type": "host",
+          "value": "ecomunity.vercel.app"
+        }
+      ],
       "destination": "https://rikeka.it/:path",
       "permanent": true
+    },
+    {
+      "source": "/LEGGIMI.md",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/firestore.rules",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/firestore.indexes.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/firebase.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/package.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/vercel.json",
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/test/:path*",
+      "destination": "/",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'none'"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), geolocation=(self), microphone=()"
+        }
+      ]
     }
   ]
 }

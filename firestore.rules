@@ -52,7 +52,7 @@ service cloud.firestore {
     // Testo senza parole non ammesse (stesso elenco di js/filtro.js, a parole intere).
     // Tutto cio' che non e' una lettera diventa uno spazio, cosi' anche gli a-capo.
     function testoPulito(t) {
-      return !(' ' + t.lower().replace('[^a-z]+', ' ') + ' ').matches('.* (cazzo|cazzi|cazzata|cazzate|cazzone|cazzoni|cazzuto|minchia|minchiata|minchiate|minchione|merda|merde|merdoso|merdosa|merdaccia|stronzo|stronza|stronzi|stronze|stronzata|stronzate|vaffanculo|fanculo|affanculo|culo|inculare|inculato|inculata|puttana|puttane|puttanata|puttanate|puttaniere|troia|troie|troione|zoccola|zoccole|mignotta|mignotte|coglione|coglioni|coglionata|coglionate|figa|pompino|pompini|sborra|sborrare|segaiolo|bastardo|bastarda|bastardi|bastarde|pirla|porcodio|porco dio|dio porco|diocane|dio cane|dio boia|porca madonna|madonna puttana|frocio|froci|ricchione|ricchioni|negro|negri|negra|negre|mongoloide|terrone|terroni|fuck|fucking|shit|bitch|cunt|asshole|nigger|faggot) .*');
+      return !(' ' + t.lower().replace('[^a-z]+', ' ') + ' ').matches('.* (cazzo|cazzi|cazzata|cazzate|cazzone|cazzoni|cazzuto|minchia|minchiata|minchiate|minchione|merda|merde|merdoso|merdosa|merdaccia|stronzo|stronza|stronzi|stronze|stronzata|stronzate|vaffanculo|fanculo|affanculo|culo|inculare|inculato|inculata|puttana|puttane|puttanata|puttanate|puttaniere|troia|troie|troione|zoccola|zoccole|mignotta|mignotte|coglione|coglioni|coglionata|coglionate|figa|pompino|pompini|sborra|sborrare|segaiolo|bastardo|bastarda|bastardi|bastarde|pirla|fottere|fottuto|fottuta|fottuti|fottiti|sticazzi|troiona|puttanone|anal|anale|porno|porn|pornografia|pornografico|tette|zinne|dildo|escort|milf|hentai|orgia|orge|scopata|scopate|trombare|trombata|porcodio|porco dio|dio porco|diocane|dio cane|dio boia|porca madonna|madonna puttana|frocio|froci|ricchione|ricchioni|negro|negri|negra|negre|mongoloide|terrone|terroni|fuck|fucking|fucker|motherfucker|shit|bitch|cunt|asshole|nigger|faggot|pussy|cock|whore|slut) .*');
     }
 
     // Oggi come numero AAAAMMGG (ora UTC), per il limite giornaliero di annunci
@@ -561,25 +561,32 @@ service cloud.firestore {
 
     // =================================================================
     // PROBLEMI SEGNALATI DAGLI UTENTI ("Segnala un problema")
-    // ID = uid_minuto: al massimo una segnalazione al minuto per persona
+    // Al massimo una segnalazione al minuto: nello stesso invio va aggiornato
+    // /problemiQuota/{uid} (stesso meccanismo dell'anti-flood degli annunci)
     // =================================================================
     match /problemi/{id} {
-      function minuto() {
-        return math.floor(request.time.toMillis() / 60000);
-      }
       allow create: if signedIn()
-        && (id == request.auth.uid + '_' + string(minuto())
-            || id == request.auth.uid + '_' + string(minuto() - 1)
-            || id == request.auth.uid + '_' + string(minuto() + 1))
+        && id.matches('^[A-Za-z0-9]{20}$')
         && request.resource.data.keys().hasOnly(['uid', 'nome', 'testo', 'pagina', 'ua', 'ts'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.nome is string && request.resource.data.nome.size() <= 80
         && request.resource.data.testo is string && request.resource.data.testo.size() >= 5 && request.resource.data.testo.size() <= 1000
         && request.resource.data.pagina is string && request.resource.data.pagina.size() <= 40
         && request.resource.data.ua is string && request.resource.data.ua.size() <= 200
-        && request.resource.data.ts == request.time;
+        && request.resource.data.ts == request.time
+        && getAfter(/databases/$(database)/documents/problemiQuota/$(request.auth.uid)).data.ultimo == request.time;
       allow get, list, delete: if isAdmin();
       allow update: if false;
+    }
+
+    match /problemiQuota/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['ultimo'])
+        && request.resource.data.ultimo == request.time
+        && (resource == null || request.time > resource.data.ultimo + duration.value(60, 's'));
+      allow delete: if false;
     }
 
     // =================================================================
@@ -653,6 +660,16 @@ service cloud.firestore {
     // =================================================================
     match /chats/{chatId} {
 
+      // La chat si cancella davvero solo quando TUTTI E DUE l'hanno eliminata
+      // (cioe' nascosta dopo l'ultimo messaggio): nessuno puo' cancellarla all'altro
+      function eliminataDaEntrambi(c) {
+        let n = c.get('nascosta', {});
+        return c.users.size() == 2
+          && c.users[0] in n && c.users[1] in n
+          && n[c.users[0]] >= c.lastMessageTimestamp
+          && n[c.users[1]] >= c.lastMessageTimestamp;
+      }
+
       function chatUsers() {
         return get(/databases/$(database)/documents/chats/$(chatId)).data.users;
       }
@@ -670,6 +687,17 @@ service cloud.firestore {
           && (isAdmin()
               || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('karmaPoints', 0)
                    >= offerOf(request.resource.data.offerId).cpValue);
+      }
+
+      // "Elimina chat" = nasconderla SOLO per se': nella mappa "nascosta" ognuno puo'
+      // scrivere (con l'orario di adesso) o togliere solo la propria voce
+      function nascondiOk() {
+        let prima = resource.data.get('nascosta', {});
+        let dopo = request.resource.data.get('nascosta', {});
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nascosta'])
+          && dopo is map
+          && dopo.diff(prima).affectedKeys().hasOnly([request.auth.uid])
+          && (!(request.auth.uid in dopo) || dopo[request.auth.uid] == request.time);
       }
 
       allow create: if signedIn()
@@ -693,16 +721,22 @@ service cloud.firestore {
       allow list: if signedIn() && request.auth.uid in resource.data.users;
 
       // Si aggiorna solo l'anteprima dell'ultimo messaggio, scritta da chi l'ha mandato
+      // Si aggiorna l'anteprima dell'ultimo messaggio (scritta da chi l'ha mandato)
+      // oppure la propria voce in "nascosta"
       allow update: if signedIn()
         && request.auth.uid in resource.data.users
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['lastMessage', 'lastMessageTimestamp', 'lastMessageSenderId'])
-        && request.resource.data.lastMessage is string
-        && request.resource.data.lastMessage.size() <= 60
-        && request.resource.data.lastMessageSenderId == request.auth.uid
-        && request.resource.data.lastMessageTimestamp == request.time;
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['lastMessage', 'lastMessageTimestamp', 'lastMessageSenderId'])
+            && request.resource.data.lastMessage is string
+            && request.resource.data.lastMessage.size() <= 60
+            && request.resource.data.lastMessageSenderId == request.auth.uid
+            && request.resource.data.lastMessageTimestamp == request.time)
+          || nascondiOk()
+        );
 
-      allow delete: if signedIn() && request.auth.uid in resource.data.users;
+      allow delete: if signedIn() && request.auth.uid in resource.data.users
+        && eliminataDaEntrambi(resource.data);
 
       match /messages/{messageId} {
         allow read: if signedIn() && request.auth.uid in chatUsers();
@@ -718,7 +752,8 @@ service cloud.firestore {
           && request.resource.data.text.size() > 0
           && request.resource.data.text.size() <= 1000
           && request.resource.data.timestamp == request.time;
-        allow delete: if signedIn() && request.auth.uid in chatUsers();
+        allow delete: if signedIn() && request.auth.uid in chatUsers()
+          && eliminataDaEntrambi(get(/databases/$(database)/documents/chats/$(chatId)).data);
         allow update: if false;
       }
     }

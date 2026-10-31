@@ -124,3 +124,9 @@ foto su Firebase Storage, trasferimento dei KP e log tramite Cloud Functions, Ap
 - **Parole non ammesse**: elenco in `js/filtro.js` (controllo nell'app, riconosce anche c4zz0, c a z z o, cazzzzo) e stesso elenco in `firestore.rules` → funzione `testoPulito` (blocco sul server). Se aggiungi una parola, aggiungila in tutti e due.
 - **Anti-flood**: almeno 30 secondi tra due annunci e massimo 20 al giorno per persona (gli amministratori no). Valori in `js/app.js` (`ANNUNCI_INTERVALLO_MS`, `ANNUNCI_MAX_GIORNO`) e in `firestore.rules` → `match /quote`.
 - **Segnala un problema**: Profilo (in fondo) o "?" in testata. Le segnalazioni arrivano nel Pannello Admin → Problemi segnalati, con una notifica agli amministratori.
+
+## Bonus di benvenuto
+
+- Chi si iscrive riceve `kpIniziali` KP subito (50) e `kpPrimoScambio` KP (50) al primo scambio concluso, regalando o ricevendo, una sola volta.
+- Nel profilo il bonus in attesa sta nel campo `bonusPrimoScambio`; al primo scambio si aggiunge ai KP e torna a 0 (anche se lo scambio lo chiude un amministratore).
+- Valori modificabili da Pannello Admin → Catalogo valori. Le regole (`bonus()`, `bonusIncassato()`) controllano i conti.

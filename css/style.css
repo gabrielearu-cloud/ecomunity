@@ -38,6 +38,9 @@ body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 #app-header { position: sticky; top: 0; z-index: 30; }
 #tab-bar .tab-item > div { position: relative; }
 .unread-indicator { display: none; }
+/* Pallino della scheda Chat con il numero di chat da leggere */
+.unread-indicator.unread-count { width: auto !important; height: auto !important; min-width: 1.1rem; padding: 0 .3rem;
+  top: 0 !important; right: -.15rem !important; font-size: .65rem; line-height: 1.1rem; font-weight: 700; color: #fff; text-align: center; }
 
 .modal-overlay {
   display: none; position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.6);

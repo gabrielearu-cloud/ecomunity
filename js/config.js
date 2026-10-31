@@ -29,7 +29,7 @@ export const LEGAL = {
   email: 'rikekainfo@gmail.com',
   comune: 'italy',
   luogoDati: "[località del database: Firebase → Impostazioni progetto → Località risorse, es. \"eur3 (Europa)\"]",
-  versioneTermini: '2026-10-27-zona',
+  versioneTermini: '2026-10-31-chat',
   etaMinima: 18
 };
 

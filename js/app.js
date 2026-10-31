@@ -357,7 +357,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v23';
+export const APP_VERSIONE = 'rikeka-v24';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -823,6 +823,7 @@ function loadChatList() {
     hasUnreadMessages = unreadChatIds.length > 0;
     updateChatTabIndicator();
     renderChatList();
+    apriChatInAttesa();
   }, (e) => reportError('loadChatList', e));
 }
 
@@ -2067,6 +2068,34 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 function tellServiceWorkerChat() {
   try { navigator.serviceWorker?.controller?.postMessage({ type: 'open-chat', chatId: currentChatId }); } catch (_) {}
 }
+
+// ---------- Notifiche: aprire l'app installata e la chat giusta ----------
+// Dice al service worker se questa finestra e' l'app installata o una scheda del browser
+const APP_INSTALLATA = window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+navigator.serviceWorker?.ready.then((reg) => {
+  try { reg.active?.postMessage({ type: 'app-mode', standalone: APP_INSTALLATA }); } catch (_) {}
+}).catch(() => {});
+
+// Chat da aprire appena i dati sono pronti (arrivata da una notifica)
+let chatDaAprire = new URLSearchParams(location.search).get('chat');
+// Indirizzo pulito; nell'app installata resta "?app=1", cosi' il service worker la
+// riconosce anche dopo essere stato "addormentato" dal telefono
+history.replaceState(null, '', location.pathname + (APP_INSTALLATA ? '?app=1' : ''));
+navigator.serviceWorker?.addEventListener('controllerchange', () => {
+  try { navigator.serviceWorker.controller?.postMessage({ type: 'app-mode', standalone: APP_INSTALLATA }); } catch (_) {}
+});
+function apriChatInAttesa() {
+  if (!chatDaAprire || !auth.currentUser) return;
+  const c = allChatsData.find((x) => x.id === chatDaAprire);
+  if (!c) return;
+  chatDaAprire = null;
+  window.openChat(c.id, c.data?.offerTitle);
+}
+navigator.serviceWorker?.addEventListener('message', (e) => {
+  if (e.data?.type !== 'apri-chat' || typeof e.data.chatId !== 'string') return;
+  chatDaAprire = e.data.chatId;
+  apriChatInAttesa();
+});
 populateSelects();
 
 // Quando si scopre (o cambia) il ruolo di amministratore, aggiorna ciò che dipende dai limiti

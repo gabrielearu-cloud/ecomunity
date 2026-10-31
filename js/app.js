@@ -364,7 +364,7 @@ function updateFotoLabels() {
 }
 
 // Versione dell'app: deve essere uguale a VERSIONE in sw.js (si vede in fondo al Profilo)
-export const APP_VERSIONE = 'rikeka-v26';
+export const APP_VERSIONE = 'rikeka-v27';
 
 // Anti-flood (gli stessi valori sono in firestore.rules, match /quote)
 const ANNUNCI_INTERVALLO_MS = 31 * 1000;   // 1 secondo di margine sui 30 delle regole
@@ -517,6 +517,10 @@ onAuthStateChanged(auth, (user) => {
 window.openChat = function (chatId, offerTitle) {
   const chat = allChatsData.find((c) => c.id === chatId)?.data;
   const me = auth.currentUser;
+  // riaperta (es. da "Avvia chat"): torna visibile nel proprio elenco
+  if (chat?.nascosta?.[me.uid]) {
+    updateDoc(doc(db, 'chats', chatId), { [`nascosta.${me.uid}`]: deleteField() }).catch((e) => reportError('mostraChat', e));
+  }
   currentChatId = chatId;
   tellServiceWorkerChat();
   $('current-chat-id').value = chatId;
@@ -807,12 +811,23 @@ function calcolaNonLette() {
   const vista = $('chat-screen').style.display === 'flex' ? currentChatId : null;
   if (vista) segnaLetta(vista);
   const letti = leggiLetti() || {};
-  unreadChatIds = allChatsData
+  unreadChatIds = chatVisibili()
     .filter(({ id, data }) => id !== vista && data.lastMessageSenderId && data.lastMessageSenderId !== me.uid
       && msChat(data) > (letti[id] || 0))
     .map((c) => c.id);
   hasUnreadMessages = unreadChatIds.length > 0;
   updateChatTabIndicator();
+}
+
+// ---------- Chat nascoste ("Elimina" toglie la chat solo dal PROPRIO elenco) ----------
+const msTs = (t) => t?.toMillis?.() || 0;
+function nascostaPerMe(chat, uid) {
+  const quando = msTs(chat?.nascosta?.[uid]);
+  return !!quando && msChat(chat) <= quando;   // ricompare se arriva un messaggio dopo
+}
+function chatVisibili() {
+  const uid = auth.currentUser?.uid;
+  return allChatsData.filter((c) => !nascostaPerMe(c.data, uid));
 }
 
 // Orario compatto per l'elenco chat: oggi "08:30", ieri "Ieri", poi "12/10"
@@ -836,14 +851,15 @@ function renderChatList() {
   const box = $('chat-list');
   const me = auth.currentUser;
   if (!box || !me) return;
-  if (!allChatsData.length) {
+  const visibili = chatVisibili();
+  if (!visibili.length) {
     box.innerHTML = `<div class="chat-list-empty"><div class="chat-list-empty-icon">💬</div>
       <p class="chat-list-empty-title">Nessuna chat per ora</p>
       <p>Apri un annuncio che ti interessa e premi <b>Avvia chat</b> per scrivere a chi lo regala.</p></div>`;
     return;
   }
   const ms = (c) => c.data.lastMessageTimestamp?.toMillis?.() ?? Date.now();
-  box.innerHTML = [...allChatsData].sort((a, b) => ms(b) - ms(a)).map(({ id, data: chat }) => {
+  box.innerHTML = [...visibili].sort((a, b) => ms(b) - ms(a)).map(({ id, data: chat }) => {
     const unread = unreadChatIds.includes(id);
     const isOwner = chat.ownerId === me.uid;
     const otherId = (chat.users || []).find((u) => u !== me.uid) || '';
@@ -852,7 +868,6 @@ function renderChatList() {
     const mio = chat.lastMessageSenderId === me.uid;
     return `
       <div class="chat-row${unread ? ' chat-row-unread' : ''}" role="button" tabindex="0" onclick="openChat('${sid(id)}')">
-        <div class="chat-row-avatar ${isOwner ? 'chat-row-avatar-own' : ''}" data-chat-initial="${esc(otherId)}">${esc((String(nome).trim()[0] || '?').toUpperCase())}</div>
         <div class="chat-row-main">
           <div class="chat-row-top">
             <span class="chat-row-name" data-chat-name="${esc(otherId)}">${esc(nome)}</span>
@@ -871,13 +886,12 @@ function renderChatList() {
       </div>`;
   }).join('');
   // nomi veri dai profili (una lettura per persona, poi restano in memoria)
-  allChatsData.forEach(({ data: chat }) => {
+  visibili.forEach(({ data: chat }) => {
     const otherId = (chat.users || []).find((u) => u !== me.uid);
     if (!otherId) return;
     datiUtente(otherId).then((d) => {
       if (!d?.displayName) return;
       document.querySelectorAll(`[data-chat-name="${CSS.escape(otherId)}"]`).forEach((el) => { el.textContent = d.displayName; });
-      document.querySelectorAll(`[data-chat-initial="${CSS.escape(otherId)}"]`).forEach((el) => { el.textContent = (d.displayName.trim()[0] || '?').toUpperCase(); });
     });
   });
 }
@@ -901,10 +915,26 @@ window.chiudiEliminaChat = function () { $('chatdel-modal').style.display = 'non
 window.confermaEliminaChat = async function () {
   const id = chatDaEliminare;
   if (!id) return;
+  const me = auth.currentUser;
   const btn = $('chatdel-go'); btn.disabled = true; btn.textContent = 'Eliminazione…';
-  await window.deleteChat(null, id, { senzaConferma: true });
-  btn.disabled = false; btn.textContent = 'Elimina chat';
-  window.chiudiEliminaChat();
+  try {
+    const chat = allChatsData.find((c) => c.id === id)?.data || {};
+    const altro = (chat.users || []).find((u) => u !== me.uid);
+    if (altro && nascostaPerMe(chat, altro)) {
+      // l'altra persona l'aveva gia' eliminata: ora si cancella davvero (messaggi compresi)
+      await window.deleteChat(null, id, { senzaConferma: true });
+    } else {
+      await updateDoc(doc(db, 'chats', id), { [`nascosta.${me.uid}`]: serverTimestamp() });
+      logEvent('chat_hidden', { chatId: id });
+    }
+    if (currentChatId === id) currentChatId = null;
+  } catch (e) {
+    reportError('nascondiChat', e, { chatId: id });
+    alert('Non è stato possibile eliminare la chat: ' + friendlyError(e));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Elimina chat';
+    window.chiudiEliminaChat();
+  }
 };
 
 function loadChatList() {
